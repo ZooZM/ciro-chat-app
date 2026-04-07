@@ -5,6 +5,7 @@ import 'package:ciro_chat_app/features/video_call/domain/repositories/video_call
 import 'package:ciro_chat_app/features/video_call/presentation/bloc/video_call_cubit.dart';
 
 class MockVideoCallRepository extends Mock implements VideoCallRepository {}
+
 class MockRoom extends Mock implements Room {}
 
 void main() {
@@ -22,7 +23,7 @@ void main() {
     cubit.close();
   });
 
-  const tWsUrl = 'ws://localhost:7880';
+  const tWsUrl = 'wss://ciro-chat-qc2pe2cz.livekit.cloud';
   const tToken = 'token';
 
   group('VideoCallCubit', () {
@@ -34,20 +35,21 @@ void main() {
       'emits [VideoCallConnecting, VideoCallConnected] when joinRoom is successful',
       () async {
         // arrange
-        when(() => mockRepository.connect(any(), any()))
-            .thenAnswer((_) async => mockRoom);
-        
+        when(
+          () => mockRepository.connect(any(), any()),
+        ).thenAnswer((_) async => mockRoom);
+
         final expectedStates = [
           const VideoCallConnecting(),
           VideoCallConnected(mockRoom),
         ];
-        
+
         // assert later
         expectLater(cubit.stream, emitsInOrder(expectedStates));
-        
+
         // act
         await cubit.joinRoom(tWsUrl, tToken);
-        
+
         // verify
         verify(() => mockRepository.connect(tWsUrl, tToken)).called(1);
       },
@@ -57,56 +59,54 @@ void main() {
       'emits [VideoCallConnecting, VideoCallError] when joinRoom fails',
       () async {
         // arrange
-        when(() => mockRepository.connect(any(), any()))
-            .thenThrow(Exception('Connection failed'));
-        
+        when(
+          () => mockRepository.connect(any(), any()),
+        ).thenThrow(Exception('Connection failed'));
+
         final expectedStates = [
           const VideoCallConnecting(),
           const VideoCallError('Exception: Connection failed'),
         ];
-        
+
         // assert later
         expectLater(cubit.stream, emitsInOrder(expectedStates));
-        
+
         // act
         await cubit.joinRoom(tWsUrl, tToken);
       },
     );
 
-    test(
-      'emits [VideoCallDisconnected] when leaveRoom is called',
-      () async {
-        // arrange
-        when(() => mockRepository.disconnect()).thenAnswer((_) async => {});
-        
-        final expectedStates = [
-          const VideoCallDisconnected(),
-        ];
-        
-        // assert later
-        expectLater(cubit.stream, emitsInOrder(expectedStates));
-        
-        // act
-        await cubit.leaveRoom();
-        
-        // verify
-        verify(() => mockRepository.disconnect()).called(1);
-      },
-    );
+    test('emits [VideoCallDisconnected] when leaveRoom is called', () async {
+      // arrange
+      when(() => mockRepository.disconnect()).thenAnswer((_) async => {});
+
+      final expectedStates = [const VideoCallDisconnected()];
+
+      // assert later
+      expectLater(cubit.stream, emitsInOrder(expectedStates));
+
+      // act
+      await cubit.leaveRoom();
+
+      // verify
+      verify(() => mockRepository.disconnect()).called(1);
+    });
 
     test('muteMic calls repository toggleMic', () async {
       when(() => mockRepository.toggleMic(any())).thenAnswer((_) async => {});
-      
+
       await cubit.muteMic(true);
-      
+
       verify(() => mockRepository.toggleMic(false)).called(1);
     });
 
     test('disableCamera calls repository toggleCamera', () async {
-      when(() => mockRepository.toggleCamera(any())).thenAnswer((_) async => {});
-      
+      when(
+        () => mockRepository.toggleCamera(any()),
+      ).thenAnswer((_) async => {});
+
       await cubit.disableCamera(true);
-      
+
       verify(() => mockRepository.toggleCamera(false)).called(1);
     });
   });

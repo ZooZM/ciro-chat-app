@@ -13,10 +13,12 @@ class VideoCallCubit extends Cubit<VideoCallState> {
 
   VideoCallCubit(this._repository) : super(const VideoCallInitial());
 
-  Future<void> joinRoom(String wsUrl, String token) async {
-    emit(VideoCallConnecting());
+  Future<void> joinRoom(String roomId) async {
+    // Hardcoded LIVEKIT_WS_URL mapped to backend's valid instance
+    const liveKitWsUrl = 'wss://ciro-chat-qc2pe2cz.livekit.cloud';
+    emit(const VideoCallConnecting());
     try {
-      final room = await _repository.connect(wsUrl, token);
+      final room = await _repository.joinRoomByApi(roomId, liveKitWsUrl);
       emit(VideoCallConnected(room));
     } catch (e) {
       emit(VideoCallError(e.toString()));

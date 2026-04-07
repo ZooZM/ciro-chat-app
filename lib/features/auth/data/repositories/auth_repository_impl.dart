@@ -20,17 +20,27 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> verifyOtp(String phoneNumber, String code) async {
     final response = await _remoteDataSource.verifyOtp(phoneNumber, code);
     
-    // Assuming backend returns {"accessToken": "...", "refreshToken": "..."}
-    final accessToken = response['accessToken'] as String?;
-    final refreshToken = response['refreshToken'] as String?;
+    // Capture the response structure for debugging if it fails
+    final keys = response.keys.toList();
+    
+    // Robust extraction: check both root and nested 'data' field
+    String? accessToken = response['accessToken'] as String?;
+    String? refreshToken = response['refreshToken'] as String?;
+    
+    if (accessToken == null && response.containsKey('data')) {
+      final data = response['data'] as Map<String, dynamic>?;
+      accessToken = data?['accessToken'] as String?;
+      refreshToken = data?['refreshToken'] as String?;
+    }
 
-    if (accessToken != null) {
+    if (accessToken != null && accessToken.isNotEmpty) {
       await _localDataSource.saveTokens(
         accessToken: accessToken,
         refreshToken: refreshToken ?? '',
       );
     } else {
-      throw Exception('Invalid token payload from server');
+      // Provide more diagnostic information in the error message
+      throw Exception('Invalid token payload. Found keys: $keys. Expected "accessToken" or "data.accessToken"');
     }
   }
 

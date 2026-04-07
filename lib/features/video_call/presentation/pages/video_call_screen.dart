@@ -16,24 +16,36 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isCameraDisabled = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Start the connection process immediately
+    context.read<VideoCallCubit>().joinRoom('testRoom1');
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: BlocBuilder<VideoCallCubit, VideoCallState>(
+      body: BlocConsumer<VideoCallCubit, VideoCallState>(
+        listener: (context, state) {
+          if (state is VideoCallError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+            );
+          }
+        },
         builder: (context, state) {
           if (state is VideoCallInitial || state is VideoCallConnecting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            );
+            return _buildConnectingUI();
           } else if (state is VideoCallError) {
-            return _buildErrorState(context, state.message);
+            return _buildErrorUI(state.message);
           } else if (state is VideoCallConnected) {
-            return _buildConnectedState(context, state.room);
+            return _buildConnectedUI(state.room);
           } else if (state is VideoCallDisconnected) {
             return const Center(
               child: Text(
-                'Call Ended',
-                style: TextStyle(color: Colors.white, fontSize: 24),
+                'Disconnected',
+                style: TextStyle(color: Colors.white, fontSize: 20),
               ),
             );
           }
@@ -43,127 +55,214 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 
-  Widget _buildErrorState(BuildContext context, String message) {
-    return Center(
+  Widget _buildConnectingUI() {
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          CircularProgressIndicator(color: Colors.white),
+          SizedBox(height: 20),
           Text(
-            'Error: $message',
-            style: const TextStyle(color: Colors.red, fontSize: 16),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Back'),
+            'Joining Room...',
+            style: TextStyle(color: Colors.white, fontSize: 16),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildConnectedState(BuildContext context, Room room) {
-    final remoteParticipant = room.remoteParticipants.values.firstOrNull;
-    final localParticipant = room.localParticipant;
+  Widget _buildErrorUI(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 60),
+            const SizedBox(height: 20),
+            Text(
+              'Error: $message',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: () => context.read<VideoCallCubit>().joinRoom('testRoom1'),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _buildConnectedUI(Room room) {
     return Stack(
       children: [
-        // Background: Remote Video
+        // Background Grid of Participants
         Positioned.fill(
-          child: _renderParticipant(remoteParticipant),
+          child: ParticipantGrid(room: room),
         ),
 
-        // PIP: Local Video
-        Positioned(
-          top: 60,
-          right: 20,
-          width: 120,
-          height: 160,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white24),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: _renderParticipant(localParticipant),
-          ),
-        ),
-
-        // Bottom Controls
+        // Bottom Control Bar (Floating)
         Positioned(
           bottom: 40,
-          left: 0,
-          right: 0,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              FloatingActionButton(
-                heroTag: 'mic_btn',
-                backgroundColor: _isMicMuted ? Colors.red : Colors.grey[800],
-                onPressed: () {
-                  setState(() => _isMicMuted = !_isMicMuted);
-                  context.read<VideoCallCubit>().muteMic(_isMicMuted);
-                },
-                child: Icon(
-                  _isMicMuted ? Icons.mic_off : Icons.mic,
-                  color: Colors.white,
+          left: 20,
+          right: 20,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _isMicMuted ? Icons.mic_off : Icons.mic,
+                    color: _isMicMuted ? Colors.red : Colors.white,
+                  ),
+                  onPressed: () {
+                    setState(() => _isMicMuted = !_isMicMuted);
+                    context.read<VideoCallCubit>().muteMic(_isMicMuted);
+                  },
                 ),
-              ),
-              FloatingActionButton(
-                heroTag: 'end_btn',
-                backgroundColor: Colors.red,
-                onPressed: () {
-                  context.read<VideoCallCubit>().leaveRoom();
-                  Navigator.of(context).pop();
-                },
-                child: const Icon(Icons.call_end, color: Colors.white),
-              ),
-              FloatingActionButton(
-                heroTag: 'cam_btn',
-                backgroundColor: _isCameraDisabled ? Colors.red : Colors.grey[800],
-                onPressed: () {
-                  setState(() => _isCameraDisabled = !_isCameraDisabled);
-                  context.read<VideoCallCubit>().disableCamera(_isCameraDisabled);
-                },
-                child: Icon(
-                  _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
-                  color: Colors.white,
+                IconButton(
+                  icon: const Icon(Icons.call_end, color: Colors.red, size: 32),
+                  onPressed: () {
+                    context.read<VideoCallCubit>().leaveRoom();
+                    Navigator.of(context).pop();
+                  },
                 ),
-              ),
-            ],
+                IconButton(
+                  icon: Icon(
+                    _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
+                    color: _isCameraDisabled ? Colors.red : Colors.white,
+                  ),
+                  onPressed: () {
+                    setState(() => _isCameraDisabled = !_isCameraDisabled);
+                    context.read<VideoCallCubit>().disableCamera(_isCameraDisabled);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _renderParticipant(Participant? participant) {
-    if (participant == null) {
+/// A reactive grid that listens to Room events and updates the display of participants.
+class ParticipantGrid extends StatefulWidget {
+  final Room room;
+  const ParticipantGrid({super.key, required this.room});
+
+  @override
+  State<ParticipantGrid> createState() => _ParticipantGridState();
+}
+
+class _ParticipantGridState extends State<ParticipantGrid> {
+  @override
+  void initState() {
+    super.initState();
+    // CRITICAL: Listen to room events to ensure the UI rebuilds when 
+    // local/remote tracks are published or updated.
+    widget.room.addListener(_onRoomUpdate);
+  }
+
+  @override
+  void dispose() {
+    widget.room.removeListener(_onRoomUpdate);
+    super.dispose();
+  }
+
+  void _onRoomUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Participant> participants = [
+      if (widget.room.localParticipant != null) widget.room.localParticipant!,
+      ...widget.room.remoteParticipants.values,
+    ];
+
+    if (participants.isEmpty) {
       return const Center(
-        child: Text(
-          'Waiting...',
-          style: TextStyle(color: Colors.white54, fontSize: 16),
-        ),
+        child: Text('Connecting to media...', style: TextStyle(color: Colors.white)),
       );
     }
 
-    VideoTrack? videoTrack;
-    for (final publication in participant.videoTrackPublications) {
-      if (publication.track != null) {
-        videoTrack = publication.track as VideoTrack?;
-        // Break on the first available video track
-        break;
-      }
-    }
+    final count = participants.length;
+    final crossAxisCount = count <= 2 ? 1 : 2;
 
-    if (videoTrack != null) {
-      return VideoTrackRenderer(videoTrack);
-    }
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: crossAxisCount == 1 ? 0.7 : 0.8,
+      ),
+      itemCount: count,
+      itemBuilder: (context, index) {
+        return _ParticipantVideoView(
+          participant: participants[index],
+        );
+      },
+    );
+  }
+}
 
-    return const Center(
-      child: Icon(Icons.person, color: Colors.white54, size: 64),
+class _ParticipantVideoView extends StatelessWidget {
+  final Participant participant;
+
+  const _ParticipantVideoView({
+    required this.participant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Safely extract the first available VideoTrack from publications
+    final videoTrack = participant.videoTrackPublications
+        .where((pub) => pub.track is VideoTrack)
+        .map((pub) => pub.track as VideoTrack)
+        .firstOrNull;
+
+    return Container(
+      color: Colors.grey[900],
+      child: Stack(
+        children: [
+          // Video Main Layer
+          Positioned.fill(
+            child: videoTrack != null
+                ? VideoTrackRenderer(videoTrack)
+                : const Center(
+                    child: Icon(Icons.person, color: Colors.white24, size: 80),
+                  ),
+          ),
+          
+          // Identity Label
+          Positioned(
+            bottom: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '${participant.identity}${participant is LocalParticipant ? ' (You)' : ''}',
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

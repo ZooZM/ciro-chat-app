@@ -1,3 +1,5 @@
+import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/auth_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -11,6 +13,13 @@ final GoRouter appRouter = GoRouter(
   routes: [
     GoRoute(
       path: '/auth',
+      builder: (context, state) => BlocProvider(
+        create: (context) => getIt<AuthCubit>(),
+        child: const AuthScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/video',
       builder: (context, state) => Scaffold(
         body: Center(
           child: ElevatedButton(
@@ -28,14 +37,14 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/video_call',
-      // We will assume the user passes a map { 'url': wsUrl, 'token': token } 
+      // We will assume the user passes a map { 'url': wsUrl, 'token': token }
       // but for testing, we can just grab it or initiate a blank one.
       // Wait, we need to invoke joinRoom if we pass it, but maybe just provision the bloc:
       builder: (context, state) {
         return BlocProvider(
           create: (_) => getIt<VideoCallCubit>()
             // Trigger connection attempt with dummy credentials to test State flows
-            ..joinRoom('wss://test-server.livekit.cloud', 'dummy_token_abc'),
+            ..joinRoom('testRoom1'),
           child: const VideoCallScreen(),
         );
       },

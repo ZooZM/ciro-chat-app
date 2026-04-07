@@ -21,6 +21,8 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/video_call/data/datasources/video_call_remote_data_source.dart'
+    as _i5;
 import '../../features/video_call/data/repositories/livekit_video_call_repository_impl.dart'
     as _i786;
 import '../../features/video_call/domain/repositories/video_call_repository.dart'
@@ -43,14 +45,8 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i852.AuthLocalDataSource>(
       () => _i852.AuthLocalDataSourceImpl(gh<_i558.FlutterSecureStorage>()),
     );
-    gh.lazySingleton<_i220.VideoCallRepository>(
-      () => _i786.LivekitVideoCallRepositoryImpl(),
-    );
     gh.lazySingleton<_i667.DioClient>(
       () => _i667.DioClient(gh<_i558.FlutterSecureStorage>()),
-    );
-    gh.factory<_i804.VideoCallCubit>(
-      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
     );
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
@@ -61,8 +57,19 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i852.AuthLocalDataSource>(),
       ),
     );
+    gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
+      () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
     gh.factory<_i52.AuthCubit>(
       () => _i52.AuthCubit(gh<_i787.AuthRepository>()),
+    );
+    gh.lazySingleton<_i220.VideoCallRepository>(
+      () => _i786.LivekitVideoCallRepositoryImpl(
+        gh<_i5.VideoCallRemoteDataSource>(),
+      ),
+    );
+    gh.factory<_i804.VideoCallCubit>(
+      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
     );
     return this;
   }

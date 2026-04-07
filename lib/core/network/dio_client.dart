@@ -10,7 +10,10 @@ class DioClient {
 
   DioClient(this._secureStorage) : _dio = Dio() {
     _dio.options = BaseOptions(
-      baseUrl: const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000/api'),
+      baseUrl: const String.fromEnvironment(
+        'API_URL',
+        defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+      ),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {

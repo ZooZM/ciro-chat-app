@@ -1,10 +1,20 @@
 import 'package:livekit_client/livekit_client.dart';
 import 'package:injectable/injectable.dart';
 import '../../domain/repositories/video_call_repository.dart';
+import '../datasources/video_call_remote_data_source.dart';
 
 @LazySingleton(as: VideoCallRepository)
 class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
+  final VideoCallRemoteDataSource _remoteDataSource;
   Room? _room;
+
+  LivekitVideoCallRepositoryImpl(this._remoteDataSource);
+
+  @override
+  Future<Room> joinRoomByApi(String roomId, String liveKitWsUrl) async {
+    final token = await _remoteDataSource.fetchLiveKitToken(roomId);
+    return connect(liveKitWsUrl, token);
+  }
 
   @override
   Future<Room> connect(String wsUrl, String token) async {
@@ -19,6 +29,12 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
       wsUrl,
       token,
     );
+
+    // CRITICAL: Publish local media tracks immediately after connecting.
+    // Without this, the local participant has no camera/mic tracks, causing
+    // the ICE agent to find no media to negotiate and timing out when a peer joins.
+    await _room!.localParticipant?.setCameraEnabled(true);
+    await _room!.localParticipant?.setMicrophoneEnabled(true);
 
     return _room!;
   }
