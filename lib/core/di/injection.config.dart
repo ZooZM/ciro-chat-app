@@ -21,6 +21,12 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/chat/data/datasources/chat_remote_data_source.dart'
+    as _i980;
+import '../../features/chat/data/repositories/chat_repository_impl.dart'
+    as _i504;
+import '../../features/chat/domain/repositories/chat_repository.dart' as _i420;
+import '../../features/chat/presentation/bloc/chat_cubit.dart' as _i708;
 import '../../features/video_call/data/datasources/video_call_remote_data_source.dart'
     as _i5;
 import '../../features/video_call/data/repositories/livekit_video_call_repository_impl.dart'
@@ -47,6 +53,15 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i667.DioClient>(
       () => _i667.DioClient(gh<_i558.FlutterSecureStorage>()),
+    );
+    gh.lazySingleton<_i980.ChatRemoteDataSource>(
+      () => _i980.ChatRemoteDataSourceImpl(gh<_i558.FlutterSecureStorage>()),
+    );
+    gh.lazySingleton<_i420.ChatRepository>(
+      () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
+    );
+    gh.factory<_i708.ChatCubit>(
+      () => _i708.ChatCubit(gh<_i420.ChatRepository>()),
     );
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),

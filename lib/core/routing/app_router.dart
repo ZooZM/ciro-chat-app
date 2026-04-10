@@ -1,5 +1,7 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/auth_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/chat_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -48,6 +50,13 @@ final GoRouter appRouter = GoRouter(
           child: const VideoCallScreen(),
         );
       },
+    ),
+    GoRoute(
+      path: '/chat',
+      builder: (context, state) => BlocProvider(
+        create: (_) => getIt<ChatCubit>(),
+        child: const ChatScreen(),
+      ),
     ),
   ],
 );

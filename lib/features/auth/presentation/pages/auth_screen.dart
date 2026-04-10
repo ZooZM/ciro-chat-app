@@ -16,6 +16,12 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isOtpMode = false;
 
   @override
+  void initState() {
+    super.initState();
+    // context.read<AuthCubit>().verifyAuthStatus();
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     _otpController.dispose();
@@ -25,10 +31,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Auth Test UI'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Auth Test UI'), centerTitle: true),
       body: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -44,14 +47,12 @@ class _AuthScreenState extends State<AuthScreen> {
             setState(() => _isOtpMode = true);
           }
           if (state is AuthInitial) {
-              setState(() => _isOtpMode = false);
+            setState(() => _isOtpMode = false);
           }
         },
         builder: (context, state) {
           if (state is AuthLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (state is Authenticated) {
@@ -139,9 +140,9 @@ class _AuthScreenState extends State<AuthScreen> {
                 final otp = _otpController.text.trim();
                 if (otp.length == 6) {
                   context.read<AuthCubit>().submitOtp(
-                        _phoneController.text.trim(),
-                        otp,
-                      );
+                    _phoneController.text.trim(),
+                    otp,
+                  );
                 }
               },
               child: const Text('Verify'),
@@ -166,10 +167,7 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
-            '✅',
-            style: TextStyle(fontSize: 100),
-          ),
+          const Text('✅', style: TextStyle(fontSize: 100)),
           const SizedBox(height: 20),
           const Text(
             'Authenticated Successfully!',
@@ -185,6 +183,16 @@ class _AuthScreenState extends State<AuthScreen> {
             onPressed: () => context.push('/video_call'),
             icon: const Icon(Icons.video_call),
             label: const Text('Go to Video Call'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(220, 50),
+            ),
+            onPressed: () => context.push('/chat'),
+            icon: const Icon(Icons.chat),
+            label: const Text('Go to Chat'),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
