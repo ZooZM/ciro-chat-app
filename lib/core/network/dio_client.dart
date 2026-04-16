@@ -33,7 +33,6 @@ class DioClient {
           return handler.next(options);
         },
         onError: (DioException e, handler) {
-          // Handle 401 unauthenticated globally
           if (e.response?.statusCode == 401) {
             // For example, redirect to the auth screen or trigger a logout event.
             // Using appRouter directly here for demonstration, though normally you might
