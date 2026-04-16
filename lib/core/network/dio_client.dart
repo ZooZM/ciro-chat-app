@@ -19,6 +19,7 @@ class DioClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'ngrok-skip-browser-warning': 'true', // Bypasses ngrok's interception screen which causes CORS errors on web
       },
     );
 

@@ -22,6 +22,7 @@ class MainApp extends StatelessWidget {
       title: 'Ciro Chat App',
       theme: ThemeData.dark(useMaterial3: true),
       routerConfig: appRouter,
+      debugShowCheckedModeBanner: false,
     );
   }
 }

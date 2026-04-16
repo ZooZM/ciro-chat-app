@@ -1,5 +1,6 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
-import 'package:ciro_chat_app/features/auth/presentation/pages/auth_screen.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_screen.dart';
 import 'package:flutter/material.dart';
@@ -17,8 +18,20 @@ final GoRouter appRouter = GoRouter(
       path: '/auth',
       builder: (context, state) => BlocProvider(
         create: (context) => getIt<AuthCubit>(),
-        child: const AuthScreen(),
+        child: const MobileNumberScreen(),
       ),
+      routes: [
+        GoRoute(
+          path: 'verify',
+          builder: (context, state) {
+            final phone = state.extra as String? ?? '';
+            return BlocProvider(
+              create: (context) => getIt<AuthCubit>(),
+              child: VerifyCodeScreen(phoneNumber: phone),
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/video',
