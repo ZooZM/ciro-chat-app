@@ -20,6 +20,8 @@ dependencies:
   shared_preferences: ^2.5.5
   socket_io_client: ^3.1.4
   web_socket_channel: ^3.0.3
+  pay: ^2.0.0
+  flutter_credit_card: ^4.0.1
 
 dev_dependencies:
   flutter_test:
