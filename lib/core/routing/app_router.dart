@@ -1,11 +1,14 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
-import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
-import 'package:ciro_chat_app/features/chat/presentation/pages/chat_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
+import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
+import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/bloc/video_call_cubit.dart';
@@ -46,9 +49,20 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/home',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Home (Chat List) Placeholder')),
-      ),
+      builder: (context, state) => const ChatListScreen(),
+    ),
+    GoRoute(
+      path: '/chat_room',
+      builder: (context, state) {
+        final chat = state.extra as ChatSession;
+        // Use the global ChatCubit instance and open the specific room
+        context.read<ChatCubit>().openRoom(chat.id);
+        return ChatRoomScreen(chatData: chat);
+      },
+    ),
+    GoRoute(
+      path: '/contacts',
+      builder: (context, state) => const ContactsScreen(),
     ),
     GoRoute(
       path: '/video_call',
@@ -63,13 +77,6 @@ final GoRouter appRouter = GoRouter(
           child: const VideoCallScreen(),
         );
       },
-    ),
-    GoRoute(
-      path: '/chat',
-      builder: (context, state) => BlocProvider(
-        create: (_) => getIt<ChatCubit>(),
-        child: const ChatScreen(),
-      ),
     ),
   ],
 );

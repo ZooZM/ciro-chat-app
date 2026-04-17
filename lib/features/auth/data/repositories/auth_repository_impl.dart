@@ -34,6 +34,7 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     if (accessToken != null && accessToken.isNotEmpty) {
+      await _localDataSource.saveUserPhone(phoneNumber); // Core dynamic identifier 
       await _localDataSource.saveTokens(
         accessToken: accessToken,
         refreshToken: refreshToken ?? '',

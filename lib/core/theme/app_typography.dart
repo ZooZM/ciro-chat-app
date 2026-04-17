@@ -1,80 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'app_colors.dart';
 
-/// Centralized typography definitions for the application.
-/// Based on Figma typography styles using Google Fonts.
+/// Centralized typography definitions using Google Fonts and flutter_screenutil
 class AppTypography {
   AppTypography._();
 
   // --- Headlines ---
 
-  /// Used for major screen titles (e.g., H1 in Figma)
-  static TextStyle headline1 = GoogleFonts.poppins(
-    fontSize: 32.0,
-    fontWeight: FontWeight.w700, // Bold
+  static TextStyle get headline1 => GoogleFonts.poppins(
+    fontSize: 32.0.resSp,
+    fontWeight: FontWeight.w700, 
     color: AppColors.textPrimary,
     height: 1.2,
   );
 
-  /// Used for modal titles or large sections
-  static TextStyle headline2 = GoogleFonts.poppins(
-    fontSize: 24.0,
-    fontWeight: FontWeight.w600, // SemiBold
+  static TextStyle get headline2 => GoogleFonts.poppins(
+    fontSize: 24.0.resSp,
+    fontWeight: FontWeight.w600, 
     color: AppColors.textPrimary,
     height: 1.3,
   );
 
   // --- Subtitles ---
 
-  /// Used for section headers or prominent list items
-  static TextStyle subtitle1 = GoogleFonts.poppins(
-    fontSize: 18.0,
-    fontWeight: FontWeight.w600, // SemiBold
+  static TextStyle get subtitle1 => GoogleFonts.poppins(
+    fontSize: 18.0.resSp,
+    fontWeight: FontWeight.w600, 
     color: AppColors.textPrimary,
     height: 1.4,
   );
 
-  /// Secondary subtitle, used below primary titles or list descriptions
-  static TextStyle subtitle2 = GoogleFonts.poppins(
-    fontSize: 16.0,
-    fontWeight: FontWeight.w500, // Medium
+  static TextStyle get subtitle2 => GoogleFonts.poppins(
+    fontSize: 16.0.resSp,
+    fontWeight: FontWeight.w500, 
     color: AppColors.textSecondary,
     height: 1.4,
   );
 
   // --- Body Text ---
 
-  /// Primary body text used for the majority of continuous reading
-  static TextStyle body1 = GoogleFonts.poppins(
-    fontSize: 16.0,
-    fontWeight: FontWeight.w400, // Regular
+  static TextStyle get body1 => GoogleFonts.poppins(
+    fontSize: 16.0.resSp,
+    fontWeight: FontWeight.w400, 
     color: AppColors.textPrimary,
     height: 1.5,
   );
 
-  /// Secondary body text, often used for smaller descriptions or metadata
-  static TextStyle body2 = GoogleFonts.poppins(
-    fontSize: 14.0,
-    fontWeight: FontWeight.w400, // Regular
+  static TextStyle get body2 => GoogleFonts.poppins(
+    fontSize: 14.0.resSp,
+    fontWeight: FontWeight.w400, 
     color: AppColors.textSecondary,
     height: 1.5,
   );
 
   // --- Buttons & Labels ---
 
-  /// Text style used inside primary buttons
-  static TextStyle buttonText = GoogleFonts.poppins(
-    fontSize: 16.0,
-    fontWeight: FontWeight.w600, // SemiBold
-    color: Colors.white, // Usually white or contrasting color
+  static TextStyle get buttonText => GoogleFonts.poppins(
+    fontSize: 16.0.resSp,
+    fontWeight: FontWeight.w600, 
+    color: Colors.white, 
     letterSpacing: 0.5,
   );
 
-  /// Small labels, tags, or captions
-  static TextStyle caption = GoogleFonts.poppins(
-    fontSize: 12.0,
-    fontWeight: FontWeight.w400, // Regular
+  static TextStyle get caption => GoogleFonts.poppins(
+    fontSize: 12.0.resSp,
+    fontWeight: FontWeight.w400, 
     color: AppColors.textSecondary,
     height: 1.4,
   );

@@ -1,0 +1,148 @@
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+/// Result object returned after a bulk permission request
+class PermissionRequestResult {
+  final bool allGranted;
+  final List<Permission> permanentlyDenied;
+  final List<Permission> denied;
+
+  const PermissionRequestResult({
+    required this.allGranted,
+    required this.permanentlyDenied,
+    required this.denied,
+  });
+}
+
+class PermissionService {
+  /// All permissions required by the Ciro Chat app
+  static const List<Permission> _requiredPermissions = [
+    Permission.contacts,
+    Permission.camera,
+    Permission.microphone,
+    Permission.photos,        // iOS: Photo Library. Android: READ_EXTERNAL_STORAGE
+    Permission.storage,       // Android < 13: file storage access
+    Permission.notification,
+  ];
+
+  /// Request all required permissions in bulk.
+  /// Returns a [PermissionRequestResult] detailing what was granted/denied.
+  Future<PermissionRequestResult> requestAll() async {
+    // Request all permissions at once
+    final statuses = await _requiredPermissions.request();
+
+    final permanentlyDenied = <Permission>[];
+    final denied = <Permission>[];
+
+    for (final permission in _requiredPermissions) {
+      final status = statuses[permission];
+      if (status == null) continue;
+
+      if (status.isPermanentlyDenied) {
+        permanentlyDenied.add(permission);
+      } else if (status.isDenied) {
+        denied.add(permission);
+      }
+    }
+
+    return PermissionRequestResult(
+      allGranted: permanentlyDenied.isEmpty && denied.isEmpty,
+      permanentlyDenied: permanentlyDenied,
+      denied: denied,
+    );
+  }
+
+  /// Human-readable label for a given permission
+  static String labelFor(Permission permission) {
+    switch (permission) {
+      case Permission.contacts:   return 'Contacts';
+      case Permission.camera:     return 'Camera';
+      case Permission.microphone: return 'Microphone';
+      case Permission.photos:     return 'Photos';
+      case Permission.storage:    return 'Storage';
+      case Permission.notification: return 'Notifications';
+      default:                    return 'Required Permission';
+    }
+  }
+}
+
+/// Mixin to be used on any StatefulWidget that needs to trigger the permission
+/// flow and handle the result gracefully.
+mixin PermissionHandlerMixin<T extends StatefulWidget> on State<T> {
+  final PermissionService _permissionService = PermissionService();
+
+  Future<void> requestAppPermissions() async {
+    final result = await _permissionService.requestAll();
+
+    if (!mounted) return;
+
+    if (result.allGranted) return; // All good, proceed normally
+
+    // Handle permanently denied — show a dialog guiding user to Settings
+    if (result.permanentlyDenied.isNotEmpty) {
+      await _showPermanentlyDeniedDialog(result.permanentlyDenied);
+      return;
+    }
+
+    // Handle soft denials — show a polite snackbar
+    if (result.denied.isNotEmpty) {
+      final names = result.denied.map(PermissionService.labelFor).join(', ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Some features may be limited. Denied: $names.',
+          ),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: requestAppPermissions,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showPermanentlyDeniedDialog(List<Permission> permissions) async {
+    final names = permissions.map(PermissionService.labelFor).join(', ');
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_outline, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('Permissions Required'),
+          ],
+        ),
+        content: Text(
+          'The following permissions were permanently denied:\n\n$names\n\n'
+          'Please open Settings and grant them to use Ciro Connect fully.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              openAppSettings(); // Opens native device Settings for the app
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+}

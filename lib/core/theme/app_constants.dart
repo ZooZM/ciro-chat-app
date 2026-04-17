@@ -1,42 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 /// Design system constants for the application.
-/// Values here are derived from the Figma design specifications.
+/// Refactored to use flutter_screenutil for responsiveness.
 class AppConstants {
   AppConstants._();
 
   // --- Layout & Spacing ---
   
-  /// Default padding for main screens (e.g., left/right edges)
-  static const double defaultScreenPadding = 16.0;
-
-  /// Default padding within cards, dialogues, or panels
-  static const double innerPadding = 12.0;
-
-  /// Spacing between elements in a column/row
-  static const double elementSpacing = 8.0;
+  static double get defaultScreenPadding => 16.0.resW;
+  static double get innerPadding => 12.0.resW;
+  static double get elementSpacing => 8.0.resH;
 
   // --- Border Radius ---
   
-  /// Standard border radius for TextFields, Buttons, and smaller Cards
-  static const double defaultBorderRadius = 12.0;
-  
-  /// Large border radius for bottom sheets or large dialogs
-  static const double largeBorderRadius = 24.0;
-  
-  /// Circular border radius for avatars or pill-shaped badges
-  static const double circularBorderRadius = 999.0;
+  static double get defaultBorderRadius => 12.0.resR;
+  static double get largeBorderRadius => 24.0.resR;
+  static double get circularBorderRadius => 999.0.resR;
 
   // --- Animation & Durations ---
   
-  /// Default duration for micro-animations (e.g., button press)
   static const Duration animationDurationShort = Duration(milliseconds: 200);
-
-  /// Default duration for screen transitions or complex animations
   static const Duration animationDurationMedium = Duration(milliseconds: 400);
 
   // --- Helper Methods ---
 
-  /// Helper to get a BorderRadius object for standard radius
-  static BorderRadius defaultRadius = BorderRadius.circular(defaultBorderRadius);
+  static BorderRadius get defaultRadius => BorderRadius.circular(defaultBorderRadius);
 }

@@ -1,0 +1,248 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../domain/entities/message.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../domain/entities/chat_session.dart';
+import '../widgets/message_bubble_widget.dart';
+import '../widgets/attachment_sheet_widget.dart';
+import '../bloc/chat_cubit.dart';
+
+class ChatRoomScreen extends StatefulWidget {
+  final ChatSession chatData;
+
+  const ChatRoomScreen({
+    Key? key,
+    required this.chatData,
+  }) : super(key: key);
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+}
+
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  final TextEditingController _msgController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late String _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to read immediately — will be populated if login already completed
+    _currentUserId = context.read<ChatCubit>().currentUserId;
+
+    // If empty (race condition on first launch), retry after first frame
+    if (_currentUserId.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _currentUserId = context.read<ChatCubit>().currentUserId;
+          });
+        }
+      });
+    }
+  }
+
+  void _showAttachmentSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => const AttachmentSheetWidget(),
+    );
+  }
+
+  void _sendMessage() {
+    final text = _msgController.text.trim();
+    if (text.isNotEmpty) {
+      context.read<ChatCubit>().sendLocalMessage(text);
+      _msgController.clear();
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      // With reverse: true, the "bottom" visually is offset 0 mathematically.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollController.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _msgController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leadingWidth: 40.resW,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
+          onPressed: () => context.pop(),
+        ),
+        title: Row(
+          children: [
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 18.resR,
+                  backgroundColor: AppColors.divider,
+                  backgroundImage: widget.chatData.avatarUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
+                      : null,
+                  child: widget.chatData.avatarUrl.isEmpty
+                      ? Text(
+                          widget.chatData.name.isNotEmpty
+                              ? widget.chatData.name[0].toUpperCase()
+                              : '?',
+                          style: AppTypography.subtitle1.copyWith(color: AppColors.primary),
+                        )
+                      : null,
+                ),
+                if (widget.chatData.isOnline)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 10.resW,
+                      height: 10.resW,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5.resW),
+                      ),
+                    ),
+                  )
+              ],
+            ),
+            SizedBox(width: 12.resW),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.chatData.name,
+                  style: AppTypography.subtitle1.copyWith(color: Colors.black),
+                ),
+                Text(
+                  widget.chatData.isOnline ? 'online' : 'offline',
+                  style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
+                )
+              ],
+            )
+          ],
+        ),
+        actions: [
+          IconButton(icon: Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
+          IconButton(icon: Icon(Icons.videocam_outlined, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
+          IconButton(icon: Icon(Icons.more_vert, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: BlocConsumer<ChatCubit, ChatState>(
+              listener: (context, state) {
+                 if (state is ChatRoomActive) {
+                     _scrollToBottom();
+                 }
+              },
+              builder: (context, state) {
+                if (state is ChatLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                }
+
+                // Strictly mapping to the localized Stream
+                List<Message> displayMessages = [];
+                if (state is ChatRoomActive) {
+                    displayMessages = state.messages.reversed.toList();
+                }
+
+                return ListView.builder(
+                  reverse: true, // Forces keyboard constraints up correctly (WhatsApp spec)
+                  controller: _scrollController,
+                  padding: EdgeInsets.symmetric(vertical: 16.resH),
+                  itemCount: displayMessages.length,
+                  itemBuilder: (context, index) {
+                    return MessageBubbleWidget(
+                      message: displayMessages[index],
+                      currentUserId: _currentUserId,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          
+          // Bottom Input Bar
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 12.resH),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
+            ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.add, color: AppColors.textSecondary, size: 28.resW),
+                    onPressed: () => _showAttachmentSheet(context),
+                  ),
+                  SizedBox(width: 8.resW),
+                  Expanded(
+                    child: Container(
+                      height: 44.resH,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22.resR),
+                        border: Border.all(color: AppColors.divider, width: 1.5.resW),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 16.resW),
+                      alignment: Alignment.centerLeft,
+                      child: TextField(
+                        controller: _msgController,
+                        onSubmitted: (_) => _sendMessage(),
+                        style: AppTypography.body1.copyWith(color: Colors.black),
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8.resW),
+                  IconButton(
+                    icon: Icon(Icons.camera_alt_outlined, color: AppColors.textSecondary, size: 26.resW),
+                    onPressed: () {},
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.send, color: AppColors.primary, size: 26.resW),
+                    onPressed: _sendMessage, // Call _sendMessage on tap
+                  ),
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
