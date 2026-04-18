@@ -46,7 +46,7 @@ class ChatSession {
         (p) => (p['phoneNumber'] ?? '') != currentUserPhone,
         orElse: () => participants.isNotEmpty ? participants.first : {},
       );
-      displayName = other['name'] ?? 'Unknown';
+      displayName = other['phoneNumber'] ?? 'Unknown';
       otherPhone = other['phoneNumber'] ?? '';
       otherAvatar = other['avatarUrl'] ?? '';
       otherIsOnline = other['isOnline'] == true;
