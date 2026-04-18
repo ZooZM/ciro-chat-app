@@ -1,313 +1,208 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:livekit_client/livekit_client.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String contactName;
+  final String livekitUrl;
+  final String livekitToken;
 
   const VideoCallScreen({
     super.key,
-    this.contactName = 'Ahmed Khaled',
+    required this.contactName,
+    required this.livekitUrl,
+    required this.livekitToken,
   });
 
   @override
   State<VideoCallScreen> createState() => _VideoCallScreenState();
 }
 
-class _VideoCallScreenState extends State<VideoCallScreen>
-    with SingleTickerProviderStateMixin {
+class _VideoCallScreenState extends State<VideoCallScreen> {
+  Room? _room;
+  bool _isConnecting = true;
   bool _isMicMuted = false;
-  bool _isCameraOff = false;
-  bool _isCaptionsOn = false;
-
-  // Simulated call duration timer
-  int _seconds = 4;
-  late final AnimationController _timerController;
+  bool _isCameraDisabled = false;
 
   @override
   void initState() {
     super.initState();
-    // Tick the call timer every second
-    _timerController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          if (mounted) {
-            setState(() => _seconds++);
-            _timerController.forward(from: 0);
-          }
-        }
-      });
-    _timerController.forward();
+    _connectToRoom();
+  }
+
+  Future<void> _connectToRoom() async {
+    try {
+      _room = Room();
+      
+      // Listen to peer connection events native to the LiveKit Room!
+      _room!.addListener(_onRoomUpdate);
+
+      await _room!.connect(widget.livekitUrl, widget.livekitToken);
+
+      // Publish local media tracks immediately upon connecting
+      await _room!.localParticipant?.setCameraEnabled(true);
+      await _room!.localParticipant?.setMicrophoneEnabled(true);
+
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isConnecting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to connect: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _onRoomUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _timerController.dispose();
+    _room?.removeListener(_onRoomUpdate);
+    _room?.disconnect();
     super.dispose();
-  }
-
-  String get _formattedTime {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isConnecting || _room == null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Colors.white),
+              const SizedBox(height: 20),
+              Text('Connecting to ${widget.contactName}...', style: const TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final localParticipant = _room!.localParticipant;
+    final remoteParticipant = _room!.remoteParticipants.values.firstOrNull;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
-        fit: StackFit.expand,
         children: [
-          // ── Remote Video Feed (Full-Screen Placeholder) ──────────────────
-          _buildRemoteVideo(),
-
-          // ── Dark gradient overlay – bottom half only ─────────────────────
+          // Background - Remote VideoTrack
           Positioned.fill(
-            child: DecoratedBox(
+            child: _ParticipantVideoView(participant: remoteParticipant),
+          ),
+
+          // PiP - Local VideoTrack
+          Positioned(
+            top: 60,
+            right: 20,
+            width: 120,
+            height: 180,
+            child: Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.35),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.70),
-                  ],
-                  stops: const [0.0, 0.25, 0.55, 1.0],
-                ),
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: _ParticipantVideoView(participant: localParticipant, isLocal: true),
             ),
           ),
 
-          // ── Top Overlay: Name + Timer + PiP ─────────────────────────────
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Control Bar
+          Positioned(
+            bottom: 40,
+            left: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(30),
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Name & Timer
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.contactName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formattedTime,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const Spacer(),
-
-                  // ── Local Camera PiP ────────────────────────────────────
-                  Container(
-                    width: 110,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A5568),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.6), width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                  IconButton(
+                    icon: Icon(
+                      _isMicMuted ? Icons.mic_off : Icons.mic,
+                      color: _isMicMuted ? Colors.red : Colors.white,
                     ),
-                    clipBehavior: Clip.hardEdge,
-                    child: _isCameraOff
-                        ? const Center(
-                            child: Icon(Icons.videocam_off, color: Colors.white54, size: 36),
-                          )
-                        : Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              // Local camera placeholder
-                              Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [Color(0xFF4A5568), Color(0xFF2D3748)],
-                                  ),
-                                ),
-                              ),
-                              const Center(
-                                child: Icon(Icons.person, color: Colors.white30, size: 56),
-                              ),
-                              Align(
-                                alignment: Alignment.bottomLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Text(
-                                    'You',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.85),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                    onPressed: () async {
+                      final targetState = !_isMicMuted;
+                      await _room!.localParticipant?.setMicrophoneEnabled(!targetState);
+                      setState(() => _isMicMuted = targetState);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.call_end, color: Colors.white, size: 32),
+                    style: IconButton.styleFrom(backgroundColor: Colors.red),
+                    onPressed: () async {
+                      await _room?.disconnect();
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
+                      color: _isCameraDisabled ? Colors.red : Colors.white,
+                    ),
+                    onPressed: () async {
+                      final targetState = !_isCameraDisabled;
+                      await _room!.localParticipant?.setCameraEnabled(!targetState);
+                      setState(() => _isCameraDisabled = targetState);
+                    },
                   ),
                 ],
               ),
-            ),
-          ),
-
-          // ── Live Caption Subtitle ────────────────────────────────────────
-          if (_isCaptionsOn)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 150,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.75),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'Doing great! Are you free for the meeting\ntomorrow?',
-                  style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
-                ),
-              ),
-            ),
-
-          // ── Bottom Control Row ───────────────────────────────────────────
-          Positioned(
-            bottom: 50,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                // Calling status text
-                Text(
-                  'جاري الاتصال...',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Control buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // CC / Captions
-                    _buildControlButton(
-                      icon: Icons.closed_caption_outlined,
-                      isActive: _isCaptionsOn,
-                      onTap: () => setState(() => _isCaptionsOn = !_isCaptionsOn),
-                    ),
-
-                    // Microphone toggle
-                    _buildControlButton(
-                      icon: _isMicMuted ? Icons.mic_off : Icons.mic,
-                      isActive: _isMicMuted,
-                      onTap: () => setState(() => _isMicMuted = !_isMicMuted),
-                    ),
-
-                    // Camera toggle
-                    _buildControlButton(
-                      icon: _isCameraOff ? Icons.videocam_off : Icons.videocam,
-                      isActive: _isCameraOff,
-                      onTap: () => setState(() => _isCameraOff = !_isCameraOff),
-                    ),
-
-                    // End Call — Red, prominent
-                    _buildControlButton(
-                      icon: Icons.call_end,
-                      backgroundColor: Colors.red,
-                      iconColor: Colors.white,
-                      size: 60,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRemoteVideo() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF3D5A6B), Color(0xFF1A2830)],
-        ),
-      ),
-      child: const Center(
-        child: Icon(Icons.person, color: Colors.white10, size: 200),
-      ),
-    );
-  }
+class _ParticipantVideoView extends StatelessWidget {
+  final Participant? participant;
+  final bool isLocal;
 
-  Widget _buildControlButton({
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isActive = false,
-    Color? backgroundColor,
-    Color iconColor = Colors.white,
-    double size = 56,
-  }) {
-    final bgColor = backgroundColor ??
-        (isActive
-            ? Colors.white
-            : Colors.white.withOpacity(0.20));
-    final fgColor = isActive && backgroundColor == null ? Colors.black : iconColor;
+  const _ParticipantVideoView({this.participant, this.isLocal = false});
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: bgColor,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white.withOpacity(0.15),
-            width: 1.5,
+  @override
+  Widget build(BuildContext context) {
+    if (participant == null) {
+      return Container(
+        color: Colors.grey[900],
+        child: Center(
+          child: Text(
+            isLocal ? 'Starting camera...' : 'Waiting for remote...',
+            style: const TextStyle(color: Colors.white54),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
         ),
-        child: Icon(icon, color: fgColor, size: size * 0.44),
-      ),
+      );
+    }
+
+    final videoTrack = participant!.videoTrackPublications
+        .where((pub) => pub.track is VideoTrack)
+        .map((pub) => pub.track as VideoTrack)
+        .firstOrNull;
+
+    if (videoTrack != null) {
+      return VideoTrackRenderer(videoTrack);
+    }
+
+    return Container(
+      color: Colors.grey[900],
+      child: const Center(child: Icon(Icons.person, color: Colors.white24, size: 80)),
     );
   }
 }
