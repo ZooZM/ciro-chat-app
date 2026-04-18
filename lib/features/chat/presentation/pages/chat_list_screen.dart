@@ -22,7 +22,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    // Trigger sync when screen loads
+    // Re-sync rooms from API every time the inbox opens.
+    // This is a background refresh — the StreamBuilder already shows
+    // cached SQLite data instantly while the fetch completes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ChatCubit>().hydrateRooms();
+    });
   }
 
   @override

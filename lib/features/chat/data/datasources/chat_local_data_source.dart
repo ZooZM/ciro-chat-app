@@ -31,7 +31,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2, // Bumped: added phoneNumber column to rooms
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages(
@@ -51,9 +51,18 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             timestamp TEXT,
             unreadCount INTEGER,
             isOnline INTEGER,
-            avatarUrl TEXT
+            avatarUrl TEXT,
+            phoneNumber TEXT DEFAULT ''
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add phoneNumber to existing installations
+          await db.execute(
+            "ALTER TABLE rooms ADD COLUMN phoneNumber TEXT DEFAULT ''",
+          );
+        }
       },
     );
   }

@@ -22,14 +22,14 @@ class ChatCubit extends Cubit<ChatState> {
   final AuthLocalDataSource _authLocalDataSource;
   final ChatApiService _chatApiService;
   final ContactsService _contactsService;
-  
+
   StreamSubscription<List<Message>>? _roomStreamSub;
   String? _activeRoomId;
   String currentUserId = ''; // Statically exposed to frontend wrappers
   final _uuid = const Uuid();
 
   ChatCubit(
-    this._localDataSource, 
+    this._localDataSource,
     this._socketService,
     this._authLocalDataSource,
     this._chatApiService,
@@ -39,55 +39,61 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   // Getter mapping the native stream completely to the ChatListScreen
-  Stream<List<ChatSession>> get recentChatsStream => _localDataSource.watchRecentChats();
+  Stream<List<ChatSession>> get recentChatsStream =>
+      _localDataSource.watchRecentChats();
 
   Future<void> _initServices() async {
     // 1. Organic local identity resolution
     currentUserId = await _authLocalDataSource.getUserPhone() ?? '';
-    
+
     // 2. Initialize SQL
     await _localDataSource.initDB();
-    
+
     // Wire socket callbacks
     _socketService.onMessageDelivered = (messageId) async {
-       // Server ACKed the message!
-       await _localDataSource.updateMessageStatus(messageId, MessageStatus.sent);
+      // Server ACKed the message!
+      await _localDataSource.updateMessageStatus(messageId, MessageStatus.sent);
     };
 
     _socketService.onNewMessage = (data) async {
-       final incoming = Message(
-         id: data['id'] ?? _uuid.v4(),
-         roomId: data['roomId'] ?? 'unknown',
-         senderId: data['senderId'] ?? 'them',
-         text: data['content'] ?? '',
-         timestamp: DateTime.now(), // Real app: parse data['timestamp']
-         status: MessageStatus.delivered,
-       );
-       
-       await _localDataSource.saveMessage(incoming);
-       
-       // Tell server we received it locally 
-       _socketService.markAsRead(roomId: incoming.roomId, messageId: incoming.id);
+      final incoming = Message(
+        id: data['id'] ?? _uuid.v4(),
+        roomId: data['chatRoomId'] ?? 'unknown',
+        senderId: data['senderId'] ?? 'them',
+        text: data['content'] ?? '',
+        timestamp: DateTime.now(), // Real app: parse data['timestamp']
+        status: MessageStatus.delivered,
+      );
+
+      await _localDataSource.saveMessage(incoming);
+
+      // Tell server we received it locally
+      _socketService.markAsRead(
+        roomId: incoming.roomId,
+        messageId: incoming.id,
+      );
     };
   }
 
   /// Called when User opens a ChatRoom
   void openRoom(String roomId) {
     if (_activeRoomId == roomId) return;
-    
+
     _activeRoomId = roomId;
     _roomStreamSub?.cancel();
     emit(ChatLoading());
 
     // Listen to our reactive local database slice
-    _roomStreamSub = _localDataSource.watchRoomMessages(roomId).listen(
-      (messages) {
-        emit(ChatRoomActive(roomId, messages));
-      },
-      onError: (e) {
-        emit(ChatError(e.toString()));
-      }
-    );
+    _roomStreamSub = _localDataSource
+        .watchRoomMessages(roomId)
+        .listen(
+          (messages) {
+            emit(ChatRoomActive(roomId, messages));
+          },
+          onError: (e) {
+            emit(ChatError(e.toString()));
+          },
+        );
   }
 
   /// Sends a local-first message
@@ -99,7 +105,9 @@ class ChatCubit extends Cubit<ChatState> {
     final newMsg = Message(
       id: msgId,
       roomId: roomId,
-      senderId: currentUserId.isNotEmpty ? currentUserId : 'me', // Real dynamically resolved user!
+      senderId: currentUserId.isNotEmpty
+          ? currentUserId
+          : 'me', // Real dynamically resolved user!
       text: text,
       timestamp: DateTime.now(),
       status: MessageStatus.pending, // Offline-first pending start!
@@ -113,7 +121,7 @@ class ChatCubit extends Cubit<ChatState> {
       roomId: roomId,
       messageId: msgId,
       text: text,
-      type: 'text'
+      type: 'text',
     );
   }
 
@@ -130,15 +138,20 @@ class ChatCubit extends Cubit<ChatState> {
   /// Triggered via manual connect/login payload
   void connectNetwork(String jwtToken) async {
     _socketService.connect(jwtToken);
-    
-    // Hydrate Background Rooms immediately after logging in
+    await hydrateRooms(); // Always sync rooms after connecting
+  }
+
+  /// Fetches rooms from the API and saves to local SQLite.
+  /// Safe to call on every ChatListScreen open — rooms table uses REPLACE conflict.
+  Future<void> hydrateRooms() async {
     try {
       final rooms = await _chatApiService.fetchRooms();
-      for (var room in rooms) {
+      for (final room in rooms) {
         await _localDataSource.saveRoom(room);
       }
+      debugPrint('[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite');
     } catch (e) {
-      debugPrint('Hydration silent fail: $e');
+      debugPrint('[ChatCubit] Hydration silent fail: $e');
     }
   }
 
