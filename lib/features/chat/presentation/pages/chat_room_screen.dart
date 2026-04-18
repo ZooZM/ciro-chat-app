@@ -10,6 +10,7 @@ import '../../domain/entities/chat_session.dart';
 import '../widgets/message_bubble_widget.dart';
 import '../widgets/attachment_sheet_widget.dart';
 import '../bloc/chat_cubit.dart';
+import '../../../video_call/presentation/pages/video_call_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final ChatSession chatData;
@@ -149,7 +150,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
         actions: [
           IconButton(icon: Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
-          IconButton(icon: Icon(Icons.videocam_outlined, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
+          IconButton(
+            icon: Icon(Icons.videocam_outlined, color: AppColors.textSecondary, size: 24.resW),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => VideoCallScreen(
+                    contactName: widget.chatData.name,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(icon: Icon(Icons.more_vert, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
         ],
       ),

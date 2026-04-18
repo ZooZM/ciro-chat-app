@@ -72,9 +72,12 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
               padding: EdgeInsets.all(AppConstants.defaultScreenPadding),
               child: Form(
                 key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
                     SizedBox(height: 48.resH), // Spacing from top
                     
                     // Centered Logo
@@ -123,7 +126,16 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                       },
                     ),
 
-                    const Spacer(),
+                          SizedBox(height: 32.resH),
+                        ],
+                      ),
+                    ),
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Container(
+                        alignment: Alignment.bottomCenter,
+                        padding: EdgeInsets.only(bottom: 16.resH),
+                        child:
 
                     // Primary Button
                     PrimaryButton(
@@ -132,7 +144,8 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                       text: 'Send Code',
                     ),
                     
-                    SizedBox(height: 16.resH),
+                      ),
+                    ),
                   ],
                 ),
               ),

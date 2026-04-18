@@ -13,7 +13,7 @@ class SocketService {
   /// Connects to the NestJS WebSocket Gateway
   void connect(String token) {
     // For local dev, use 10.0.2.2 on android emulator or localhost on web/iOS
-    final url = kIsWeb ? 'ws://localhost:3000' : 'ws://10.0.2.2:3000';
+    final url ="https://firstly-perforative-jaylah.ngrok-free.dev";
 
     _socket = IO.io(
       url,
@@ -69,7 +69,7 @@ class SocketService {
   }
 
   void markAsRead({required String roomId, required String messageId}) {
-    _socket?.emit('markRead', {'roomId': roomId, 'messageId': messageId});
+    _socket?.emit('markRead', {'chatRoomId': roomId, 'messageId': messageId});
   }
 
   void disconnect() {
