@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/auth_cubit.dart';
@@ -19,7 +18,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-    // context.read<AuthCubit>().verifyAuthStatus();
+    context.read<AuthCubit>().verifyAuthStatus();
   }
 
   @override

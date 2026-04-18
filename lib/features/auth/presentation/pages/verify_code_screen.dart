@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,10 +14,7 @@ import '../bloc/auth_cubit.dart';
 class VerifyCodeScreen extends StatefulWidget {
   final String phoneNumber;
 
-  const VerifyCodeScreen({
-    super.key,
-    required this.phoneNumber,
-  });
+  const VerifyCodeScreen({super.key, required this.phoneNumber});
 
   @override
   State<VerifyCodeScreen> createState() => _VerifyCodeScreenState();
@@ -67,6 +65,11 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           );
         } else if (state is Authenticated) {
           // Success! Navigate to the main/home flow
+          context.read<ChatCubit>().connectNetwork(
+            state.userData!['accessToken'],
+          );
+          // final token = state.userData!['accessToken'];
+          // debugPrint(token);
           context.go('/home'); // Routing to chat list
         }
       },
@@ -82,7 +85,6 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox(height: 64.resH), // Spacing from top
-                  
                   // Header Title
                   Text(
                     'Verify code',
@@ -99,12 +101,18 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   RichText(
                     textAlign: TextAlign.center,
                     text: TextSpan(
-                      style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.body1.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                       children: [
-                        const TextSpan(text: 'Please enter the code we just send to\n'),
+                        const TextSpan(
+                          text: 'Please enter the code we just send to\n',
+                        ),
                         TextSpan(
                           text: 'Phone number ',
-                          style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
+                          style: AppTypography.body1.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         TextSpan(
                           text: widget.phoneNumber,
@@ -127,7 +135,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     submittedPinTheme: defaultPinTheme,
                     onChanged: (val) {
                       setState(() {
-                         _pin = val;
+                        _pin = val;
                       });
                     },
                     onCompleted: (val) {
@@ -155,7 +163,9 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     children: [
                       Text(
                         'Didn’t receive code? ',
-                        style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                        style: AppTypography.body1.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       GestureDetector(
                         onTap: isLoading ? null : _onResend,
@@ -179,7 +189,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     onPressed: _onVerify,
                     text: 'Verify',
                   ),
-                  
+
                   SizedBox(height: 16.resH),
                 ],
               ),

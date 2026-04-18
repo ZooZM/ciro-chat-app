@@ -6,6 +6,7 @@ class ChatSession {
   final int unreadCount;
   final bool isOnline;
   final String avatarUrl;
+  final String phoneNumber;
 
   ChatSession({
     required this.id,
@@ -15,6 +16,7 @@ class ChatSession {
     this.unreadCount = 0,
     this.isOnline = false,
     required this.avatarUrl,
+    required this.phoneNumber,
   });
 
   Map<String, dynamic> toMap() {
@@ -26,6 +28,7 @@ class ChatSession {
       'unreadCount': unreadCount,
       'isOnline': isOnline ? 1 : 0,
       'avatarUrl': avatarUrl,
+      'phoneNumber': phoneNumber,
     };
   }
 
@@ -38,6 +41,7 @@ class ChatSession {
       unreadCount: map['unreadCount'] as int? ?? 0,
       isOnline: (map['isOnline'] as int? ?? 0) == 1,
       avatarUrl: map['avatarUrl'] ?? '',
+      phoneNumber: map['phoneNumber'] ?? '',
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,8 +9,19 @@ import '../../domain/entities/chat_session.dart';
 import '../widgets/chat_tile_widget.dart';
 import '../bloc/chat_cubit.dart';
 
-class ChatListScreen extends StatelessWidget {
+class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Trigger sync when screen loads
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +49,7 @@ class ChatListScreen extends StatelessWidget {
               child: IconButton(
                 icon: Icon(Icons.add, color: Colors.white, size: 20.resW),
                 onPressed: () {
-                   context.push('/contacts');
+                  context.push('/contacts');
                 },
                 padding: EdgeInsets.zero,
               ),
@@ -51,14 +61,15 @@ class ChatListScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 8.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: 16.resW,
+              vertical: 8.resH,
+            ),
             child: Row(
               children: [
                 Text(
                   'Chats',
-                  style: AppTypography.headline1.copyWith(
-                    color: Colors.black,
-                  ),
+                  style: AppTypography.headline1.copyWith(color: Colors.black),
                 ),
                 SizedBox(width: 16.resW),
                 // Pill Search Bar
@@ -68,16 +79,25 @@ class ChatListScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20.resR),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1.resW),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.5),
+                        width: 1.resW,
+                      ),
                     ),
                     padding: EdgeInsets.symmetric(horizontal: 12.resW),
                     child: Row(
                       children: [
-                        Icon(Icons.search, color: AppColors.textSecondary, size: 20.resW),
+                        Icon(
+                          Icons.search,
+                          color: AppColors.textSecondary,
+                          size: 20.resW,
+                        ),
                         SizedBox(width: 8.resW),
                         Text(
                           'Search',
-                          style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                          style: AppTypography.body1.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
@@ -88,21 +108,25 @@ class ChatListScreen extends StatelessWidget {
           ),
           Expanded(
             child: StreamBuilder<List<ChatSession>>(
-              stream: context.read<ChatCubit>().recentChatsStream, // Direct pure SQLite hook!
+              stream: context
+                  .read<ChatCubit>()
+                  .recentChatsStream, // Direct pure SQLite hook!
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                   return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator());
                 }
                 final activeChats = snapshot.data ?? [];
 
                 if (activeChats.isEmpty) {
-                   return Center(
-                     child: Text(
-                       'No active chats yet.\nTap the + button to start one!',
-                       textAlign: TextAlign.center,
-                       style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
-                     )
-                   );
+                  return Center(
+                    child: Text(
+                      'No active chats yet.\nTap the + button to start one!',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.body1.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  );
                 }
 
                 return ListView.separated(
@@ -117,12 +141,12 @@ class ChatListScreen extends StatelessWidget {
                     return ChatTileWidget(
                       chat: chat,
                       onTap: () {
-                         context.push('/chat_room', extra: chat);
+                        context.push('/chat_room', extra: chat);
                       },
                     );
                   },
                 );
-              }
+              },
             ),
           ),
         ],
@@ -136,7 +160,9 @@ class ChatListScreen extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: AppColors.primary,
           unselectedItemColor: AppColors.textSecondary,
-          selectedLabelStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
+          selectedLabelStyle: AppTypography.caption.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
           unselectedLabelStyle: AppTypography.caption,
           items: [
             BottomNavigationBarItem(

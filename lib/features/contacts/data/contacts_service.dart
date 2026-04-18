@@ -21,27 +21,29 @@ class ContactsService {
     }
 
     // 2. Fetch raw device contacts (with phones)
-    final contacts = await FlutterContacts.getAll(properties: {ContactProperty.phone});
+    final contacts = await FlutterContacts.getAll(
+      properties: {ContactProperty.phone},
+    );
 
     // 3. Normalize numbers
-    final List<String> rawNumbers = [];
-    for (var contact in contacts) {
-      for (var phone in contact.phones) {
-        // Strip spaces, dashes, parentheses
-        var normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
-        
-        // Example logic: Default missing country codes to EG (+20)
-        if (!normalized.startsWith('+') && normalized.length >= 10) {
-           if (normalized.startsWith('0')) {
-             normalized = '+20${normalized.substring(1)}';
-           } else {
-             normalized = '+20$normalized';
-           }
-        }
-        
-        if (normalized.isNotEmpty) rawNumbers.add(normalized);
-      }
-    }
+    final List<Contact> rawNumbers = contacts;
+    // for (var contact in contacts) {
+    //   for (var phone in contact.phones) {
+    //     // Strip spaces, dashes, parentheses
+    //     var normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
+
+    //     // Example logic: Default missing country codes to EG (+20)
+    //     if (!normalized.startsWith('+') && normalized.length >= 10) {
+    //        if (normalized.startsWith('0')) {
+    //          normalized = '+20${normalized.substring(1)}';
+    //        } else {
+    //          normalized = '+20$normalized';
+    //        }
+    //     }
+
+    //     if (normalized.isNotEmpty) rawNumbers.add(normalized);
+    //   }
+    // }
 
     // Remove duplicates safely
     final uniqueNumbers = rawNumbers.toSet().toList();
@@ -49,49 +51,83 @@ class ContactsService {
 
     // 4. Send bulk list to API to cross-reference registered users
     try {
-      // ⚠️ CHECK: Confirm the field name matches your NestJS DTO exactly.
-      // Common variants: 'phones', 'phoneNumbers', 'contacts'
-      // Log payload for debugging:
-      debugPrint('[ContactsService] Syncing ${uniqueNumbers.length} numbers: $uniqueNumbers');
+      debugPrint(
+        '[ContactsService] Syncing ${uniqueNumbers.length} numbers: $uniqueNumbers',
+      );
 
       final payload = {
-        'phoneNumbers': uniqueNumbers, // ← adjust this key to match your NestJS DTO
+        'phoneNumbers': uniqueNumbers
+            .map((e) => e.phones.first.number)
+            .toList(),
       };
 
-      final response = await _dioClient.dio.post('/users/sync-contacts', data: payload);
+      final response = await _dioClient.dio.post(
+        '/users/sync-contacts',
+        data: payload,
+      );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Handle both array and wrapped { data: [] } response shapes
         final raw = response.data;
-        final List<dynamic> data = (raw is List) ? raw : (raw['data'] ?? raw['users'] ?? []);
-        
-        return data.map((json) => ChatSession(
-           id: json['id'] ?? json['_id'] ?? 'tmp',
-           name: json['name'] ?? json['displayName'] ?? 'Unknown',
-           lastMessage: 'Tap to start chatting',
-           timestamp: DateTime.now(),
-           avatarUrl: json['avatarUrl'] ?? json['profilePicture'] ?? 'https://i.pravatar.cc/150?u=${json['id']}',
-           isOnline: json['isOnline'] == true,
-        )).toList();
+        final List<dynamic> data = (raw is List)
+            ? raw
+            : (raw['data'] ?? raw['users'] ?? []);
+
+        return data
+            .map(
+              (json) => ChatSession(
+                id: json['id'] ?? json['_id'] ?? 'tmp',
+                name:
+                    rawNumbers
+                        .lastWhere(
+                          (contact) => contact.phones.any(
+                            (phone) => phone.number == json['phoneNumber'],
+                          ),
+                        )
+                        .displayName ??
+                    "Unknown",
+                lastMessage: 'Tap to start chatting',
+                timestamp: DateTime.now(),
+                avatarUrl:
+                    json['avatarUrl'] ??
+                    json['profilePicture'] ??
+                    'https://i.pravatar.cc/150?u=${json['id']}',
+                isOnline: json['isOnline'] == true,
+                phoneNumber: json['phoneNumber'] ?? '',
+              ),
+            )
+            .toList();
       }
+
       return [];
     } catch (e) {
       throw Exception('Failed to synchronize contacts: $e');
     }
   }
 
-  Future<String> resolvePrivateChat(String targetPhoneNumber) async {
+  Future<String> resolvePrivateChat({
+    required String targetPhoneNumber,
+    required ChatSession chatSession,
+  }) async {
     try {
-      final response = await _dioClient.dio.post('/chat/private/resolve', data: {
-         'phoneNumber': targetPhoneNumber
-      });
-      
+      final response = await _dioClient.dio.post(
+        '/chat/private/resolve',
+        data: {'phoneNumber': targetPhoneNumber},
+      );
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-         // Should return the unique roomId for this 1on1 session
-         return response.data['roomId'] as String;
+        final responseData = response.data['data'] ?? response.data;
+
+        final roomId =
+            responseData['roomId'] ?? responseData['_id'] ?? responseData['id'];
+
+        if (roomId != null) {
+          return roomId.toString();
+        }
       }
-      throw Exception('Server failed to resolve chat root');
+      throw Exception('Server failed to return a valid roomId');
     } catch (e) {
+      debugPrint('Resolve Chat Error: $e');
       throw Exception('Failed to resolve private chat: $e');
     }
   }

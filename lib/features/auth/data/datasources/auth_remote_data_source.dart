@@ -15,17 +15,21 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<void> sendOtp(String phoneNumber) async {
-    await _dioClient.dio.post('/auth/send-otp', data: {
-      'phoneNumber': phoneNumber,
-    });
+    await _dioClient.dio.post(
+      '/auth/send-otp',
+      data: {'phoneNumber': phoneNumber},
+    );
   }
 
   @override
-  Future<Map<String, dynamic>> verifyOtp(String phoneNumber, String code) async {
-    final response = await _dioClient.dio.post('/auth/verify-otp', data: {
-      'phoneNumber': phoneNumber,
-      'code': code,
-    });
-    return response.data as Map<String, dynamic>;
+  Future<Map<String, dynamic>> verifyOtp(
+    String phoneNumber,
+    String code,
+  ) async {
+    final response = await _dioClient.dio.post(
+      '/auth/verify-otp',
+      data: {'phoneNumber': phoneNumber, 'code': code},
+    );
+    return response.data['data'] as Map<String, dynamic>;
   }
 }
