@@ -6,13 +6,13 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
+import 'package:ciro_chat_app/features/video_call/presentation/bloc/call_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
-
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
-import '../../features/video_call/presentation/bloc/video_call_cubit.dart';
+import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../di/injection.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -70,16 +70,21 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const ContactsScreen(),
     ),
     GoRoute(
-      path: '/video_call',
-      // We will assume the user passes a map { 'url': wsUrl, 'token': token }
-      // but for testing, we can just grab it or initiate a blank one.
-      // Wait, we need to invoke joinRoom if we pass it, but maybe just provision the bloc:
+      path: '/incoming_call',
       builder: (context, state) {
-        return BlocProvider(
-          create: (_) => getIt<VideoCallCubit>()
-            // Trigger connection attempt with dummy credentials to test State flows
-            ..joinRoom('testRoom1'),
-          child: const VideoCallScreen(),
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return IncomingCallScreen(
+          callerName: data['callerName'] as String? ?? 'Unknown',
+          callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
+        );
+      },
+    ),
+    GoRoute(
+      path: '/video_call',
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return VideoCallScreen(
+          contactName: data['contactName'] as String? ?? 'Calling...',
         );
       },
     ),

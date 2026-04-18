@@ -10,6 +10,7 @@ import '../../domain/entities/chat_session.dart';
 import '../widgets/message_bubble_widget.dart';
 import '../widgets/attachment_sheet_widget.dart';
 import '../bloc/chat_cubit.dart';
+import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../video_call/presentation/pages/video_call_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -179,11 +180,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           IconButton(
             icon: Icon(Icons.videocam_outlined, color: AppColors.textSecondary, size: 24.resW),
             onPressed: () {
+              // 1. Emit requestCall via socket (CallCubit handles the signaling)
+              context.read<CallCubit>().initiateCall(
+                targetUserId: widget.chatData.phoneNumber,
+                targetName: widget.chatData.name,
+                targetAvatarUrl: widget.chatData.avatarUrl,
+              );
+              // 2. Navigate to VideoCallScreen immediately ("Calling..." state)
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => VideoCallScreen(
-                    contactName: widget.chatData.name,
+                  builder: (_) => BlocProvider.value(
+                    value: context.read<CallCubit>(),
+                    child: VideoCallScreen(
+                      contactName: widget.chatData.name,
+                    ),
                   ),
                 ),
               );
