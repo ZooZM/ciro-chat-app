@@ -8,6 +8,8 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
 import '../widgets/chat_tile_widget.dart';
 import '../bloc/chat_cubit.dart';
+import '../../../../core/theme/app_logo.dart';
+
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -31,15 +33,47 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 16.resW,
-        title: SvgPicture.asset(
-          'assets/icons/logo.svg', // Assuming primary logo variant exists
-          height: 36.resH,
-          // Placeholder if missing
-          placeholderBuilder: (_) => Text(
-            'CIRO CONNECT',
-            style: AppTypography.headline2.copyWith(color: AppColors.primary),
-          ),
-        ),
+         title: Row(
+          children: [
+            AppLogoWidget(
+              size: 44,
+              showText: false,
+            ),
+            SizedBox(width: 8.resW),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'CIRO',
+                  style: AppTypography.logoMark.copyWith(
+                    fontSize: 20,
+                    height: 1.1,
+                    letterSpacing: 2,
+                  ),
+                ),
+                Text(
+                  'CONNECT',
+                  style: AppTypography.logoTagline.copyWith(
+                    fontSize: 9,
+                    height: 1.1,
+                    letterSpacing: 3,
+                  ),
+                ),
+              ],
+            ),
+          ],
+         ),
+        // SvgPicture.asset(
+        //   'assets/icons/logo.svg', // Assuming primary logo variant exists
+        //   height: 36.resH,
+        //   // Placeholder if missing
+        //   placeholderBuilder: (_) => Text(
+        //     'CIRO CONNECT',
+        //     style: AppTypography.headline2.copyWith(color: AppColors.primary),
+        //   ),
+        // ),
+         
         actions: [
           Padding(
             padding: EdgeInsets.only(right: 16.resW),

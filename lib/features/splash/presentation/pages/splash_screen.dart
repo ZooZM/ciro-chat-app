@@ -42,7 +42,8 @@ class _SplashScreenState extends State<SplashScreen>
 
     try {
       final authRepo = getIt<AuthRepository>();
-      final isLoggedIn = await authRepo.checkAuthStatus();
+      final isLoggedIn = false;
+      // await authRepo.checkAuthStatus();
 
       if (isLoggedIn) {
         context.go('/home'); // Direct to ChatListScreen
