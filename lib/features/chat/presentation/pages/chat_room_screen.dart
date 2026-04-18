@@ -28,6 +28,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late String _currentUserId;
+  bool _isMenuOpen = false; // tracks popup visibility for background dim
 
   @override
   void initState() {
@@ -76,6 +77,31 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         );
       });
     }
+  }
+
+  PopupMenuItem<String> _buildMenuItem(
+    String value,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 14),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -163,10 +189,32 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               );
             },
           ),
-          IconButton(icon: Icon(Icons.more_vert, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: AppColors.textSecondary, size: 24.resW),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: Colors.white,
+            elevation: 8,
+            offset: const Offset(0, 48), // push dropdown below the icon
+            onOpened: () => setState(() => _isMenuOpen = true),
+            onCanceled: () => setState(() => _isMenuOpen = false),
+            onSelected: (value) {
+              setState(() => _isMenuOpen = false);
+              // Handle menu actions here
+            },
+            itemBuilder: (context) => [
+              _buildMenuItem('search',      Icons.search,                 'Search in conversation', AppColors.textPrimary),
+              _buildMenuItem('mute',        Icons.notifications_off_outlined,'Mute notification',   AppColors.textPrimary),
+              _buildMenuItem('block',       Icons.person_off_outlined,    'Block user',             Colors.red),
+              _buildMenuItem('report',      Icons.flag_outlined,          'Report',                 Colors.red),
+              _buildMenuItem('delete',      Icons.delete_outline,         'Delete chat',            Colors.red),
+            ],
+          ),
         ],
       ),
-      body: Column(
+      body: AnimatedOpacity(
+        duration: const Duration(milliseconds: 200),
+        opacity: _isMenuOpen ? 0.3 : 1.0,
+        child: Column(
         children: [
           Expanded(
             child: BlocConsumer<ChatCubit, ChatState>(
@@ -255,7 +303,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
           )
         ],
-      ),
+        ), // Column
+      ), // AnimatedOpacity
     );
   }
 }
