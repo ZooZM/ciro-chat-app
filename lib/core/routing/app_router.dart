@@ -5,6 +5,7 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
+import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -15,8 +16,12 @@ import '../../features/video_call/presentation/bloc/video_call_cubit.dart';
 import '../di/injection.dart';
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/auth',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/auth',
       builder: (context, state) => BlocProvider(

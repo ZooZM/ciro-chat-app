@@ -39,6 +39,7 @@ class AuthRepositoryImpl implements AuthRepository {
         accessToken: accessToken,
         refreshToken: refreshToken ?? '',
       );
+      await _localDataSource.setLoggedInStatus(true);
     } else {
       // Provide more diagnostic information in the error message
       throw Exception('Invalid token payload. Found keys: $keys. Expected "accessToken" or "data.accessToken"');
@@ -53,6 +54,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<bool> checkAuthStatus() async {
     final token = await _localDataSource.getAccessToken();
-    return token != null && token.isNotEmpty;
+    final isLoggedIn = await _localDataSource.getLoggedInStatus();
+    return token != null && token.isNotEmpty && isLoggedIn;
   }
 }

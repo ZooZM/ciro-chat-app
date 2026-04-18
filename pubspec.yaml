@@ -25,6 +25,7 @@ dependencies:
   google_fonts: ^8.0.2
   flutter_svg: ^2.2.4
   intl_phone_field: ^3.2.0
+  country_picker: ^2.0.26
   pinput: ^6.0.2
   flutter_screenutil: ^5.9.3
   cached_network_image: ^3.4.1
@@ -47,6 +48,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    - assets/logo.png
 
 dependency_overrides:
   connectivity_plus: ^6.1.1

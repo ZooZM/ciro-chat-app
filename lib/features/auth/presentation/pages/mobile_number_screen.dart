@@ -4,13 +4,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
+import '../widgets/primary_button.dart';
+import '../widgets/phone_field_widget.dart';
+import '../bloc/auth_cubit.dart';
+import '../../../../core/helpers/permission_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_constants.dart';
-import '../widgets/primary_button.dart';
-import '../bloc/auth_cubit.dart';
-import '../../../../core/helpers/permission_service.dart';
+import '../../../../core/theme/app_logo.dart';
 
 class MobileNumberScreen extends StatefulWidget {
   const MobileNumberScreen({super.key});
@@ -77,19 +78,9 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                     SizedBox(height: 48.resH), // Spacing from top
                     
                     // Centered Logo
-                    SvgPicture.asset(
-                      'assets/icons/logo.svg',
-                      width: 80.resW,
-                      height: 80.resW,
-                      placeholderBuilder: (context) => Container(
-                        width: 80.resW,
-                        height: 80.resW,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.chat_bubble, color: Colors.white, size: 40.resW),
-                      ),
+                    const AppLogoWidget(
+                      size: 180,
+                      showText: false, // Icon only on auth screen
                     ),
 
                     SizedBox(height: 32.resH),
@@ -119,40 +110,16 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
 
                     const SizedBox(height: 8),
 
-                    // Phone Input Field
-                    IntlPhoneField(
-                      decoration: InputDecoration(
-                        hintText: '123 456 890',
-                        hintStyle: AppTypography.body1.copyWith(color: AppColors.divider),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 2.0),
-                        ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 16.resH),
-                      ),
-                      initialCountryCode: 'EG',
-                      dropdownIcon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textPrimary),
-                      dropdownIconPosition: IconPosition.trailing,
-                      showCountryFlag: true,
-                      flagsButtonPadding: const EdgeInsets.only(left: 12),
-                      style: AppTypography.body1,
-                      cursorColor: AppColors.primary,
-                      onChanged: (phone) {
-                        _phoneNumber = phone.completeNumber;
+                    // Phone Input (CiroPhoneField = full custom UI control)
+                    CiroPhoneField(
+                      onChanged: (fullNumber) {
+                        _phoneNumber = fullNumber;
                       },
-                      validator: (phone) {
-                        if (phone == null || phone.number.isEmpty) {
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
                           return 'Please enter a valid phone number';
                         }
-                        return null; // IntlPhoneField generally handles basic validation internally too
+                        return null;
                       },
                     ),
 
