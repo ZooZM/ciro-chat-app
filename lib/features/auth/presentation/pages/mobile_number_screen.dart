@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
+import '../widgets/primary_button.dart';
+import '../widgets/phone_field_widget.dart';
+import '../bloc/auth_cubit.dart';
+import '../../../../core/helpers/permission_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_constants.dart';
-import '../widgets/primary_button.dart';
-import '../bloc/auth_cubit.dart';
+import '../../../../core/theme/app_logo.dart';
 
 class MobileNumberScreen extends StatefulWidget {
   const MobileNumberScreen({super.key});
@@ -16,9 +20,19 @@ class MobileNumberScreen extends StatefulWidget {
   State<MobileNumberScreen> createState() => _MobileNumberScreenState();
 }
 
-class _MobileNumberScreenState extends State<MobileNumberScreen> {
+class _MobileNumberScreenState extends State<MobileNumberScreen>
+    with PermissionHandlerMixin {
   String _phoneNumber = '';
   final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Request all required app permissions at the first screen the user sees
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      requestAppPermissions();
+    });
+  }
 
   void _onSendCode() {
     if (_formKey.currentState?.validate() ?? false) {
@@ -55,31 +69,24 @@ class _MobileNumberScreenState extends State<MobileNumberScreen> {
           backgroundColor: AppColors.surface,
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(AppConstants.defaultScreenPadding),
+              padding: EdgeInsets.all(AppConstants.defaultScreenPadding),
               child: Form(
                 key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 48), // Spacing from top
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                    SizedBox(height: 48.resH), // Spacing from top
                     
                     // Centered Logo
-                    SvgPicture.asset(
-                      'assets/icons/logo.svg',
-                      width: 80,
-                      height: 80,
-                      placeholderBuilder: (context) => Container(
-                        width: 80,
-                        height: 80,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.chat_bubble, color: Colors.white, size: 40),
-                      ),
+                    const AppLogoWidget(
+                      size: 180,
+                      showText: false, // Icon only on auth screen
                     ),
 
-                    const SizedBox(height: 32),
+                    SizedBox(height: 32.resH),
 
                     // Instruction Text
                     Text(
@@ -90,7 +97,7 @@ class _MobileNumberScreenState extends State<MobileNumberScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 48),
+                    SizedBox(height: 48.resH),
 
                     // Mobile Number Label
                     Align(
@@ -106,44 +113,29 @@ class _MobileNumberScreenState extends State<MobileNumberScreen> {
 
                     const SizedBox(height: 8),
 
-                    // Phone Input Field
-                    IntlPhoneField(
-                      decoration: InputDecoration(
-                        hintText: '123 456 890',
-                        hintStyle: AppTypography.body1.copyWith(color: AppColors.divider),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppConstants.defaultBorderRadius),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 2.0),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      ),
-                      initialCountryCode: 'EG',
-                      dropdownIcon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textPrimary),
-                      dropdownIconPosition: IconPosition.trailing,
-                      showCountryFlag: true,
-                      flagsButtonPadding: const EdgeInsets.only(left: 12),
-                      style: AppTypography.body1,
-                      cursorColor: AppColors.primary,
-                      onChanged: (phone) {
-                        _phoneNumber = phone.completeNumber;
+                    // Phone Input (CiroPhoneField = full custom UI control)
+                    CiroPhoneField(
+                      onChanged: (fullNumber) {
+                        _phoneNumber = fullNumber;
                       },
-                      validator: (phone) {
-                        if (phone == null || phone.number.isEmpty) {
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
                           return 'Please enter a valid phone number';
                         }
-                        return null; // IntlPhoneField generally handles basic validation internally too
+                        return null;
                       },
                     ),
 
-                    const Spacer(),
+                          SizedBox(height: 32.resH),
+                        ],
+                      ),
+                    ),
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Container(
+                        alignment: Alignment.bottomCenter,
+                        padding: EdgeInsets.only(bottom: 16.resH),
+                        child:
 
                     // Primary Button
                     PrimaryButton(
@@ -152,7 +144,8 @@ class _MobileNumberScreenState extends State<MobileNumberScreen> {
                       text: 'Send Code',
                     ),
                     
-                    const SizedBox(height: 16),
+                      ),
+                    ),
                   ],
                 ),
               ),

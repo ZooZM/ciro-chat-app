@@ -1,47 +1,70 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color palette for the application.
-/// Update the hex values below with the exact colors from your Figma file.
+/// Centralized color palette — sourced directly from the Ciro Connect logo.
+///
+/// Brand colors extracted from the reference image:
+///   Green  #4CA02A  — left speech bubble, primary CTA color
+///   Blue   #5B9BD5  — right speech bubble, secondary accent
 class AppColors {
-  AppColors._(); // Private constructor to prevent instantiation
+  AppColors._();
 
-  // --- Brand Colors ---
-  
-  /// Primary Brand Color (Green from Figma)
-  static const Color primary = Color(0xFF4CA02A); 
+  // ── Brand ─────────────────────────────────────────────────────────────────
 
-  /// Secondary Brand Color
-  static const Color secondary = Color(0xFF4A90E2); 
+  /// Primary green — left bubble, buttons, highlights
+  static const Color primary = Color(0xFF4CA02A);
 
-  // --- Background Colors ---
+  /// Darker green for active / pressed states
+  static const Color primaryDark = Color(0xFF397820);
 
-  /// Main application background color
-  static const Color background = Color(0xFFF8F9FA); 
-  
-  /// Surface color for cards, dialogs, and bottom sheets
-  static const Color surface = Color(0xFFFFFFFF); 
+  /// Light green tint — backgrounds, chips, badges
+  static const Color primaryLight = Color(0xFFE8F5E3);
 
-  // --- Text Colors ---
+  /// Secondary blue — right bubble, secondary actions
+  static const Color secondary = Color(0xFF5B9BD5);
 
-  /// Primary Text Color - High emphasis, for headings and main body text
-  static const Color textPrimary = Colors.black; 
+  /// Darker blue for active / pressed states
+  static const Color secondaryDark = Color(0xFF3A7BB5);
 
-  /// Secondary Text Color - Medium emphasis, for subtitles and helper text
-  static const Color textSecondary = Color(0xFF757575); 
+  /// Light blue tint
+  static const Color secondaryLight = Color(0xFFE3EFF9);
 
-  // --- Status & Semantic Colors ---
+  // ── Backgrounds ───────────────────────────────────────────────────────────
 
-  /// Error color for validation and warnings
-  static const Color error = Color(0xFFD32F2F); 
+  static const Color background    = Color(0xFFF8F9FA);
+  static const Color surface       = Color(0xFFFFFFFF);
+  static const Color surfaceVariant = Color(0xFFF3F4F6);
 
-  /// Success color for confirmations and positive actions
+  // ── Text ──────────────────────────────────────────────────────────────────
+
+  /// High-emphasis text — headings, titles
+  static const Color textPrimary   = Color(0xFF1A1A1A);
+
+  /// Medium-emphasis — subtitles, helper text
+  static const Color textSecondary = Color(0xFF757575);
+
+  /// Low-emphasis — placeholders, disabled
+  static const Color textHint      = Color(0xFFBDBDBD);
+
+  // ── Semantic ──────────────────────────────────────────────────────────────
+
+  static const Color error   = Color(0xFFD32F2F);
   static const Color success = Color(0xFF388E3C);
-
-  /// Warning color for alerts
   static const Color warning = Color(0xFFF57C00);
+  static const Color info    = Color(0xFF1976D2);
 
-  // --- Dividers & Borders ---
-  
-  /// Default color for dividers, borders, and subtle lines
-  static const Color divider = Color(0xFFE0E0E0);
+  // ── UI Chrome ─────────────────────────────────────────────────────────────
+
+  /// Dividers, border strokes
+  static const Color divider  = Color(0xFFE0E0E0);
+
+  /// Input field borders in rest state
+  static const Color border   = Color(0xFFCCCCCC);
+
+  // ── Chat bubbles ──────────────────────────────────────────────────────────
+
+  /// Outgoing message bubble
+  static const Color bubbleOut = Color(0xFFDFFAC4);
+
+  /// Incoming message bubble
+  static const Color bubbleIn  = Color(0xFFFFFFFF);
 }

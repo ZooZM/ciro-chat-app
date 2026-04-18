@@ -1,19 +1,27 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
-import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
-import 'package:ciro_chat_app/features/chat/presentation/pages/chat_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
+import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
+import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
+import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
+import 'package:ciro_chat_app/features/video_call/presentation/bloc/call_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
-import '../../features/video_call/presentation/bloc/video_call_cubit.dart';
+import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../di/injection.dart';
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/auth',
+  initialLocation: '/splash',
   routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
     GoRoute(
       path: '/auth',
       builder: (context, state) => BlocProvider(
@@ -46,30 +54,39 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/home',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Home (Chat List) Placeholder')),
-      ),
+      builder: (context, state) => const ChatListScreen(),
     ),
     GoRoute(
-      path: '/video_call',
-      // We will assume the user passes a map { 'url': wsUrl, 'token': token }
-      // but for testing, we can just grab it or initiate a blank one.
-      // Wait, we need to invoke joinRoom if we pass it, but maybe just provision the bloc:
+      path: '/chat_room',
       builder: (context, state) {
-        return BlocProvider(
-          create: (_) => getIt<VideoCallCubit>()
-            // Trigger connection attempt with dummy credentials to test State flows
-            ..joinRoom('testRoom1'),
-          child: const VideoCallScreen(),
+        final chat = state.extra as ChatSession;
+        // Use the global ChatCubit instance and open the specific room
+        context.read<ChatCubit>().openRoom(chat.id);
+        return ChatRoomScreen(chatData: chat);
+      },
+    ),
+    GoRoute(
+      path: '/contacts',
+      builder: (context, state) => const ContactsScreen(),
+    ),
+    GoRoute(
+      path: '/incoming_call',
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return IncomingCallScreen(
+          callerName: data['callerName'] as String? ?? 'Unknown',
+          callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
         );
       },
     ),
     GoRoute(
-      path: '/chat',
-      builder: (context, state) => BlocProvider(
-        create: (_) => getIt<ChatCubit>(),
-        child: const ChatScreen(),
-      ),
+      path: '/video_call',
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return VideoCallScreen(
+          contactName: data['contactName'] as String? ?? 'Calling...',
+        );
+      },
     ),
   ],
 );

@@ -40,8 +40,8 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> submitOtp(String phone, String code) async {
     emit(const AuthLoading());
     try {
-      await _repository.verifyOtp(phone, code);
-      emit(const Authenticated());
+      final response = await _repository.verifyOtp(phone, code);
+      emit(Authenticated(userData: response));
     } catch (e) {
       emit(AuthError(e.toString()));
     }

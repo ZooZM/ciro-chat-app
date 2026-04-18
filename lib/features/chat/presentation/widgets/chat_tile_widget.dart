@@ -1,0 +1,94 @@
+import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:badges/badges.dart' as pk_badges;
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../domain/entities/chat_session.dart';
+
+class ChatTileWidget extends StatelessWidget {
+  final ChatSession chat;
+  final VoidCallback onTap;
+
+  const ChatTileWidget({
+    Key? key,
+    required this.chat,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+      leading: Stack(
+        children: [
+          CircleAvatar(
+            radius: 28.resR,
+            backgroundColor: AppColors.divider,
+            backgroundImage: CachedNetworkImageProvider(chat.avatarUrl),
+          ),
+          if (chat.isOnline)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: 14.resW,
+                height: 14.resW,
+                decoration: BoxDecoration(
+                  color: Colors.blue, // Same blue shown in mockups
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.surface, width: 2.resW),
+                ),
+              ),
+            ),
+        ],
+      ),
+      title: Text(
+        chat.name,
+        style: AppTypography.subtitle1.copyWith(
+          fontWeight: chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+          color: Colors.black, // Dark text from mockups
+        ),
+      ),
+      subtitle: Text(
+        chat.lastMessage,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.body2.copyWith(
+          color: chat.unreadCount > 0 ? Colors.black87 : AppColors.textSecondary,
+        ),
+      ),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            "${chat.timestamp.hour}:${chat.timestamp.minute.toString().padLeft(2, '0')}",
+            style: AppTypography.caption.copyWith(
+              color: chat.unreadCount > 0 ? Colors.black : AppColors.textSecondary,
+            ),
+          ),
+          SizedBox(height: 6.resH),
+          if (chat.unreadCount > 0)
+            pk_badges.Badge(
+              badgeContent: Text(
+                chat.unreadCount.toString(),
+                style: TextStyle(color: Colors.white, fontSize: 10.resSp),
+              ),
+              badgeStyle: pk_badges.BadgeStyle(
+                badgeColor: AppColors.primary,
+                padding: EdgeInsets.all(5.resW),
+              ),
+            )
+          else if (!chat.isOnline && chat.unreadCount == 0)
+             // Simple placeholder for read ticks shown in mockups when no unread messages
+             Icon(Icons.done_all, size: 16.resW, color: Colors.blue) 
+          else 
+             SizedBox(height: 16.resH)
+        ],
+      ),
+    );
+  }
+}

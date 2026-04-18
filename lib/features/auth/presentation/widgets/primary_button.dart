@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_constants.dart';
 
@@ -19,7 +21,7 @@ class PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 56.0, // Large pill-shaped button
+      height: 56.0.resH, // Responsive pill-shaped button height
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
@@ -32,10 +34,10 @@ class PrimaryButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
+            ? SizedBox(
+                width: 24.resW,
+                height: 24.resW,
+                child: const CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2.5,
                 ),

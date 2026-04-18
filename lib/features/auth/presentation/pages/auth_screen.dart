@@ -18,7 +18,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-    // context.read<AuthCubit>().verifyAuthStatus();
+    context.read<AuthCubit>().verifyAuthStatus();
   }
 
   @override

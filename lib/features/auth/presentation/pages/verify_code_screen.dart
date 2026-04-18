@@ -1,5 +1,8 @@
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -11,10 +14,7 @@ import '../bloc/auth_cubit.dart';
 class VerifyCodeScreen extends StatefulWidget {
   final String phoneNumber;
 
-  const VerifyCodeScreen({
-    super.key,
-    required this.phoneNumber,
-  });
+  const VerifyCodeScreen({super.key, required this.phoneNumber});
 
   @override
   State<VerifyCodeScreen> createState() => _VerifyCodeScreenState();
@@ -40,8 +40,8 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
   @override
   Widget build(BuildContext context) {
     final defaultPinTheme = PinTheme(
-      width: 50, // Resized from 64 to 50 to fit 6 boxes on mobile screens
-      height: 56, // Resized slightly to give a nice vertical rectangle look
+      width: 50.resW, // Resized to scale responsively
+      height: 56.resH, // Resized to scale responsively
       textStyle: AppTypography.headline2,
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -65,7 +65,12 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           );
         } else if (state is Authenticated) {
           // Success! Navigate to the main/home flow
-          context.go('/video'); // Using video as per current router placeholder
+          context.read<ChatCubit>().connectNetwork(
+            state.userData!['accessToken'],
+          );
+          // final token = state.userData!['accessToken'];
+          // debugPrint(token);
+          context.go('/home'); // Routing to chat list
         }
       },
       builder: (context, state) {
@@ -75,12 +80,11 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           backgroundColor: AppColors.surface,
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(AppConstants.defaultScreenPadding),
+              padding: EdgeInsets.all(AppConstants.defaultScreenPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 64), // Spacing from top
-                  
+                  SizedBox(height: 64.resH), // Spacing from top
                   // Header Title
                   Text(
                     'Verify code',
@@ -91,18 +95,24 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12.resH),
 
                   // Subtitle Text Block
                   RichText(
                     textAlign: TextAlign.center,
                     text: TextSpan(
-                      style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.body1.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                       children: [
-                        const TextSpan(text: 'Please enter the code we just send to\n'),
+                        const TextSpan(
+                          text: 'Please enter the code we just send to\n',
+                        ),
                         TextSpan(
                           text: 'Phone number ',
-                          style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
+                          style: AppTypography.body1.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         TextSpan(
                           text: widget.phoneNumber,
@@ -115,7 +125,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 48),
+                  SizedBox(height: 48.resH),
 
                   // OTP Entry Field
                   Pinput(
@@ -125,7 +135,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     submittedPinTheme: defaultPinTheme,
                     onChanged: (val) {
                       setState(() {
-                         _pin = val;
+                        _pin = val;
                       });
                     },
                     onCompleted: (val) {
@@ -136,16 +146,16 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          width: 22,
-                          height: 2,
+                          margin: EdgeInsets.only(bottom: 16.resH),
+                          width: 22.resW,
+                          height: 2.resH,
                           color: AppColors.primary,
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 48),
+                  SizedBox(height: 48.resH),
 
                   // Resend Row
                   Row(
@@ -153,7 +163,9 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     children: [
                       Text(
                         'Didn’t receive code? ',
-                        style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
+                        style: AppTypography.body1.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       GestureDetector(
                         onTap: isLoading ? null : _onResend,
@@ -177,8 +189,8 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     onPressed: _onVerify,
                     text: 'Verify',
                   ),
-                  
-                  const SizedBox(height: 16),
+
+                  SizedBox(height: 16.resH),
                 ],
               ),
             ),
