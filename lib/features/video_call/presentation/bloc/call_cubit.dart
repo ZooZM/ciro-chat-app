@@ -53,14 +53,23 @@ class CallIncoming extends CallState {
 
 /// Both sides accepted – join the video room
 class CallActive extends CallState {
-  /// LiveKit room token delivered by the backend in callAccepted payload
   final String livekitToken;
+  final String livekitUrl;
   final String contactName;
 
-  const CallActive({required this.livekitToken, required this.contactName});
+  const CallActive({required this.livekitToken, required this.livekitUrl, required this.contactName});
 
   @override
-  List<Object?> get props => [livekitToken];
+  List<Object?> get props => [livekitToken, livekitUrl];
+}
+
+/// Receiver accepts the call and waits for token authorization
+class CallConnecting extends CallState {
+  final String contactName;
+  const CallConnecting({required this.contactName});
+
+  @override
+  List<Object?> get props => [contactName];
 }
 
 /// Call ended or rejected
@@ -107,13 +116,21 @@ class CallCubit extends Cubit<CallState> {
     // Remote accepted our call → both enter room
     _socketService.onCallAccepted = (data) {
       _stopRinging();
-      final incoming = state;
-      final contactName = incoming is CallOutgoing
-          ? incoming.targetName
-          : 'Caller';
+      final currentState = state;
+      String contactName = 'Unknown';
+      
+      if (currentState is CallOutgoing) {
+        contactName = currentState.targetName;
+      } else if (currentState is CallConnecting) {
+        contactName = currentState.contactName;
+      } else if (currentState is CallIncoming) {
+        contactName = currentState.callerName;
+      }
+
       emit(
         CallActive(
           livekitToken: data['token'] as String? ?? '',
+          livekitUrl: data['livekitUrl'] as String? ?? 'wss://ciro-chat-qc2pe2cz.livekit.cloud',
           contactName: contactName,
         ),
       );
@@ -159,8 +176,8 @@ class CallCubit extends Cubit<CallState> {
     _stopRinging();
     _socketService.acceptCall(callerId: s.callerId);
 
-    // Transition to active immediately on receiver side.
-    emit(CallActive(livekitToken: '', contactName: s.callerName));
+    // Transition to connecting state until server broadcasts callAccepted with tokens
+    emit(CallConnecting(contactName: s.callerName));
   }
 
   /// Receiver taps Decline → emits rejectCall
