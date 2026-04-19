@@ -105,6 +105,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   void dispose() {
+    // PREVENT STALE STATE ROUTING! Explicitly flush the bound Mongo identifier.
+    context.read<ChatCubit>().closeRoom();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();

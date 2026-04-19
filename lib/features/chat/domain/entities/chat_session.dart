@@ -9,6 +9,7 @@ class ChatSession {
   final bool isOnline;
   final String avatarUrl;
   final String phoneNumber;
+  final String lastMessageSenderId;
 
   ChatSession({
     required this.id,
@@ -19,6 +20,7 @@ class ChatSession {
     this.isOnline = false,
     required this.avatarUrl,
     required this.phoneNumber,
+    this.lastMessageSenderId = '',
   });
 
   /// Parses a raw backend ChatRoom JSON object.
@@ -55,9 +57,11 @@ class ChatSession {
     // Parse the nested lastMessage object
     String lastMsgText = '';
     DateTime lastMsgTime = DateTime.now();
+    String lastMsgSender = '';
     final lastMsg = json['lastMessage'];
     if (lastMsg is Map) {
       lastMsgText = lastMsg['content'] ?? '';
+      lastMsgSender = lastMsg['senderId'] ?? '';
       lastMsgTime =
           DateTime.tryParse(
             lastMsg['createdAt'] ?? lastMsg['updatedAt'] ?? '',
@@ -80,6 +84,7 @@ class ChatSession {
           : 'https://i.pravatar.cc/150?u=$roomId',
       isOnline: otherIsOnline,
       phoneNumber: otherPhone,
+      lastMessageSenderId: lastMsgSender,
     );
   }
 
@@ -95,6 +100,7 @@ class ChatSession {
       'isOnline': isOnline ? 1 : 0,
       'avatarUrl': avatarUrl,
       'phoneNumber': phoneNumber,
+      'lastMessageSenderId': lastMessageSenderId,
     };
   }
 
@@ -108,6 +114,7 @@ class ChatSession {
       isOnline: (map['isOnline'] as int? ?? 0) == 1,
       avatarUrl: map['avatarUrl'] ?? '',
       phoneNumber: map['phoneNumber'] ?? '',
+      lastMessageSenderId: map['lastMessageSenderId'] ?? '',
     );
   }
 }

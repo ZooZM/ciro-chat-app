@@ -10,11 +10,13 @@ import '../../domain/entities/chat_session.dart';
 class ChatTileWidget extends StatelessWidget {
   final ChatSession chat;
   final VoidCallback onTap;
+  final String currentUserId;
 
   const ChatTileWidget({
     Key? key,
     required this.chat,
     required this.onTap,
+    required this.currentUserId,
   }) : super(key: key);
 
   @override
@@ -82,8 +84,8 @@ class ChatTileWidget extends StatelessWidget {
                 padding: EdgeInsets.all(5.resW),
               ),
             )
-          else if (!chat.isOnline && chat.unreadCount == 0)
-             // Simple placeholder for read ticks shown in mockups when no unread messages
+          else if (!chat.isOnline && chat.unreadCount == 0 && chat.lastMessageSenderId == currentUserId && chat.lastMessageSenderId.isNotEmpty)
+             // Only display ticks natively if the sender matches EXACTLY the local auth identity
              Icon(Icons.done_all, size: 16.resW, color: Colors.blue) 
           else 
              SizedBox(height: 16.resH)

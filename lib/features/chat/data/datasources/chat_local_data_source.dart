@@ -33,7 +33,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 2, // Bumped: added phoneNumber column to rooms
+      version: 3, // Bumped: strictly added lastMessageSenderId mapping
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages(
@@ -54,17 +54,40 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             unreadCount INTEGER,
             isOnline INTEGER,
             avatarUrl TEXT,
-            phoneNumber TEXT DEFAULT ''
+            phoneNumber TEXT DEFAULT '',
+            lastMessageSenderId TEXT DEFAULT ''
           )
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          // Add phoneNumber to existing installations
-          await db.execute(
-            "ALTER TABLE rooms ADD COLUMN phoneNumber TEXT DEFAULT ''",
-          );
-        }
+        // Strict development mode constraint — Drop completely mapping to clear migrations natively
+        await db.execute('DROP TABLE IF EXISTS rooms');
+        await db.execute('DROP TABLE IF EXISTS messages');
+        
+        // Re-execute onCreate directly bridging logic
+        await db.execute('''
+          CREATE TABLE messages(
+            id TEXT PRIMARY KEY,
+            room_id TEXT,
+            sender_id TEXT,
+            text TEXT,
+            timestamp INTEGER,
+            status TEXT
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE rooms(
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            lastMessage TEXT,
+            timestamp TEXT,
+            unreadCount INTEGER,
+            isOnline INTEGER,
+            avatarUrl TEXT,
+            phoneNumber TEXT DEFAULT '',
+            lastMessageSenderId TEXT DEFAULT ''
+          )
+        ''');
       },
     );
   }
@@ -81,8 +104,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     );
     
     // Reactivity: Push the message data directly to the rooms table unconditionally.
-    String updateQuery = 'UPDATE rooms SET lastMessage = ?, timestamp = ? ';
-    List<dynamic> args = [message.text, message.timestamp.toIso8601String()];
+    String updateQuery = 'UPDATE rooms SET lastMessage = ?, timestamp = ?, lastMessageSenderId = ? ';
+    List<dynamic> args = [message.text, message.timestamp.toIso8601String(), message.senderId];
 
     if (incrementUnread) {
       updateQuery += ', unreadCount = unreadCount + 1 ';
@@ -158,7 +181,23 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> saveRoom(ChatSession room) async {
     final db = _db;
     if (db == null) return;
-    await db.insert('rooms', room.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    
+    // Natively protect unreadCount preventing API calls from erasing unread badges
+    await db.rawInsert('''
+      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId)
+      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?)
+    ''', [
+      room.id,
+      room.name,
+      room.lastMessage,
+      room.timestamp.toIso8601String(),
+      room.id,
+      room.isOnline ? 1 : 0,
+      room.avatarUrl,
+      room.phoneNumber,
+      room.lastMessageSenderId
+    ]);
+
     await _dispatchRecentChatsUpdate();
   }
 

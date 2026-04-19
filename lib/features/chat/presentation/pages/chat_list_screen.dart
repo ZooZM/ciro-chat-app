@@ -185,44 +185,58 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ),
           Expanded(
-            child: StreamBuilder<List<ChatSession>>(
-              stream: context
-                  .read<ChatCubit>()
-                  .recentChatsStream, // Direct pure SQLite hook!
-              builder: (context, snapshot) {
-                // Remove blocking spinners completely. Instantly stream local SQLite cache regardless of data length.
-                final activeChats = snapshot.data ?? [];
+            child: BlocBuilder<ChatCubit, ChatState>(
+              builder: (context, state) {
+                return StreamBuilder<List<ChatSession>>(
+                  stream: context.read<ChatCubit>().recentChatsStream, // Direct pure SQLite hook!
+                  builder: (context, snapshot) {
+                    
+                    // Offline-First UX: Prevent 1-frame flashes while SQLite boots or network spins
+                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                      return const SizedBox.shrink(); // Silent buffer
+                    }
 
-                if (activeChats.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No active chats yet.\nTap the + button to start one!',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.body1.copyWith(
-                        color: AppColors.textSecondary,
+                    final activeChats = snapshot.data ?? [];
+
+                    // Do NOT show empty state permanently unless DB is truly empty AND Hydration natively finished!
+                    if (activeChats.isEmpty) {
+                      if (!context.read<ChatCubit>().isHydrationComplete) {
+                        return const Center(child: CircularProgressIndicator()); // Subtle fallback if zero cache
+                      }
+                      
+                      return Center(
+                        child: Text(
+                          'No active chats yet.\nTap the + button to start one!',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.body1.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      itemCount: activeChats.length,
+                      separatorBuilder: (context, index) => Divider(
+                        height: 1,
+                        color: AppColors.divider.withOpacity(0.5),
+                        indent: 80.resW, // Lines up under names
                       ),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: activeChats.length,
-                  separatorBuilder: (context, index) => Divider(
-                    height: 1,
-                    color: AppColors.divider.withOpacity(0.5),
-                    indent: 80.resW, // Lines up under names
-                  ),
-                  itemBuilder: (context, index) {
-                    final chat = activeChats[index];
-                    return ChatTileWidget(
-                      chat: chat,
-                      onTap: () {
-                        context.push('/chat_room', extra: chat);
+                      itemBuilder: (context, index) {
+                        final chat = activeChats[index];
+                        return ChatTileWidget(
+                          key: ValueKey(chat.id),
+                          chat: chat,
+                          currentUserId: context.read<ChatCubit>().currentUserId,
+                          onTap: () {
+                            context.push('/chat_room', extra: chat);
+                          },
+                        );
                       },
                     );
                   },
                 );
-              },
+              }
             ),
           ),
         ],

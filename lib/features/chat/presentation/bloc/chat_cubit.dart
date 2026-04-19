@@ -25,7 +25,8 @@ class ChatCubit extends Cubit<ChatState> {
 
   StreamSubscription<List<Message>>? _roomStreamSub;
   String? _activeRoomId;
-  String currentUserId = ''; // Statically exposed to frontend wrappers
+  String currentUserId = ''; // Statically exposed natively pulling Mongo_id
+  bool isHydrationComplete = false;
   final _uuid = const Uuid();
 
   ChatCubit(
@@ -43,8 +44,8 @@ class ChatCubit extends Cubit<ChatState> {
       _localDataSource.watchRecentChats();
 
   Future<void> _initServices() async {
-    // 1. Organic local identity resolution
-    currentUserId = await _authLocalDataSource.getUserPhone() ?? '';
+    // 1. Organic local identity resolution mapped strictly to authentic Mono _id
+    currentUserId = await _authLocalDataSource.getUserId() ?? '';
 
     // 2. Initialize SQL
     await _localDataSource.initDB();
@@ -163,6 +164,10 @@ class ChatCubit extends Cubit<ChatState> {
       debugPrint('[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite');
     } catch (e) {
       debugPrint('[ChatCubit] Hydration silent fail: $e');
+    } finally {
+      // Offline-First UX requirement — natively unblock the skeleton screens unconditionally
+      isHydrationComplete = true;
+      emit(ChatInitial()); // Re-paint UI cleanly natively
     }
   }
 

@@ -10,6 +10,8 @@ abstract class AuthLocalDataSource {
   Future<String?> getUserPhone();
   Future<void> setLoggedInStatus(bool status);
   Future<bool> getLoggedInStatus();
+  Future<void> saveUserId(String userId);
+  Future<String?> getUserId();
 }
 
 @LazySingleton(as: AuthLocalDataSource)
@@ -40,6 +42,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     await _storage.delete(key: 'accessToken');
     await _storage.delete(key: 'refreshToken');
     await _storage.delete(key: 'userPhone');
+    await _storage.delete(key: 'userId');
     await _storage.delete(key: 'isLoggedIn');
   }
 
@@ -62,5 +65,15 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
   Future<bool> getLoggedInStatus() async {
     final status = await _storage.read(key: 'isLoggedIn');
     return status == 'true';
+  }
+
+  @override
+  Future<void> saveUserId(String userId) async {
+    await _storage.write(key: 'userId', value: userId);
+  }
+
+  @override
+  Future<String?> getUserId() async {
+    return await _storage.read(key: 'userId');
   }
 }
