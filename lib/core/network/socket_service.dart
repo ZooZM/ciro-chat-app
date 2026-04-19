@@ -100,6 +100,13 @@ class SocketService {
 
   // ── Chat emitters ─────────────────────────────────────────────────────────
 
+  /// Joins a chat room's socket channel. Call this immediately after a JIT
+  /// room is created so the backend starts routing messages to this client.
+  void joinRoom(String roomId) {
+    _socket?.emit('joinRoom', {'chatRoomId': roomId});
+    debugPrint('[SocketService] Joined room: $roomId');
+  }
+
   void sendMessage({
     required String roomId,
     required String messageId,
