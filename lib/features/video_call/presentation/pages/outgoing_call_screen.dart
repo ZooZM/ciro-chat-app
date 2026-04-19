@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 import '../bloc/call_cubit.dart';
-import 'video_call_screen.dart';
 
 class OutgoingCallScreen extends StatelessWidget {
   final String contactName;
@@ -20,19 +20,11 @@ class OutgoingCallScreen extends StatelessWidget {
       listener: (context, state) {
         if (state is CallActive) {
           // Replace outgoing ringing screen strictly with actual video call
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BlocProvider.value(
-                value: context.read<CallCubit>(),
-                child: VideoCallScreen(
-                  contactName: state.contactName,
-                  livekitUrl: state.livekitUrl,
-                  livekitToken: state.livekitToken,
-                ),
-              ),
-            ),
-          );
+          context.pushReplacement('/video_call', extra: {
+            'contactName': state.contactName,
+            'livekitUrl': state.livekitUrl,
+            'livekitToken': state.livekitToken,
+          });
         } else if (state is CallEnded || state is CallIdle) {
           Navigator.pop(context); // Go back if rejected or canceled
         }
