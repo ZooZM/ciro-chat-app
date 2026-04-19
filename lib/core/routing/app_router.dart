@@ -13,7 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
-import '../../features/auth/data/datasources/auth_local_data_source.dart';
 import '../di/injection.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -21,26 +20,34 @@ import 'go_router_refresh_stream.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
+  // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
+  // Every time AuthCubit emits a new state, the redirect guard below is re-run.
   refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),
-  redirect: (context, state) async {
-    final isLoggedIn = await getIt<AuthLocalDataSource>().getLoggedInStatus();
-    
-    // The very moment routing rules are evaluated during the boot process, peel the native splash off
+  // Pure state-driven redirect: reads AuthCubit synchronously — no async,
+  // no stale boolean flags, no race conditions.
+  redirect: (context, state) {
+    // Remove the native splash on the very first routing evaluation.
     FlutterNativeSplash.remove();
 
-    final isAuthRoute = state.matchedLocation == '/auth' || state.matchedLocation.startsWith('/auth/');
-    final isSplash = state.matchedLocation == '/splash';
+    final authState = getIt<AuthCubit>().state;
+    final location = state.matchedLocation;
 
-    // 1. Unauthenticated users strictly stay in limits
-    if (!isLoggedIn && !isAuthRoute) {
-      return '/auth';
+    final isAuthRoute = location == '/auth' || location.startsWith('/auth/');
+    final isSplash   = location == '/splash';
+
+    // While auth is still being determined, stay on the splash screen.
+    if (authState is AuthInitial || authState is AuthLoading) {
+      return isSplash ? null : '/splash';
     }
 
-    // 2. Authenticated users are banned from auth pages, forced to /home
-    if (isLoggedIn && (isAuthRoute || isSplash)) {
-      return '/home';
+    // Fully authenticated: move out of splash/auth into the app.
+    if (authState is Authenticated) {
+      if (isSplash || isAuthRoute) return '/home';
+      return null; // already on a valid screen
     }
 
+    // Unauthenticated (or AuthError): keep out of the app.
+    if (!isAuthRoute) return '/auth';
     return null;
   },
   routes: [
@@ -86,8 +93,7 @@ final GoRouter appRouter = GoRouter(
       path: '/chat_room',
       builder: (context, state) {
         final chat = state.extra as ChatSession;
-        // Use the global ChatCubit instance and open the specific room
-        context.read<ChatCubit>().openRoom(chat.id);
+        // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
         return ChatRoomScreen(chatData: chat);
       },
     ),
