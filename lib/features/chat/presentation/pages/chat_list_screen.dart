@@ -11,6 +11,8 @@ import '../bloc/chat_cubit.dart';
 import '../../../../core/theme/app_logo.dart';
 import '../../../../core/di/injection.dart';
 import '../../../auth/data/datasources/auth_local_data_source.dart';
+import '../../../auth/presentation/bloc/auth_cubit.dart';
+
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
 
@@ -88,6 +90,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
         // ),
          
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.logout,
+              color: AppColors.textSecondary,
+              size: 20.resW,
+            ),
+            onPressed: () async {
+              await getIt<AuthCubit>().logOut();
+              if (mounted) {
+                context.go('/auth');
+              }
+            },
+          ),
           Padding(
             padding: EdgeInsets.only(right: 16.resW),
             child: CircleAvatar(
