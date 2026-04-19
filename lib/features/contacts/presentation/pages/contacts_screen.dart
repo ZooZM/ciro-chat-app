@@ -11,6 +11,8 @@ import '../../../chat/presentation/bloc/chat_cubit.dart';
 import '../../data/contacts_service.dart';
 import '../../../../core/di/injection.dart';
 
+import 'package:permission_handler/permission_handler.dart';
+
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({Key? key}) : super(key: key);
 
@@ -19,11 +21,17 @@ class ContactsScreen extends StatefulWidget {
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
+  bool _hasPermission = true;
+
   @override
   void initState() {
     super.initState();
-    // Dispatch organic state request fully into Cubit
-    context.read<ChatCubit>().syncContacts();
+    // Dispatch silent network fetch purely evaluating permission cleanly without UI destruction
+    context.read<ChatCubit>().silentSyncContacts().then((granted) {
+      if (mounted && !granted) {
+        setState(() => _hasPermission = false);
+      }
+    });
   }
 
   Future<void> _startPrivateChat(ChatSession targetUser) async {
@@ -66,6 +74,44 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
   }
 
+  Widget _buildPermissionDenied() {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.resW),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.perm_contact_calendar, size: 60.resW, color: Colors.grey),
+            SizedBox(height: 16.resH),
+            Text(
+              'We need access to your contacts to automatically connect you with your friends on Ciro Connect.',
+              textAlign: TextAlign.center,
+              style: AppTypography.subtitle1,
+            ),
+            SizedBox(height: 24.resH),
+            ElevatedButton(
+              onPressed: () => openAppSettings(),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('Open Settings', style: TextStyle(color: Colors.white)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShimmer() {
+    return ListView.separated(
+      itemCount: 8,
+      separatorBuilder: (context, index) => Divider(height: 1, indent: 80.resW),
+      itemBuilder: (context, index) => ListTile(
+        leading: CircleAvatar(backgroundColor: Colors.grey[200], radius: 24.resW),
+        title: Container(height: 14.resH, width: double.infinity, color: Colors.grey[200]),
+        subtitle: Container(height: 12.resH, width: 100.resW, color: Colors.grey[200]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,71 +128,47 @@ class _ContactsScreenState extends State<ContactsScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: BlocBuilder<ChatCubit, ChatState>(
-        builder: (context, state) {
-          if (state is ChatLoading) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(color: AppColors.primary),
-                  SizedBox(height: 16.resH),
-                  Text(
-                    'Syncing Ciro Connect contacts...',
-                    style: AppTypography.body1,
-                  ),
-                ],
-              ),
-            );
-          }
+      body: !_hasPermission
+          ? _buildPermissionDenied()
+          : StreamBuilder<List<ChatSession>>(
+              stream: context.read<ChatCubit>().watchLocalContacts,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return _buildShimmer();
+                }
 
-          if (state is ChatError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                  SizedBox(height: 16.resH),
-                  Text('Sync failed', style: AppTypography.subtitle1),
-                  Text(state.message, style: AppTypography.body2),
-                  TextButton(
-                    onPressed: () => context.read<ChatCubit>().syncContacts(),
-                    child: const Text('Try Again'),
-                  ),
-                ],
-              ),
-            );
-          }
+                final contacts = snapshot.data ?? [];
 
-          if (state is ChatContactsSynced) {
-            final contacts = state.syncedContacts;
-            if (contacts.isEmpty) {
-              return Center(
-                child: Text(
-                  'None of your contacts are on Ciro Connect yet.',
-                  style: AppTypography.body1.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              );
-            }
+                if (contacts.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'None of your contacts are on Ciro Connect yet.\nInvite them to join!',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.body1.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  );
+                }
 
-            return ListView.builder(
-              itemCount: contacts.length,
-              itemBuilder: (context, index) {
-                final user = contacts[index];
-                return ChatTileWidget(
-                  chat: user,
-                  onTap: () => _startPrivateChat(user),
-                  currentUserId: context.read<ChatCubit>().currentUserId,
+                return ListView.separated(
+                  itemCount: contacts.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: AppColors.divider.withOpacity(0.5),
+                    indent: 80.resW,
+                  ),
+                  itemBuilder: (context, index) {
+                    final user = contacts[index];
+                    return ChatTileWidget(
+                      chat: user,
+                      onTap: () => _startPrivateChat(user),
+                      currentUserId: context.read<ChatCubit>().currentUserId,
+                    );
+                  },
                 );
               },
-            );
-          }
-
-          return const SizedBox.shrink();
-        },
-      ),
+            ),
     );
   }
 }

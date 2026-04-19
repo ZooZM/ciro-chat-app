@@ -13,6 +13,8 @@ abstract class ChatLocalDataSource {
   Stream<List<Message>> watchRoomMessages(String roomId);
   Future<void> saveRoom(ChatSession room);
   Stream<List<ChatSession>> watchRecentChats();
+  Stream<List<ChatSession>> watchContacts();
+  Future<void> upsertContacts(List<ChatSession> contacts);
   Future<void> resetUnreadCount(String roomId);
   void closeRoomStream(String roomId);
   Future<void> clearAllData();
@@ -27,6 +29,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       {};
   final StreamController<List<ChatSession>> _recentChatsController =
       StreamController<List<ChatSession>>.broadcast();
+  final StreamController<List<ChatSession>> _contactsController =
+      StreamController<List<ChatSession>>.broadcast();
 
   @override
   Future<void> initDB() async {
@@ -36,7 +40,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 3, // Bumped: strictly added lastMessageSenderId mapping
+      version: 4, // Bumped: mapped contacts table directly
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages(
@@ -61,11 +65,21 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             lastMessageSenderId TEXT DEFAULT ''
           )
         ''');
+        await db.execute('''
+          CREATE TABLE contacts(
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            phoneNumber TEXT,
+            avatarUrl TEXT,
+            isOnline INTEGER
+          )
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         // Strict development mode constraint — Drop completely mapping to clear migrations natively
         await db.execute('DROP TABLE IF EXISTS rooms');
         await db.execute('DROP TABLE IF EXISTS messages');
+        await db.execute('DROP TABLE IF EXISTS contacts');
 
         // Re-execute onCreate directly bridging logic
         await db.execute('''
@@ -89,6 +103,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             avatarUrl TEXT,
             phoneNumber TEXT DEFAULT '',
             lastMessageSenderId TEXT DEFAULT ''
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE contacts(
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            phoneNumber TEXT,
+            avatarUrl TEXT,
+            isOnline INTEGER
           )
         ''');
       },
@@ -243,6 +266,47 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   }
 
   @override
+  Stream<List<ChatSession>> watchContacts() async* {
+    final db = _db;
+    if (db != null) {
+      // Yield strictly synchronously blocking logic cleanly before joining streams natively!
+      final maps = await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
+      yield maps.map((e) => ChatSession.fromMap(e)).toList();
+    } else {
+      yield <ChatSession>[];
+    }
+    yield* _contactsController.stream;
+  }
+
+  @override
+  Future<void> upsertContacts(List<ChatSession> contacts) async {
+    final db = _db;
+    if (db == null || contacts.isEmpty) return;
+
+    Batch batch = db.batch();
+    for (var contact in contacts) {
+      batch.insert(
+        'contacts',
+        {
+          'id': contact.id,
+          'name': contact.name,
+          'phoneNumber': contact.phoneNumber,
+          'avatarUrl': contact.avatarUrl,
+          'isOnline': contact.isOnline ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+
+    // Refresh memory cache instantly avoiding lag arrays
+    final maps = await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
+    if (!_contactsController.isClosed) {
+      _contactsController.add(maps.map((e) => ChatSession.fromMap(e)).toList());
+    }
+  }
+
+  @override
   Future<void> resetUnreadCount(String roomId) async {
     final db = _db;
     if (db == null) return;
@@ -272,6 +336,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     // 1. Physically nuke the tables
     await db.delete('messages');
     await db.delete('rooms');
+    await db.delete('contacts');
 
     // 2. Tear down reactive stream infra
     for (final controller in _roomStreamControllers.values) {
@@ -285,6 +350,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     // 3. Flush the global inbox state
     if (!_recentChatsController.isClosed) {
       _recentChatsController.add([]);
+    }
+    if (!_contactsController.isClosed) {
+      _contactsController.add([]);
     }
   }
 }

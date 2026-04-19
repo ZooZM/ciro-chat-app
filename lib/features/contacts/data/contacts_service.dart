@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -6,6 +7,40 @@ import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:injectable/injectable.dart';
 
 import 'package:ciro_chat_app/core/network/dio_client.dart';
+
+// TOP LEVEL: Safe Isolate Context Execution stripping UI boundaries natively
+Future<Map<String, String>> _normalizeContactsIsolate(Map<String, dynamic> params) async {
+  final List<Contact> rawContacts = params['contacts'] as List<Contact>;
+  final String defaultCountryCode = params['defaultCountryCode'] as String;
+
+  final Map<String, String> phoneToName = {};
+
+  for (var contact in rawContacts) {
+    if (contact.phones.isEmpty) continue;
+
+    for (var phone in contact.phones) {
+      String normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
+      if (normalized.isEmpty) continue;
+
+      if (normalized.startsWith('00')) {
+        normalized = '+${normalized.substring(2)}';
+      }
+
+      if (!normalized.startsWith('+')) {
+        if (normalized.startsWith('0')) {
+          normalized = '$defaultCountryCode${normalized.substring(1)}';
+        } else {
+          normalized = '$defaultCountryCode$normalized';
+        }
+      }
+
+      if (normalized.length >= 8) {
+        phoneToName[normalized] = contact.displayName;
+      }
+    }
+  }
+  return phoneToName;
+}
 
 @lazySingleton
 class ContactsService {
@@ -27,50 +62,19 @@ class ContactsService {
       properties: {ContactProperty.phone},
     );
 
-    // 3. Normalize numbers & Create a Lookup Map for fast O(1) matching
-    final Map<String, Contact> phoneToContactMap = {};
-    final Set<String> uniqueNumbers = {};
+    // 3. Normalize numbers & Create a Lookup Map purely inside a Background Isolate Thread protecting 60fps!
+    final Map<String, String> phoneToName = await compute(_normalizeContactsIsolate, {
+      'contacts': contacts,
+      'defaultCountryCode': defaultCountryCode,
+    });
 
-    for (var contact in contacts) {
-      if (contact.phones.isEmpty) continue;
-
-      for (var phone in contact.phones) {
-        // Strip spaces, dashes, parentheses, keeping only digits and '+'
-        String normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
-
-        if (normalized.isEmpty) continue;
-
-        // Convert starting '00' to '+' (e.g., 002010 -> +2010)
-        if (normalized.startsWith('00')) {
-          normalized = '+${normalized.substring(2)}';
-        }
-
-        // Apply dynamic default country code if missing
-        if (!normalized.startsWith('+')) {
-          // If local number starts with '0' (like 010.. in EG), replace '0' with country code
-          if (normalized.startsWith('0')) {
-            normalized = '$defaultCountryCode${normalized.substring(1)}';
-          } else {
-            normalized = '$defaultCountryCode$normalized';
-          }
-        }
-
-        // Basic validation: Avoid adding abnormally short numbers
-        if (normalized.length >= 8) {
-          uniqueNumbers.add(normalized);
-          // Save in map to easily find the Contact name later using the clean number
-          phoneToContactMap[normalized] = contact;
-        }
-      }
-    }
-
-    if (uniqueNumbers.isEmpty) return [];
+    if (phoneToName.isEmpty) return [];
 
     // 4. Send bulk list to API
     try {
-      debugPrint('[ContactsService] Syncing ${uniqueNumbers.length} numbers');
+      debugPrint('[ContactsService] Syncing ${phoneToName.length} numbers exclusively via Background Isolate payload');
 
-      final payload = {'phoneNumbers': uniqueNumbers.toList()};
+      final payload = {'phoneNumbers': phoneToName.keys.toList()};
 
       final response = await _dioClient.dio.post(
         '/users/sync-contacts',
@@ -87,13 +91,13 @@ class ContactsService {
           // Extract the exact phone number returned from your backend
           final String phoneFromApi = json['phoneNumber'] ?? '';
 
-          // Match it instantly using our Map
-          final Contact? matchedContact = phoneToContactMap[phoneFromApi];
+          // Match it instantly natively
+          final String resolvedName = phoneToName[phoneFromApi] ?? "Unknown";
 
           return ChatSession(
             id: json['id'] ?? json['_id'] ?? 'tmp',
             // Fallback: 1. Contact Name -> 2. Backend Name -> 3. "Unknown"
-            name: matchedContact?.displayName ?? json['name'] ?? "Unknown",
+            name: resolvedName.isNotEmpty && resolvedName != "Unknown" ? resolvedName : (json['name'] ?? "Unknown"),
             lastMessage: 'Tap to start chatting',
             timestamp: DateTime.now(),
             avatarUrl:

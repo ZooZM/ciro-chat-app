@@ -43,6 +43,10 @@ class ChatCubit extends Cubit<ChatState> {
   Stream<List<ChatSession>> get recentChatsStream =>
       _localDataSource.watchRecentChats();
 
+  // Exposes offline cached contacts natively mapped strictly avoiding states
+  Stream<List<ChatSession>> get watchLocalContacts => 
+      _localDataSource.watchContacts();
+
   Future<void> _initServices() async {
     // 1. Organic local identity resolution mapped strictly to authentic Mono _id
     currentUserId = await _authLocalDataSource.getUserId() ?? '';
@@ -140,8 +144,9 @@ class ChatCubit extends Cubit<ChatState> {
     );
   }
 
-  Future<void> syncContacts() async {
-    emit(ChatLoading());
+  /// Executes a seamless async network fetch cleanly updating SQLite silently without emitting UI loading barriers.
+  /// Returns false strictly if Permission boundaries throw exceptions. True yields success or normal socket/network hangs seamlessly handled.
+  Future<bool> silentSyncContacts() async {
     try {
       final myPhoneNumber = await _authLocalDataSource.getUserPhone() ?? '';
 
@@ -159,9 +164,16 @@ class ChatCubit extends Cubit<ChatState> {
         defaultCountryCode: userCountryCode,
       );
 
-      emit(ChatContactsSynced(contacts));
+      await _localDataSource.upsertContacts(contacts);
+      return true;
     } catch (e) {
-      emit(ChatError(e.toString()));
+      debugPrint('[ChatCubit] silentSyncContacts failed purely in background: $e');
+      if (e.toString().toLowerCase().contains('permission')) {
+        return false;
+      }
+      // If the engine throws purely internet errors, we absolutely do not break the UI state, 
+      // the SQLite cache functionally handles offline mode regardless.
+      return true; 
     }
   }
 
