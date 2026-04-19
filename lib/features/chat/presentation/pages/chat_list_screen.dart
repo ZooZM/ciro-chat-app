@@ -10,6 +10,7 @@ import '../widgets/chat_tile_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../../core/theme/app_logo.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../core/network/socket_service.dart';
 import '../../../auth/data/datasources/auth_local_data_source.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 
@@ -74,6 +75,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     height: 1.1,
                     letterSpacing: 3,
                   ),
+                ),
+                // WhatsApp-Style minimal connecting feedback seamlessly below the branding
+                ValueListenableBuilder<bool>(
+                  valueListenable: getIt<SocketService>().isConnectedNotifier,
+                  builder: (context, isConnected, _) {
+                    if (isConnected) return const SizedBox.shrink();
+                    return Text(
+                      'Connecting...',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 9, // Subtly styled
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -174,9 +190,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   .read<ChatCubit>()
                   .recentChatsStream, // Direct pure SQLite hook!
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                // Remove blocking spinners completely. Instantly stream local SQLite cache regardless of data length.
                 final activeChats = snapshot.data ?? [];
 
                 if (activeChats.isEmpty) {

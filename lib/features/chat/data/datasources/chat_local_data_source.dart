@@ -7,12 +7,14 @@ import 'package:injectable/injectable.dart';
 
 abstract class ChatLocalDataSource {
   Future<void> initDB();
-  Future<void> saveMessage(Message message);
+  Future<void> saveMessage(Message message, {bool incrementUnread = false});
   Future<void> updateMessageStatus(String messageId, MessageStatus status);
   Future<List<Message>> getRoomMessages(String roomId);
   Stream<List<Message>> watchRoomMessages(String roomId);
   Future<void> saveRoom(ChatSession room);
   Stream<List<ChatSession>> watchRecentChats();
+  Future<void> resetUnreadCount(String roomId);
+  void closeRoomStream(String roomId);
 }
 
 @LazySingleton(as: ChatLocalDataSource)
@@ -68,7 +70,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   }
 
   @override
-  Future<void> saveMessage(Message message) async {
+  Future<void> saveMessage(Message message, {bool incrementUnread = false}) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
     
@@ -78,8 +80,21 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     
-    // Notify reactive listeners
+    // Reactivity: Push the message data directly to the rooms table unconditionally.
+    String updateQuery = 'UPDATE rooms SET lastMessage = ?, timestamp = ? ';
+    List<dynamic> args = [message.text, message.timestamp.toIso8601String()];
+
+    if (incrementUnread) {
+      updateQuery += ', unreadCount = unreadCount + 1 ';
+    }
+    updateQuery += 'WHERE id = ?';
+    args.add(message.roomId);
+
+    await db.rawUpdate(updateQuery, args);
+    
+    // Switch both the active room AND the global inbox reactive streams
     await _dispatchUpdateForRoom(message.roomId);
+    await _dispatchRecentChatsUpdate();
   }
 
   @override
@@ -113,10 +128,12 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       'messages',
       where: 'room_id = ?',
       whereArgs: [roomId],
-      orderBy: 'timestamp ASC', // oldest first (List bottom is newest)
+      orderBy: 'timestamp DESC', // Read newest messages
+      limit: 20, // Strict buffer constraint
     );
     
-    return maps.map((e) => Message.fromMap(e)).toList();
+    // Reverse memory stack so chronological flow is restored for ListView bottom-gravity
+    return maps.map((e) => Message.fromMap(e)).toList().reversed.toList();
   }
 
   @override
@@ -154,8 +171,32 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> _dispatchRecentChatsUpdate() async {
     final db = _db;
     if (db == null) return;
-    final maps = await db.query('rooms', orderBy: 'timestamp DESC');
+    final maps = await db.query('rooms', orderBy: 'timestamp DESC', limit: 20);
     final rooms = maps.map((e) => ChatSession.fromMap(e)).toList();
-    _recentChatsController.add(rooms);
+    if (!_recentChatsController.isClosed) {
+      _recentChatsController.add(rooms);
+    }
+  }
+
+  @override
+  Future<void> resetUnreadCount(String roomId) async {
+    final db = _db;
+    if (db == null) return;
+
+    await db.update(
+      'rooms',
+      {'unreadCount': 0},
+      where: 'id = ?',
+      whereArgs: [roomId],
+    );
+    await _dispatchRecentChatsUpdate();
+  }
+
+  @override
+  void closeRoomStream(String roomId) {
+    if (_roomStreamControllers.containsKey(roomId)) {
+      _roomStreamControllers[roomId]?.close();
+      _roomStreamControllers.remove(roomId);
+    }
   }
 }

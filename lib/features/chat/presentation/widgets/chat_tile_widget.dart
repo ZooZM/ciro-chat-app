@@ -78,7 +78,7 @@ class ChatTileWidget extends StatelessWidget {
                 style: TextStyle(color: Colors.white, fontSize: 10.resSp),
               ),
               badgeStyle: pk_badges.BadgeStyle(
-                badgeColor: AppColors.primary,
+                badgeColor: Colors.green, // Enforced WhatsApp aesthetic
                 padding: EdgeInsets.all(5.resW),
               ),
             )

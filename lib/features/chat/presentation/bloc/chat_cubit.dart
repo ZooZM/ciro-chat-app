@@ -65,7 +65,8 @@ class ChatCubit extends Cubit<ChatState> {
         status: MessageStatus.delivered,
       );
 
-      await _localDataSource.saveMessage(incoming);
+      final shouldIncrement = incoming.roomId != _activeRoomId;
+      await _localDataSource.saveMessage(incoming, incrementUnread: shouldIncrement);
 
       // Tell server we received it locally
       _socketService.markAsRead(
@@ -81,6 +82,7 @@ class ChatCubit extends Cubit<ChatState> {
 
     _activeRoomId = roomId;
     _roomStreamSub?.cancel();
+    _localDataSource.resetUnreadCount(roomId); // Push the SQLite reset boundary
     emit(ChatLoading());
 
     // Listen to our reactive local database slice
@@ -94,6 +96,15 @@ class ChatCubit extends Cubit<ChatState> {
             emit(ChatError(e.toString()));
           },
         );
+  }
+
+  /// Closes active streams and bounds when exiting a room to plug memory holes
+  void closeRoom() {
+    if (_activeRoomId != null) {
+      _localDataSource.closeRoomStream(_activeRoomId!);
+      _roomStreamSub?.cancel();
+      _activeRoomId = null;
+    }
   }
 
   /// Sends a local-first message

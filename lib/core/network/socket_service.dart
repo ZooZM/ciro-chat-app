@@ -5,6 +5,9 @@ import 'package:injectable/injectable.dart';
 @lazySingleton
 class SocketService {
   IO.Socket? _socket;
+  
+  // Exposes declarative binding for WhatsApp-style Connecting... banner
+  final ValueNotifier<bool> isConnectedNotifier = ValueNotifier(false);
 
   // ── Chat callbacks ────────────────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onNewMessage;
@@ -32,10 +35,18 @@ class SocketService {
 
     _socket?.onConnect((_) {
       debugPrint('Socket Connected to WS namespace');
+      isConnectedNotifier.value = true;
     });
 
-    _socket?.onConnectError((err) => debugPrint('Socket Connect Error: $err'));
-    _socket?.onDisconnect((_) => debugPrint('Socket Disconnected'));
+    _socket?.onConnectError((err) {
+      debugPrint('Socket Connect Error: $err');
+      isConnectedNotifier.value = false;
+    });
+    
+    _socket?.onDisconnect((_) {
+      debugPrint('Socket Disconnected');
+      isConnectedNotifier.value = false;
+    });
 
     // ── Chat events ───────────────────────────────────────────────────────
     _socket?.on('newMessage', (data) {
