@@ -16,6 +16,7 @@ import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/auth/data/datasources/auth_local_data_source.dart';
 import '../di/injection.dart';
 
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -23,6 +24,9 @@ final GoRouter appRouter = GoRouter(
   refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),
   redirect: (context, state) async {
     final isLoggedIn = await getIt<AuthLocalDataSource>().getLoggedInStatus();
+    
+    // The very moment routing rules are evaluated during the boot process, peel the native splash off
+    FlutterNativeSplash.remove();
 
     final isAuthRoute = state.matchedLocation == '/auth' || state.matchedLocation.startsWith('/auth/');
     final isSplash = state.matchedLocation == '/splash';

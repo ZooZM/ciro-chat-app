@@ -8,8 +8,11 @@ import 'core/network/dio_client.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
 
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   Bloc.observer = const AppBlocObserver();
   await configureDependencies();
 
