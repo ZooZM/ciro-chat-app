@@ -130,28 +130,30 @@ class ChatCubit extends Cubit<ChatState> {
   /// Sends a local-first message.
   /// On the very first message to a new contact, creates the backend room JIT.
   Future<void> sendLocalMessage(String text) async {
-    final contactForUpsert = _pendingContact;
+    // Snapshot _pendingContact NOW, before any async gap or null-clear below.
+    final pendingContact = _pendingContact;
 
     // ── JIT Room Creation ─────────────────────────────────────────────────────
-    ChatSession?
-    jitContact; // snapshot metadata BEFORE clearing _pendingContact
     if (_activeRoomId == null) {
-      if (contactForUpsert == null) {
+      if (pendingContact == null) {
         debugPrint(
           '[ChatCubit] sendLocalMessage called with no active room and no pending contact',
         );
         return;
       }
-      jitContact = contact; // preserve for UPSERT below
       try {
         // Creates the room on the backend — fires only ONCE, on the first Send tap.
-        final newRoomId = await _chatApiService.createRoom(contact.id);
+        final newRoomId = await _chatApiService.createRoom(pendingContact.id);
         _activeRoomId = newRoomId;
         _pendingContact = null;
+
+        // Join the socket room BEFORE sending so the backend routes messages correctly.
         _socketService.joinRoom(newRoomId);
+
+        // Give MongoDB 300ms to replicate the new room document.
         await Future.delayed(const Duration(milliseconds: 300));
 
-        // Start listening to the new room's message stream immediately
+        // Wire up the local SQLite message stream for the new room.
         _localDataSource.resetUnreadCount(newRoomId);
         _roomStreamSub?.cancel();
         _roomStreamSub = _localDataSource
@@ -172,7 +174,6 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Local-first send ──────────────────────────────────────────────────────
     final roomId = _activeRoomId!;
     final msgId = _uuid.v4();
-    final contact = _pendingContact; // null after JIT path above
     final newMsg = Message(
       id: msgId,
       roomId: roomId,
@@ -182,12 +183,12 @@ class ChatCubit extends Cubit<ChatState> {
       status: MessageStatus.pending,
     );
 
-    // UPSERT: passes room metadata so saveMessage can create the row if needed.
+    // pendingContact carries name/avatar for brand-new JIT rooms; null for existing rooms.
     await _localDataSource.saveMessage(
       newMsg,
-      roomName: contact?.name ?? '',
-      roomAvatarUrl: contact?.avatarUrl ?? '',
-      roomPhoneNumber: contact?.phoneNumber ?? '',
+      roomName: pendingContact?.name ?? '',
+      roomAvatarUrl: pendingContact?.avatarUrl ?? '',
+      roomPhoneNumber: pendingContact?.phoneNumber ?? '',
     );
 
     // Transmit via WebSockets (after the 300ms settle, backend is ready).
