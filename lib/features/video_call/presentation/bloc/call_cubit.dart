@@ -1,6 +1,6 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/socket_service.dart';
 
@@ -57,10 +57,7 @@ class CallActive extends CallState {
   final String livekitToken;
   final String contactName;
 
-  const CallActive({
-    required this.livekitToken,
-    required this.contactName,
-  });
+  const CallActive({required this.livekitToken, required this.contactName});
 
   @override
   List<Object?> get props => [livekitToken];
@@ -82,11 +79,11 @@ class CallEnded extends CallState {
 @lazySingleton
 class CallCubit extends Cubit<CallState> {
   final SocketService _socketService;
-  final AudioPlayer _audioPlayer;
+  final FlutterRingtonePlayer _audioPlayer;
 
-  CallCubit(this._socketService) 
-      : _audioPlayer = AudioPlayer(),
-        super(const CallIdle()) {
+  CallCubit(this._socketService)
+    : _audioPlayer = FlutterRingtonePlayer(),
+      super(const CallIdle()) {
     _bindSocketListeners();
   }
 
@@ -95,26 +92,31 @@ class CallCubit extends Cubit<CallState> {
   void _bindSocketListeners() {
     // Remote is calling us
     _socketService.onIncomingCall = (data) async {
-      emit(CallIncoming(
-        callerId: data['callerId'] as String? ?? '',
-        callerName: data['callerName'] as String? ?? 'Unknown',
-        callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
-      ));
-      
+      emit(
+        CallIncoming(
+          callerId: data['callerId'] as String? ?? '',
+          callerName: data['callerName'] as String? ?? 'Unknown',
+          callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
+        ),
+      );
+
       // CRITICAL: Play ringtone continuously in a LOOP natively!
-      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
+      _audioPlayer.playRingtone(looping: true);
     };
 
     // Remote accepted our call → both enter room
     _socketService.onCallAccepted = (data) {
       _stopRinging();
       final incoming = state;
-      final contactName = incoming is CallOutgoing ? incoming.targetName : 'Caller';
-      emit(CallActive(
-        livekitToken: data['token'] as String? ?? '',
-        contactName: contactName,
-      ));
+      final contactName = incoming is CallOutgoing
+          ? incoming.targetName
+          : 'Caller';
+      emit(
+        CallActive(
+          livekitToken: data['token'] as String? ?? '',
+          contactName: contactName,
+        ),
+      );
     };
 
     // Remote rejected our call
@@ -132,19 +134,22 @@ class CallCubit extends Cubit<CallState> {
     required String targetName,
     String targetAvatarUrl = '',
   }) async {
-    _socketService.requestCall(
-      targetUserId: targetUserId,
-      isVideo: true,
+    _socketService.requestCall(targetUserId: targetUserId, isVideo: true);
+    emit(
+      CallOutgoing(
+        targetUserId: targetUserId,
+        targetName: targetName,
+        targetAvatarUrl: targetAvatarUrl,
+      ),
     );
-    emit(CallOutgoing(
-      targetUserId: targetUserId,
-      targetName: targetName,
-      targetAvatarUrl: targetAvatarUrl,
-    ));
 
     // CRITICAL: Play dialing sound continuously in a LOOP
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    _audioPlayer.play(AssetSource('sounds/dialing.mp3'));
+    _audioPlayer.play(
+      android: AndroidSounds.ringtone,
+      ios: IosSounds.electronic,
+      looping: true,
+      volume: 0.5,
+    );
   }
 
   /// Receiver taps Accept → emits acceptCall
@@ -153,7 +158,7 @@ class CallCubit extends Cubit<CallState> {
     if (s is! CallIncoming) return;
     _stopRinging();
     _socketService.acceptCall(callerId: s.callerId);
-    
+
     // Transition to active immediately on receiver side.
     emit(CallActive(livekitToken: '', contactName: s.callerName));
   }
@@ -189,8 +194,7 @@ class CallCubit extends Cubit<CallState> {
   @override
   Future<void> close() {
     _stopRinging();
-    _audioPlayer.dispose();
+    _audioPlayer.stop();
     return super.close();
   }
 }
-

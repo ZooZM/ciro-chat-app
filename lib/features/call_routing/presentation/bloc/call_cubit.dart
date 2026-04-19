@@ -1,5 +1,5 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 // ------------------------------------------------------------
 // Core Base States for Call Management
@@ -31,19 +31,16 @@ class CallDisconnected extends CallState {}
 // CallCubit: Manages the Ringtone Audioplayer & Call Flags
 // ------------------------------------------------------------
 class CallCubit extends Cubit<CallState> {
-  final AudioPlayer _audioPlayer;
+  final FlutterRingtonePlayer _audioPlayer;
 
-  CallCubit()
-      : _audioPlayer = AudioPlayer(),
-        super(CallIdle());
+  CallCubit() : _audioPlayer = FlutterRingtonePlayer(), super(CallIdle());
 
   /// Triggers when the 'callIncoming' WebSocket event hits the backend.
   Future<void> handleIncomingCall(String callerId, String callerName) async {
     emit(CallIncoming(callerId, callerName));
-    
+
     // CRITICAL: Play ringtone continuously in a LOOP natively!
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    _audioPlayer.play(AssetSource('sounds/ringtone.mp3'));
+    _audioPlayer.playRingtone(looping: true);
   }
 
   /// Triggers when you dial outwards.
@@ -51,8 +48,12 @@ class CallCubit extends Cubit<CallState> {
     emit(CallOutgoing(calleeName));
 
     // CRITICAL: Play dialing sound continuously in a LOOP
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    _audioPlayer.play(AssetSource('sounds/dialing.mp3'));
+    _audioPlayer.play(
+      android: AndroidSounds.notification,
+      ios: IosSounds.electronic,
+      looping: true,
+      volume: 0.5,
+    );
   }
 
   /// Triggers when the 'callAccepted' WebSocket payload yields credentials.
@@ -77,7 +78,7 @@ class CallCubit extends Cubit<CallState> {
   @override
   Future<void> close() {
     _stopRinging();
-    _audioPlayer.dispose();
+    _audioPlayer.stop();
     return super.close();
   }
 }

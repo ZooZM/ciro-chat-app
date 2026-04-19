@@ -44,6 +44,7 @@ import '../../features/video_call/data/repositories/livekit_video_call_repositor
     as _i786;
 import '../../features/video_call/domain/repositories/video_call_repository.dart'
     as _i220;
+import '../../features/video_call/presentation/bloc/call_cubit.dart' as _i104;
 import '../../features/video_call/presentation/bloc/video_call_cubit.dart'
     as _i804;
 import '../network/dio_client.dart' as _i667;
@@ -75,6 +76,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i420.ChatRepository>(
       () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
+    );
+    gh.lazySingleton<_i104.CallCubit>(
+      () => _i104.CallCubit(gh<_i917.SocketService>()),
     );
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
