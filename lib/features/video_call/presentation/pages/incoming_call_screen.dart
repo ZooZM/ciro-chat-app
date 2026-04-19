@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import 'package:go_router/go_router.dart';
 import '../bloc/call_cubit.dart';
 
 /// Shown on the receiving device when someone calls us.
@@ -18,105 +19,111 @@ class IncomingCallScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // ── Dark gradient background ──────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  const Color(0xFF1A1A2E),
-                  AppColors.primary.withOpacity(0.15),
-                  const Color(0xFF1A1A2E),
+    return BlocListener<CallCubit, CallState>(
+      listener: (context, state) {
+        if (state is CallActive) {
+          context.pushReplacement(
+            '/video_call',
+            extra: {
+              'contactName': state.contactName,
+              'livekitUrl': state.livekitUrl,
+              'livekitToken': state.livekitToken,
+            },
+          );
+        } else if (state is CallEnded || state is CallIdle) {
+          Navigator.pop(context); // Fallback pop if completely dismissed
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1A1A2E),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── Dark gradient background ──────────────────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFF1A1A2E),
+                    AppColors.primary.withOpacity(0.15),
+                    const Color(0xFF1A1A2E),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Ringing pulse animation around avatar ─────────────────────────
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Spacer(flex: 2),
+
+                  // Animated rings
+                  _PulseAvatar(avatarUrl: callerAvatarUrl, name: callerName),
+
+                  const SizedBox(height: 28),
+
+                  // Caller name
+                  Text(
+                    callerName,
+                    style: AppTypography.headline2.copyWith(
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Status
+                  Text(
+                    'جاري الاتصال...',
+                    style: AppTypography.body1.copyWith(color: Colors.white54),
+                  ),
+
+                  const Spacer(flex: 3),
+
+                  // ── Action buttons row ────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 60,
+                      vertical: 48,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Decline
+                        _CallActionButton(
+                          icon: Icons.call_end,
+                          color: Colors.red,
+                          label: 'رفض',
+                          onTap: () {
+                            context.read<CallCubit>().rejectCall();
+                            Navigator.of(context).pop();
+                          },
+                        ),
+
+                        // Accept
+                        _CallActionButton(
+                          icon: Icons.videocam,
+                          color: AppColors.primary,
+                          label: 'قبول',
+                          onTap: () {
+                            // Tap Accept: State goes to CallConnecting until server acknowledges.
+                            // The BlocListener directly above will intercept CallActive when ready.
+                            context.read<CallCubit>().acceptCall();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-
-          // ── Ringing pulse animation around avatar ─────────────────────────
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Spacer(flex: 2),
-
-                // Animated rings
-                _PulseAvatar(
-                  avatarUrl: callerAvatarUrl,
-                  name: callerName,
-                ),
-
-                const SizedBox(height: 28),
-
-                // Caller name
-                Text(
-                  callerName,
-                  style: AppTypography.headline2.copyWith(
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Status
-                Text(
-                  'جاري الاتصال...',
-                  style: AppTypography.body1.copyWith(
-                    color: Colors.white54,
-                  ),
-                ),
-
-                const Spacer(flex: 3),
-
-                // ── Action buttons row ────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 48),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Decline
-                      _CallActionButton(
-                        icon: Icons.call_end,
-                        color: Colors.red,
-                        label: 'رفض',
-                        onTap: () {
-                          context.read<CallCubit>().rejectCall();
-                          Navigator.of(context).pop();
-                        },
-                      ),
-
-                      // Accept
-                      _CallActionButton(
-                        icon: Icons.videocam,
-                        color: AppColors.primary,
-                        label: 'قبول',
-                        onTap: () {
-                          context.read<CallCubit>().acceptCall();
-                          // Replace IncomingCallScreen with VideoCallScreen
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => BlocProvider.value(
-                                value: context.read<CallCubit>(),
-                                child: VideoCallActiveWrapper(
-                                    contactName: callerName),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -146,9 +153,10 @@ class _PulseAvatarState extends State<_PulseAvatar>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 1.0, end: 1.18).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _pulse = Tween<double>(
+      begin: 1.0,
+      end: 1.18,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -161,17 +169,17 @@ class _PulseAvatarState extends State<_PulseAvatar>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _pulse,
-      builder: (_, child) => Transform.scale(
-        scale: _pulse.value,
-        child: child,
-      ),
+      builder: (_, child) => Transform.scale(scale: _pulse.value, child: child),
       child: Container(
         width: 120,
         height: 120,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: AppColors.primary.withOpacity(0.25),
-          border: Border.all(color: AppColors.primary.withOpacity(0.6), width: 3),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.6),
+            width: 3,
+          ),
         ),
         child: CircleAvatar(
           radius: 56,
@@ -239,60 +247,6 @@ class _CallActionButton extends StatelessWidget {
           style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
       ],
-    );
-  }
-}
-
-// ── Thin wrapper used after accept, waits for CallActive state ─────────────────
-
-class VideoCallActiveWrapper extends StatelessWidget {
-  final String contactName;
-  const VideoCallActiveWrapper({super.key, required this.contactName});
-
-  @override
-  Widget build(BuildContext context) {
-    // The actual VideoCallScreen lives in video_call_screen.dart
-    // Import it here to avoid circular imports at the top
-    return _VideoCallBridge(contactName: contactName);
-  }
-}
-
-// Lazy import bridge to avoid circular dependency at top of file
-class _VideoCallBridge extends StatelessWidget {
-  final String contactName;
-  const _VideoCallBridge({required this.contactName});
-
-  @override
-  Widget build(BuildContext context) {
-    // This screen is already self-contained; we simply push it.
-    // The CallCubit endCall() is wired to the End Call button below.
-    return BlocListener<CallCubit, CallState>(
-      listenWhen: (_, s) => s is CallIdle || s is CallEnded,
-      listener: (context, _) => Navigator.of(context).pop(),
-      child: VideoCallScreenShell(contactName: contactName),
-    );
-  }
-}
-
-/// Minimal shell that renders the UI from video_call_screen.dart
-/// without depending on LiveKit. Import video_call_screen at top
-/// of the consuming file.
-class VideoCallScreenShell extends StatelessWidget {
-  final String contactName;
-  const VideoCallScreenShell({super.key, required this.contactName});
-
-  @override
-  Widget build(BuildContext context) {
-    // Delegate to the full VideoCallScreen widget
-    // (imported indirectly via the file that uses this)
-    return Scaffold(
-      body: Center(
-        child: Text(
-          'Active call with $contactName',
-          style: const TextStyle(color: Colors.white, fontSize: 20),
-        ),
-      ),
-      backgroundColor: Colors.black,
     );
   }
 }
