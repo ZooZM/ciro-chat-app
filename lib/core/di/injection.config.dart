@@ -113,9 +113,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i850.ContactsService>(),
       ),
     );
-    gh.lazySingleton<_i52.AuthCubit>(
-      () => _i52.AuthCubit(gh<_i787.AuthRepository>()),
-    );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
     );
@@ -126,6 +123,12 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i420.PaymentCubit>(
       () => _i420.PaymentCubit(gh<_i639.PaymentRepository>()),
+    );
+    gh.lazySingleton<_i52.AuthCubit>(
+      () => _i52.AuthCubit(
+        gh<_i787.AuthRepository>(),
+        gh<_i852.AuthLocalDataSource>(),
+      ),
     );
     gh.factory<_i804.VideoCallCubit>(
       () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
