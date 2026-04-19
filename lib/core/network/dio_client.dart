@@ -1,7 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import '../../features/auth/data/datasources/auth_local_data_source.dart';
+import '../../core/network/socket_service.dart';
+import '../../core/di/injection.dart';
 
 // Decoupled global callback to enforce redirect cleanly outside Dio's module graph
 void Function()? globalOnUnauthorizedRedirect;
@@ -52,8 +55,23 @@ class DioClient {
                 final newRefresh = response.data['refreshToken'] ?? refreshToken;
                 
                 await _authLocal.saveTokens(accessToken: newAccess, refreshToken: newRefresh);
-                
-                // Resume Original Request organically!
+
+                // ── SOCKET RE-SYNC ──────────────────────────────────────────────
+                // The old socket connection is using the expired JWT. Silently
+                // tear it down and reconnect with the new token so the user
+                // never experiences a WebSocket interruption mid-session.
+                try {
+                  final socketService = getIt<SocketService>();
+                  socketService.disconnect();
+                  socketService.connect(newAccess);
+                  debugPrint('[DioClient] Socket silently re-synced with new token');
+                } catch (socketErr) {
+                  // Non-fatal: HTTP requests continue even if socket sync fails.
+                  debugPrint('[DioClient] Socket re-sync failed: $socketErr');
+                }
+                // ──────────────────────────────────────────────────────────────
+
+                // Resume the original failed HTTP request with the new token.
                 e.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
                 final retryResponse = await _dio.fetch(e.requestOptions);
                 return handler.resolve(retryResponse);

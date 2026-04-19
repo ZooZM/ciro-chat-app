@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../domain/repositories/auth_repository.dart';
+import '../../data/datasources/auth_local_data_source.dart';
 
 import '../../../chat/presentation/bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
@@ -15,16 +17,31 @@ part 'auth_state.dart';
 @lazySingleton
 class AuthCubit extends Cubit<AuthState> {
   final AuthRepository _repository;
+  final AuthLocalDataSource _localDataSource;
 
-  AuthCubit(this._repository) : super(const AuthInitial());
+  AuthCubit(this._repository, this._localDataSource) : super(const AuthInitial());
 
   Future<void> verifyAuthStatus() async {
     emit(const AuthLoading());
+
+    // Splash screen minimum display duration — prevents jarring flash on fast devices.
+    await Future.delayed(const Duration(seconds: 2));
+
     try {
       final isAuthenticated = await _repository.checkAuthStatus();
+
       if (isAuthenticated) {
+        // Always read the CURRENT token from secure storage after the repository
+        // has had a chance to silently refresh it, then hand it to the socket.
+        final freshToken = await _localDataSource.getAccessToken() ?? '';
+        if (freshToken.isNotEmpty) {
+          getIt<SocketService>().connect(freshToken);
+          debugPrint('[AuthCubit] Socket connected on app start with fresh token');
+        }
         emit(const Authenticated());
       } else {
+        // Safety: ensure no stale socket is left open when the user is not authenticated.
+        getIt<SocketService>().disconnect();
         emit(const Unauthenticated());
       }
     } catch (e) {
