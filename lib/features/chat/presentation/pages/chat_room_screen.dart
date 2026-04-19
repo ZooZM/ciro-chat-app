@@ -28,7 +28,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final ScrollController _scrollController = ScrollController();
   late String _currentUserId;
   bool _isMenuOpen = false; // tracks popup visibility for background dim
-
+  late ChatCubit cubit;
   @override
   void initState() {
     super.initState();
@@ -45,6 +45,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         }
       });
     }
+    cubit = context.read<ChatCubit>();
+    cubit.openRoom(widget.chatData.id);
   }
 
   void _showAttachmentSheet(BuildContext context) {
@@ -106,7 +108,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   @override
   void dispose() {
     // PREVENT STALE STATE ROUTING! Explicitly flush the bound Mongo identifier.
-    context.read<ChatCubit>().closeRoom();
+    cubit.closeRoom();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
