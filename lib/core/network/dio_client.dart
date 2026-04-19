@@ -1,14 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:ciro_chat_app/core/routing/app_router.dart';
+import '../../features/auth/data/datasources/auth_local_data_source.dart';
+
+// Decoupled global callback to enforce redirect cleanly outside Dio's module graph
+void Function()? globalOnUnauthorizedRedirect;
 
 @lazySingleton
 class DioClient {
   final Dio _dio;
-  final FlutterSecureStorage _secureStorage;
+  final AuthLocalDataSource _authLocal;
 
-  DioClient(this._secureStorage) : _dio = Dio() {
+  DioClient(this._authLocal) : _dio = Dio() {
     _dio.options = BaseOptions(
       baseUrl: const String.fromEnvironment(
         'API_URL',
@@ -27,18 +30,43 @@ class DioClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           // Automatically read the accessToken and attach it to the Authorization header
-          final accessToken = await _secureStorage.read(key: 'accessToken');
+          final accessToken = await _authLocal.getAccessToken();
           if (accessToken != null && accessToken.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $accessToken';
           }
           return handler.next(options);
         },
-        onError: (DioException e, handler) {
+        onError: (DioException e, handler) async {
           if (e.response?.statusCode == 401) {
-            // For example, redirect to the auth screen or trigger a logout event.
-            // Using appRouter directly here for demonstration, though normally you might
-            // dispatch an event to your AuthBloc or use a NavigationService.
-            appRouter.go('/auth');
+            final refreshToken = await _authLocal.getRefreshToken();
+            
+            if (refreshToken != null && refreshToken.isNotEmpty) {
+              try {
+                // Secondary isolated Dio instance strictly for token refresh to avoid infinity loops
+                final refreshDio = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
+                final response = await refreshDio.post('/auth/refresh', data: {
+                  'refreshToken': refreshToken
+                });
+                
+                final newAccess = response.data['accessToken'];
+                final newRefresh = response.data['refreshToken'] ?? refreshToken;
+                
+                await _authLocal.saveTokens(accessToken: newAccess, refreshToken: newRefresh);
+                
+                // Resume Original Request organically!
+                e.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
+                final retryResponse = await _dio.fetch(e.requestOptions);
+                return handler.resolve(retryResponse);
+              } catch (_) {
+                // Completely expire the keychain payload. The refresh token is strictly dead.
+                await _authLocal.deleteTokens();
+                globalOnUnauthorizedRedirect?.call();
+              }
+            } else {
+              // The keychain never possessed a refresh token
+              await _authLocal.deleteTokens();
+              globalOnUnauthorizedRedirect?.call();
+            }
           }
           return handler.next(e);
         },

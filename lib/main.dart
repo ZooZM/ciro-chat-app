@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
 import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
+import 'core/network/dio_client.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
 
@@ -11,6 +12,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Bloc.observer = const AppBlocObserver();
   await configureDependencies();
+
+  // Link Network failure fallback strictly after router & DI initialization
+  globalOnUnauthorizedRedirect = () => appRouter.go('/auth');
 
   runApp(const MainApp());
 }

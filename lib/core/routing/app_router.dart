@@ -13,10 +13,32 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
+import '../../features/auth/data/datasources/auth_local_data_source.dart';
 import '../di/injection.dart';
+
+import 'go_router_refresh_stream.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
+  refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),
+  redirect: (context, state) async {
+    final isLoggedIn = await getIt<AuthLocalDataSource>().getLoggedInStatus();
+
+    final isAuthRoute = state.matchedLocation == '/auth' || state.matchedLocation.startsWith('/auth/');
+    final isSplash = state.matchedLocation == '/splash';
+
+    // 1. Unauthenticated users strictly stay in limits
+    if (!isLoggedIn && !isAuthRoute) {
+      return '/auth';
+    }
+
+    // 2. Authenticated users are banned from auth pages, forced to /home
+    if (isLoggedIn && (isAuthRoute || isSplash)) {
+      return '/home';
+    }
+
+    return null;
+  },
   routes: [
     GoRoute(
       path: '/splash',

@@ -1,4 +1,4 @@
-import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
+
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -64,13 +64,8 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
             ),
           );
         } else if (state is Authenticated) {
-          // Success! Navigate to the main/home flow
-          context.read<ChatCubit>().connectNetwork(
-            state.userData!['accessToken'],
-          );
-          // final token = state.userData!['accessToken'];
-          // debugPrint(token);
-          context.go('/home'); // Routing to chat list
+          // Success! The updated Auth state automatically triggers GoRouter's
+          // refreshListenable, ripping this screen away natively.
         }
       },
       builder: (context, state) {

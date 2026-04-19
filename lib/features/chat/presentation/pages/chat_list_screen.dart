@@ -9,8 +9,8 @@ import '../../domain/entities/chat_session.dart';
 import '../widgets/chat_tile_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../../core/theme/app_logo.dart';
-
-
+import '../../../../core/di/injection.dart';
+import '../../../auth/data/datasources/auth_local_data_source.dart';
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
 
@@ -25,8 +25,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
     // Re-sync rooms from API every time the inbox opens.
     // This is a background refresh — the StreamBuilder already shows
     // cached SQLite data instantly while the fetch completes.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ChatCubit>().hydrateRooms();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Connect to the WebSocket using the locally persisted token
+      final token = await getIt<AuthLocalDataSource>().getAccessToken();
+      if (token != null && token.isNotEmpty && mounted) {
+        context.read<ChatCubit>().connectNetwork(token);
+      }
+      
+      if (mounted) {
+        context.read<ChatCubit>().hydrateRooms();
+      }
     });
   }
 

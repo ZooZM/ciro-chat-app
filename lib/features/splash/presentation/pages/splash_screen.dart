@@ -31,32 +31,6 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
 
-    // Check login status in the background while the animation plays
-    _checkLoginStatus();
-  }
-
-  Future<void> _checkLoginStatus() async {
-    // Wait for the splash animation to finish (at least 2.5 seconds total)
-    await Future.delayed(const Duration(milliseconds: 2500));
-
-    if (!mounted) return;
-
-    try {
-      final authRepo = getIt<AuthRepository>();
-      final isLoggedIn = false;
-      // await authRepo.checkAuthStatus();
-
-      if (isLoggedIn) {
-        context.go('/home'); // Direct to ChatListScreen
-      } else {
-        context.go('/auth'); // Direct to PhoneInputScreen
-      }
-    } catch (e) {
-      // On error, default to auth screen
-      if (mounted) context.go('/auth');
-    }
-  }
-
   @override
   void dispose() {
     _ctrl.dispose();
