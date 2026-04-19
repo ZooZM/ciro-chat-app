@@ -46,7 +46,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       });
     }
     cubit = context.read<ChatCubit>();
-    cubit.openRoom(widget.chatData.id);
+
+    if (widget.chatData.id.isEmpty) {
+      // No room exists yet — entering from ContactsScreen. JIT room will be
+      // created on the first Send press. Pass the contact metadata so the
+      // Cubit can call createRoom(contact.id) at that moment.
+      cubit.openRoom('', contact: widget.chatData);
+    } else {
+      cubit.openRoom(widget.chatData.id);
+    }
   }
 
   void _showAttachmentSheet(BuildContext context) {

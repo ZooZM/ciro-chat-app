@@ -9,7 +9,9 @@ import 'package:injectable/injectable.dart';
 import 'package:ciro_chat_app/core/network/dio_client.dart';
 
 // TOP LEVEL: Safe Isolate Context Execution stripping UI boundaries natively
-Future<Map<String, String>> _normalizeContactsIsolate(Map<String, dynamic> params) async {
+Future<Map<String, String>> _normalizeContactsIsolate(
+  Map<String, dynamic> params,
+) async {
   final List<Contact> rawContacts = params['contacts'] as List<Contact>;
   final String defaultCountryCode = params['defaultCountryCode'] as String;
 
@@ -35,7 +37,7 @@ Future<Map<String, String>> _normalizeContactsIsolate(Map<String, dynamic> param
       }
 
       if (normalized.length >= 8) {
-        phoneToName[normalized] = contact.displayName;
+        phoneToName[normalized] = contact.displayName ?? '';
       }
     }
   }
@@ -63,16 +65,18 @@ class ContactsService {
     );
 
     // 3. Normalize numbers & Create a Lookup Map purely inside a Background Isolate Thread protecting 60fps!
-    final Map<String, String> phoneToName = await compute(_normalizeContactsIsolate, {
-      'contacts': contacts,
-      'defaultCountryCode': defaultCountryCode,
-    });
+    final Map<String, String> phoneToName = await compute(
+      _normalizeContactsIsolate,
+      {'contacts': contacts, 'defaultCountryCode': defaultCountryCode},
+    );
 
     if (phoneToName.isEmpty) return [];
 
     // 4. Send bulk list to API
     try {
-      debugPrint('[ContactsService] Syncing ${phoneToName.length} numbers exclusively via Background Isolate payload');
+      debugPrint(
+        '[ContactsService] Syncing ${phoneToName.length} numbers exclusively via Background Isolate payload',
+      );
 
       final payload = {'phoneNumbers': phoneToName.keys.toList()};
 
@@ -97,7 +101,9 @@ class ContactsService {
           return ChatSession(
             id: json['id'] ?? json['_id'] ?? 'tmp',
             // Fallback: 1. Contact Name -> 2. Backend Name -> 3. "Unknown"
-            name: resolvedName.isNotEmpty && resolvedName != "Unknown" ? resolvedName : (json['name'] ?? "Unknown"),
+            name: resolvedName.isNotEmpty && resolvedName != "Unknown"
+                ? resolvedName
+                : (json['name'] ?? "Unknown"),
             lastMessage: 'Tap to start chatting',
             timestamp: DateTime.now(),
             avatarUrl:

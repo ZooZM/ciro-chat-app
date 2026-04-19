@@ -35,42 +35,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _startPrivateChat(ChatSession targetUser) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      debugPrint(
-        '[ContactsScreen] Starting chat with ${targetUser.phoneNumber}',
-      );
-      final roomId = await getIt<ContactsService>().resolvePrivateChat(
-        targetPhoneNumber: targetUser
-            .phoneNumber, // targetUser.id = phoneNumber from sync-contacts
-        chatSession: targetUser,
-      );
-
-      if (mounted) Navigator.pop(context); // dismiss loader
-
-      final roomPayload = ChatSession(
-        id: roomId,
-        name: targetUser.name,
-        lastMessage: '',
-        timestamp: DateTime.now(),
-        avatarUrl: targetUser.avatarUrl,
-        isOnline: targetUser.isOnline,
-        phoneNumber: targetUser.phoneNumber,
-      );
-
-      if (mounted) context.pushReplacement('/chat_room', extra: roomPayload);
-    } catch (err) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to start chat: $err')));
-      }
+    // Navigate INSTANTLY — zero blocking API calls here.
+    // The backend room is created JIT when the user presses Send for the first time.
+    if (mounted) {
+      context.pushReplacement('/chat_room', extra: targetUser);
     }
   }
 

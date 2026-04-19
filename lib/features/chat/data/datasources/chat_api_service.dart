@@ -59,4 +59,17 @@ class ChatApiService {
       return [];
     }
   }
+
+  /// Just-In-Time room resolution — called only when the very first message is sent.
+  /// Returns the canonical MongoDB room _id from the backend.
+  Future<String> createRoom(String targetUserId) async {
+    final response = await _dioClient.dio.post(
+      '/chat/private/resolve',
+      data: {'userId': targetUserId},
+    );
+    final data = response.data['data'] ?? response.data;
+    final roomId = data['roomId'] ?? data['_id'] ?? data['id'];
+    if (roomId == null) throw Exception('Backend returned no roomId');
+    return roomId.toString();
+  }
 }

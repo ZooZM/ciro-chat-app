@@ -7,7 +7,13 @@ import 'package:injectable/injectable.dart';
 
 abstract class ChatLocalDataSource {
   Future<void> initDB();
-  Future<void> saveMessage(Message message, {bool incrementUnread = false});
+  Future<void> saveMessage(
+    Message message, {
+    bool incrementUnread = false,
+    String roomName = '',
+    String roomAvatarUrl = '',
+    String roomPhoneNumber = '',
+  });
   Future<void> updateMessageStatus(String messageId, MessageStatus status);
   Future<List<Message>> getRoomMessages(String roomId);
   Stream<List<Message>> watchRoomMessages(String roomId);
@@ -122,6 +128,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> saveMessage(
     Message message, {
     bool incrementUnread = false,
+    String roomName = '',
+    String roomAvatarUrl = '',
+    String roomPhoneNumber = '',
   }) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
@@ -132,24 +141,39 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    // Reactivity: Push the message data directly to the rooms table unconditionally.
-    String updateQuery =
-        'UPDATE rooms SET lastMessage = ?, timestamp = ?, lastMessageSenderId = ? ';
-    List<dynamic> args = [
-      message.text,
-      message.timestamp.toIso8601String(),
-      message.senderId,
-    ];
+    // GHOST CHAT FIX: UPSERT the room row so that a brand-new room created
+    // JIT (just-in-time on first send) is always visible in the Inbox stream.
+    // COALESCE preserves the existing unreadCount if the row already exists.
+    await db.rawInsert(
+      '''
+      INSERT OR REPLACE INTO rooms
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId)
+      VALUES (
+        ?,
+        COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
+        COALESCE((SELECT avatarUrl     FROM rooms WHERE id = ?), ?),
+        COALESCE((SELECT phoneNumber   FROM rooms WHERE id = ?), ?),
+        ?,
+        ?,
+        COALESCE((SELECT unreadCount   FROM rooms WHERE id = ?), 0) + ?,
+        COALESCE((SELECT isOnline      FROM rooms WHERE id = ?), 0),
+        ?
+      )
+      ''',
+      [
+        message.roomId,           // id
+        message.roomId, roomName,          // name  (keep existing or use provided)
+        message.roomId, roomAvatarUrl,     // avatarUrl
+        message.roomId, roomPhoneNumber,   // phoneNumber
+        message.text,                      // lastMessage
+        message.timestamp.toIso8601String(), // timestamp
+        message.roomId, incrementUnread ? 1 : 0, // unreadCount += 0 or 1
+        message.roomId,                    // isOnline
+        message.senderId,                  // lastMessageSenderId
+      ],
+    );
 
-    if (incrementUnread) {
-      updateQuery += ', unreadCount = unreadCount + 1 ';
-    }
-    updateQuery += 'WHERE id = ?';
-    args.add(message.roomId);
-
-    await db.rawUpdate(updateQuery, args);
-
-    // Switch both the active room AND the global inbox reactive streams
+    // Push reactive updates to both the room stream and the inbox stream
     await _dispatchUpdateForRoom(message.roomId);
     await _dispatchRecentChatsUpdate();
   }
