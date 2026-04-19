@@ -92,6 +92,7 @@ class SocketService {
 
   /// Step 1 — Caller initiates call
   void requestCall({required String targetUserId, bool isVideo = true}) {
+    debugPrint('[CALL] requestCall: $targetUserId');
     _socket?.emit('requestCall', {
       'targetUserId': targetUserId,
       'isVideo': isVideo,

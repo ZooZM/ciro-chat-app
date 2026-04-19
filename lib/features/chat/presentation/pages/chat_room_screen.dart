@@ -217,7 +217,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               onPressed: () {
                 // 1. Emit requestCall via socket exactly using Mongo ID
                 context.read<CallCubit>().initiateCall(
-                  targetUserId: widget.chatData.id,
+                  targetUserId: widget.chatData.phoneNumber,
                   targetName: widget.chatData.name,
                   targetAvatarUrl: widget.chatData.avatarUrl,
                 );
