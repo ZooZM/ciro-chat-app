@@ -47,7 +47,7 @@ class ChatCubit extends Cubit<ChatState> {
       _localDataSource.watchRecentChats();
 
   // Exposes offline cached contacts natively mapped strictly avoiding states
-  Stream<List<ChatSession>> get watchLocalContacts => 
+  Stream<List<ChatSession>> get watchLocalContacts =>
       _localDataSource.watchContacts();
 
   Future<void> _initServices() async {
@@ -130,20 +130,24 @@ class ChatCubit extends Cubit<ChatState> {
   /// Sends a local-first message.
   /// On the very first message to a new contact, creates the backend room JIT.
   Future<void> sendLocalMessage(String text) async {
+    final contactForUpsert = _pendingContact;
+
     // ── JIT Room Creation ─────────────────────────────────────────────────────
     if (_activeRoomId == null) {
-      final contact = _pendingContact;
-      if (contact == null) {
-        debugPrint('[ChatCubit] sendLocalMessage called with no active room and no pending contact');
+      if (contactForUpsert == null) {
+        debugPrint(
+          '[ChatCubit] sendLocalMessage called with no active room and no pending contact',
+        );
         return;
       }
       try {
-        // Creates the room on the backend — fires only ONCE, on the first Send tap.
-        final newRoomId = await _chatApiService.createRoom(contact.id);
+        // Creates the room on the backend
+        final newRoomId = await _chatApiService.createRoom(contactForUpsert.id);
         _activeRoomId = newRoomId;
         _pendingContact = null;
+        _socketService.joinRoom(newRoomId);
+        await Future.delayed(const Duration(milliseconds: 300));
 
-        // Start listening to the new room's message stream immediately
         _localDataSource.resetUnreadCount(newRoomId);
         _roomStreamSub?.cancel();
         _roomStreamSub = _localDataSource
@@ -164,7 +168,7 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Local-first send ──────────────────────────────────────────────────────
     final roomId = _activeRoomId!;
     final msgId = _uuid.v4();
-    final contact = _pendingContact; // null after JIT path above
+
     final newMsg = Message(
       id: msgId,
       roomId: roomId,
@@ -174,12 +178,12 @@ class ChatCubit extends Cubit<ChatState> {
       status: MessageStatus.pending,
     );
 
-    // UPSERT: passes room metadata so saveMessage can create the row if needed.
+    // UPSERT: نستخدم النسخة اللي حفظناها فوق عشان اسم الغرفة والصورة ميطيروش
     await _localDataSource.saveMessage(
       newMsg,
-      roomName: contact?.name ?? '',
-      roomAvatarUrl: contact?.avatarUrl ?? '',
-      roomPhoneNumber: contact?.phoneNumber ?? '',
+      roomName: contactForUpsert?.name ?? '',
+      roomAvatarUrl: contactForUpsert?.avatarUrl ?? '',
+      roomPhoneNumber: contactForUpsert?.phoneNumber ?? '',
     );
 
     // Transmit async via WebSockets
@@ -214,13 +218,15 @@ class ChatCubit extends Cubit<ChatState> {
       await _localDataSource.upsertContacts(contacts);
       return true;
     } catch (e) {
-      debugPrint('[ChatCubit] silentSyncContacts failed purely in background: $e');
+      debugPrint(
+        '[ChatCubit] silentSyncContacts failed purely in background: $e',
+      );
       if (e.toString().toLowerCase().contains('permission')) {
         return false;
       }
-      // If the engine throws purely internet errors, we absolutely do not break the UI state, 
+      // If the engine throws purely internet errors, we absolutely do not break the UI state,
       // the SQLite cache functionally handles offline mode regardless.
-      return true; 
+      return true;
     }
   }
 
