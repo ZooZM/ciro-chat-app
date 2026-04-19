@@ -47,7 +47,7 @@ class ChatCubit extends Cubit<ChatState> {
       _localDataSource.watchRecentChats();
 
   // Exposes offline cached contacts natively mapped strictly avoiding states
-  Stream<List<ChatSession>> get watchLocalContacts => 
+  Stream<List<ChatSession>> get watchLocalContacts =>
       _localDataSource.watchContacts();
 
   Future<void> _initServices() async {
@@ -130,29 +130,28 @@ class ChatCubit extends Cubit<ChatState> {
   /// Sends a local-first message.
   /// On the very first message to a new contact, creates the backend room JIT.
   Future<void> sendLocalMessage(String text) async {
+    final contactForUpsert = _pendingContact;
+
     // ── JIT Room Creation ─────────────────────────────────────────────────────
-    ChatSession? jitContact; // snapshot metadata BEFORE clearing _pendingContact
+    ChatSession?
+    jitContact; // snapshot metadata BEFORE clearing _pendingContact
     if (_activeRoomId == null) {
-      final contact = _pendingContact;
-      if (contact == null) {
-        debugPrint('[ChatCubit] sendLocalMessage called with no active room and no pending contact');
+      if (contactForUpsert == null) {
+        debugPrint(
+          '[ChatCubit] sendLocalMessage called with no active room and no pending contact',
+        );
         return;
       }
       jitContact = contact; // preserve for UPSERT below
       try {
-        // 1. Create the room — fires only ONCE, on the very first Send tap.
+        // Creates the room on the backend — fires only ONCE, on the first Send tap.
         final newRoomId = await _chatApiService.createRoom(contact.id);
         _activeRoomId = newRoomId;
         _pendingContact = null;
-
-        // 2. Tell the socket to join the new room BEFORE sending any message.
         _socketService.joinRoom(newRoomId);
-
-        // 3. Give MongoDB 300ms to replicate the new room document so the
-        //    backend doesn't reject the first sendMessage with "room not found".
         await Future.delayed(const Duration(milliseconds: 300));
 
-        // 4. Wire up the message stream now that the room is guaranteed to exist.
+        // Start listening to the new room's message stream immediately
         _localDataSource.resetUnreadCount(newRoomId);
         _roomStreamSub?.cancel();
         _roomStreamSub = _localDataSource
@@ -173,6 +172,7 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Local-first send ──────────────────────────────────────────────────────
     final roomId = _activeRoomId!;
     final msgId = _uuid.v4();
+    final contact = _pendingContact; // null after JIT path above
     final newMsg = Message(
       id: msgId,
       roomId: roomId,
@@ -182,12 +182,12 @@ class ChatCubit extends Cubit<ChatState> {
       status: MessageStatus.pending,
     );
 
-    // jitContact holds the name/avatar for brand-new rooms; null for existing rooms.
+    // UPSERT: passes room metadata so saveMessage can create the row if needed.
     await _localDataSource.saveMessage(
       newMsg,
-      roomName: jitContact?.name ?? '',
-      roomAvatarUrl: jitContact?.avatarUrl ?? '',
-      roomPhoneNumber: jitContact?.phoneNumber ?? '',
+      roomName: contact?.name ?? '',
+      roomAvatarUrl: contact?.avatarUrl ?? '',
+      roomPhoneNumber: contact?.phoneNumber ?? '',
     );
 
     // Transmit via WebSockets (after the 300ms settle, backend is ready).
@@ -222,13 +222,15 @@ class ChatCubit extends Cubit<ChatState> {
       await _localDataSource.upsertContacts(contacts);
       return true;
     } catch (e) {
-      debugPrint('[ChatCubit] silentSyncContacts failed purely in background: $e');
+      debugPrint(
+        '[ChatCubit] silentSyncContacts failed purely in background: $e',
+      );
       if (e.toString().toLowerCase().contains('permission')) {
         return false;
       }
-      // If the engine throws purely internet errors, we absolutely do not break the UI state, 
+      // If the engine throws purely internet errors, we absolutely do not break the UI state,
       // the SQLite cache functionally handles offline mode regardless.
-      return true; 
+      return true;
     }
   }
 

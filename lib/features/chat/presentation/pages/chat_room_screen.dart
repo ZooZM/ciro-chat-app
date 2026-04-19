@@ -149,7 +149,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           leadingWidth: 40.resW,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
-            onPressed: () => context.pushReplacement('/home'),
+            onPressed: () => context.go('/home'),
           ),
           title: Row(
             children: [

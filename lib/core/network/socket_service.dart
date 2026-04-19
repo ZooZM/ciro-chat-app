@@ -9,7 +9,7 @@ import 'package:ciro_chat_app/core/di/injection.dart';
 class SocketService {
   IO.Socket? _socket;
   bool _isRefreshing = false;
-  
+
   // Exposes declarative binding for WhatsApp-style Connecting... banner
   final ValueNotifier<bool> isConnectedNotifier = ValueNotifier(false);
 
@@ -56,17 +56,21 @@ class SocketService {
       isConnectedNotifier.value = false;
 
       final errorStr = err.toString().toLowerCase();
-      if (errorStr.contains('jwt expired') || errorStr.contains('unauthorized') || errorStr.contains('401')) {
+      if (errorStr.contains('jwt expired') ||
+          errorStr.contains('unauthorized') ||
+          errorStr.contains('401')) {
         await _handleTokenRefresh();
       }
     });
-    
+
     _socket?.onDisconnect((reason) async {
       debugPrint('Socket Disconnected: $reason');
       isConnectedNotifier.value = false;
 
       final reasonStr = reason.toString().toLowerCase();
-      if (reasonStr.contains('jwt expired') || reasonStr.contains('unauthorized') || reasonStr.contains('401')) {
+      if (reasonStr.contains('jwt expired') ||
+          reasonStr.contains('unauthorized') ||
+          reasonStr.contains('401')) {
         await _handleTokenRefresh();
       }
     });
@@ -125,6 +129,13 @@ class SocketService {
     }
   }
 
+  void joinRoom(String roomId) {
+    if (_socket!.connected) {
+      _socket!.emit('joinRoom', {'roomId': roomId});
+      debugPrint('[Socket] Joined room: $roomId');
+    }
+  }
+
   void markAsRead({required String roomId, required String messageId}) {
     _socket?.emit('markRead', {'chatRoomId': roomId, 'messageId': messageId});
   }
@@ -164,9 +175,12 @@ class SocketService {
   Future<void> _handleTokenRefresh() async {
     if (_isRefreshing) return;
     _isRefreshing = true;
-    
-    debugPrint('[SocketService] Token expired. Pausing reconnection and triggering refresh...');
-    _socket?.disconnect(); // Ensure socket stops hammering the server while we cleanly HTTP refresh
+
+    debugPrint(
+      '[SocketService] Token expired. Pausing reconnection and triggering refresh...',
+    );
+    _socket
+        ?.disconnect(); // Ensure socket stops hammering the server while we cleanly HTTP refresh
 
     final authLocal = getIt<AuthLocalDataSource>();
 
@@ -174,23 +188,31 @@ class SocketService {
       final refreshToken = await authLocal.getRefreshToken();
       if (refreshToken != null && refreshToken.isNotEmpty) {
         // Launch isolated network payload identical to DioClient interceptor logic
-        final refreshDio = Dio(BaseOptions(
-          baseUrl: const String.fromEnvironment(
-            'API_URL',
-            defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+        final refreshDio = Dio(
+          BaseOptions(
+            baseUrl: const String.fromEnvironment(
+              'API_URL',
+              defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+            ),
           ),
-        ));
-        
-        final response = await refreshDio.post('/auth/refresh', data: {
-          'refreshToken': refreshToken
-        });
-        
+        );
+
+        final response = await refreshDio.post(
+          '/auth/refresh',
+          data: {'refreshToken': refreshToken},
+        );
+
         final newAccess = response.data['accessToken'];
         final newRefresh = response.data['refreshToken'] ?? refreshToken;
-        
-        await authLocal.saveTokens(accessToken: newAccess, refreshToken: newRefresh);
-        
-        debugPrint('[SocketService] Refresh successful. Resuming socket connection...');
+
+        await authLocal.saveTokens(
+          accessToken: newAccess,
+          refreshToken: newRefresh,
+        );
+
+        debugPrint(
+          '[SocketService] Refresh successful. Resuming socket connection...',
+        );
         if (_socket != null) {
           _socket!.auth = {'token': newAccess};
           _socket!.connect();

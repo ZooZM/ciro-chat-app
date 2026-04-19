@@ -135,46 +135,45 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
 
-    await db.transaction((txn) async {
-      // 1. Insert the message row — replace on id conflict (idempotent retry-safe).
-      await txn.insert(
-        'messages',
-        message.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+    await db.insert(
+      'messages',
+      message.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
-      // 2. Bulletproof room UPSERT inside the same transaction.
-      //    ON CONFLICT(id) DO UPDATE ensures we never lose an existing row AND
-      //    CASE WHEN guards prevent empty strings from wiping stored name/avatar.
-      await txn.rawInsert(
-        '''
-        INSERT INTO rooms
-          (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name             = CASE WHEN excluded.name     != '' THEN excluded.name     ELSE rooms.name     END,
-          avatarUrl        = CASE WHEN excluded.avatarUrl != '' THEN excluded.avatarUrl ELSE rooms.avatarUrl END,
-          phoneNumber      = CASE WHEN excluded.phoneNumber != '' THEN excluded.phoneNumber ELSE rooms.phoneNumber END,
-          lastMessage      = excluded.lastMessage,
-          timestamp        = excluded.timestamp,
-          unreadCount      = rooms.unreadCount + ${incrementUnread ? 1 : 0},
-          lastMessageSenderId = excluded.lastMessageSenderId
-        ''',
-        [
-          message.roomId,
-          roomName,
-          roomAvatarUrl,
-          roomPhoneNumber,
-          message.text,
-          message.timestamp.toIso8601String(),
-          0,               // unreadCount seed for brand-new rows
-          message.senderId,
-        ],
-      );
-    });
+    // GHOST CHAT FIX: UPSERT the room row so that a brand-new room created
+    // JIT (just-in-time on first send) is always visible in the Inbox stream.
+    // COALESCE preserves the existing unreadCount if the row already exists.
+    await db.rawInsert(
+      '''
+      INSERT OR REPLACE INTO rooms
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId)
+      VALUES (
+        ?,
+        COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
+        COALESCE((SELECT avatarUrl     FROM rooms WHERE id = ?), ?),
+        COALESCE((SELECT phoneNumber   FROM rooms WHERE id = ?), ?),
+        ?,
+        ?,
+        COALESCE((SELECT unreadCount   FROM rooms WHERE id = ?), 0) + ?,
+        COALESCE((SELECT isOnline      FROM rooms WHERE id = ?), 0),
+        ?
+      )
+      ''',
+      [
+        message.roomId, // id
+        message.roomId, roomName, // name  (keep existing or use provided)
+        message.roomId, roomAvatarUrl, // avatarUrl
+        message.roomId, roomPhoneNumber, // phoneNumber
+        message.text, // lastMessage
+        message.timestamp.toIso8601String(), // timestamp
+        message.roomId, incrementUnread ? 1 : 0, // unreadCount += 0 or 1
+        message.roomId, // isOnline
+        message.senderId, // lastMessageSenderId
+      ],
+    );
 
-    // Push reactive updates outside the transaction so subscribers see a
-    // fully committed state, never a partial write.
+    // Push reactive updates to both the room stream and the inbox stream
     await _dispatchUpdateForRoom(message.roomId);
     await _dispatchRecentChatsUpdate();
   }
@@ -295,7 +294,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final db = _db;
     if (db != null) {
       // Yield strictly synchronously blocking logic cleanly before joining streams natively!
-      final maps = await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
+      final maps = await db.query(
+        'contacts',
+        orderBy: 'name COLLATE NOCASE ASC',
+      );
       yield maps.map((e) => ChatSession.fromMap(e)).toList();
     } else {
       yield <ChatSession>[];
@@ -310,17 +312,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     Batch batch = db.batch();
     for (var contact in contacts) {
-      batch.insert(
-        'contacts',
-        {
-          'id': contact.id,
-          'name': contact.name,
-          'phoneNumber': contact.phoneNumber,
-          'avatarUrl': contact.avatarUrl,
-          'isOnline': contact.isOnline ? 1 : 0,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      batch.insert('contacts', {
+        'id': contact.id,
+        'name': contact.name,
+        'phoneNumber': contact.phoneNumber,
+        'avatarUrl': contact.avatarUrl,
+        'isOnline': contact.isOnline ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
 
