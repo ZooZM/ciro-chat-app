@@ -171,6 +171,15 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  /// Flushes all in-memory states and subscriptions to prevent cross-account leaks
+  void reset() {
+    _roomStreamSub?.cancel();
+    _activeRoomId = null;
+    currentUserId = '';
+    isHydrationComplete = false;
+    emit(ChatInitial());
+  }
+
   @override
   Future<void> close() {
     _roomStreamSub?.cancel();

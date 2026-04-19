@@ -4,6 +4,12 @@ import 'package:injectable/injectable.dart';
 
 import '../../domain/repositories/auth_repository.dart';
 
+import '../../../chat/presentation/bloc/chat_cubit.dart';
+import '../../../video_call/presentation/bloc/call_cubit.dart';
+import '../../../chat/data/datasources/chat_local_data_source.dart';
+import '../../../../core/network/socket_service.dart';
+import '../../../../core/di/injection.dart';
+
 part 'auth_state.dart';
 
 @lazySingleton
@@ -50,7 +56,20 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> logOut() async {
     emit(const AuthLoading());
     try {
+      // 1. Reset UI & Streams first (Close the apps)
+      getIt<ChatCubit>().reset();
+      getIt<CallCubit>().reset();
+
+      // 2. Disconnect Network (Sever the connection)
+      getIt<SocketService>().disconnect();
+
+      // 3. Nuke Local Database (Format the hard drive)
+      await getIt<ChatLocalDataSource>().clearAllData();
+
+      // 4. Clear Secure Storage Credentials (Destroy the passport)
       await _repository.logout();
+
+      // 5. Trigger Routing Guard (Kick the user out)
       emit(const Unauthenticated());
     } catch (e) {
       emit(AuthError(e.toString()));

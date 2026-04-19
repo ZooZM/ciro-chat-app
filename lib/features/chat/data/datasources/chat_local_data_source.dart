@@ -15,15 +15,18 @@ abstract class ChatLocalDataSource {
   Stream<List<ChatSession>> watchRecentChats();
   Future<void> resetUnreadCount(String roomId);
   void closeRoomStream(String roomId);
+  Future<void> clearAllData();
 }
 
 @LazySingleton(as: ChatLocalDataSource)
 class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Database? _db;
-  
+
   // Local stream controllers for reactive UI updates per room
-  final Map<String, StreamController<List<Message>>> _roomStreamControllers = {};
-  final StreamController<List<ChatSession>> _recentChatsController = StreamController<List<ChatSession>>.broadcast();
+  final Map<String, StreamController<List<Message>>> _roomStreamControllers =
+      {};
+  final StreamController<List<ChatSession>> _recentChatsController =
+      StreamController<List<ChatSession>>.broadcast();
 
   @override
   Future<void> initDB() async {
@@ -63,7 +66,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         // Strict development mode constraint — Drop completely mapping to clear migrations natively
         await db.execute('DROP TABLE IF EXISTS rooms');
         await db.execute('DROP TABLE IF EXISTS messages');
-        
+
         // Re-execute onCreate directly bridging logic
         await db.execute('''
           CREATE TABLE messages(
@@ -93,19 +96,27 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   }
 
   @override
-  Future<void> saveMessage(Message message, {bool incrementUnread = false}) async {
+  Future<void> saveMessage(
+    Message message, {
+    bool incrementUnread = false,
+  }) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
-    
+
     await db.insert(
       'messages',
       message.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    
+
     // Reactivity: Push the message data directly to the rooms table unconditionally.
-    String updateQuery = 'UPDATE rooms SET lastMessage = ?, timestamp = ?, lastMessageSenderId = ? ';
-    List<dynamic> args = [message.text, message.timestamp.toIso8601String(), message.senderId];
+    String updateQuery =
+        'UPDATE rooms SET lastMessage = ?, timestamp = ?, lastMessageSenderId = ? ';
+    List<dynamic> args = [
+      message.text,
+      message.timestamp.toIso8601String(),
+      message.senderId,
+    ];
 
     if (incrementUnread) {
       updateQuery += ', unreadCount = unreadCount + 1 ';
@@ -114,21 +125,29 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     args.add(message.roomId);
 
     await db.rawUpdate(updateQuery, args);
-    
+
     // Switch both the active room AND the global inbox reactive streams
     await _dispatchUpdateForRoom(message.roomId);
     await _dispatchRecentChatsUpdate();
   }
 
   @override
-  Future<void> updateMessageStatus(String messageId, MessageStatus status) async {
+  Future<void> updateMessageStatus(
+    String messageId,
+    MessageStatus status,
+  ) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
-    
-    // We need to find the room id to notify the stream. 
+
+    // We need to find the room id to notify the stream.
     // Faster query:
-    final records = await db.query('messages', columns: ['room_id'], where: 'id = ?', whereArgs: [messageId]);
-    
+    final records = await db.query(
+      'messages',
+      columns: ['room_id'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+
     await db.update(
       'messages',
       {'status': status.name},
@@ -146,7 +165,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<Message>> getRoomMessages(String roomId) async {
     final db = _db;
     if (db == null) return [];
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'messages',
       where: 'room_id = ?',
@@ -154,7 +173,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp DESC', // Read newest messages
       limit: 20, // Strict buffer constraint
     );
-    
+
     // Reverse memory stack so chronological flow is restored for ListView bottom-gravity
     return maps.map((e) => Message.fromMap(e)).toList().reversed.toList();
   }
@@ -162,11 +181,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   @override
   Stream<List<Message>> watchRoomMessages(String roomId) {
     if (!_roomStreamControllers.containsKey(roomId)) {
-      _roomStreamControllers[roomId] = StreamController<List<Message>>.broadcast();
+      _roomStreamControllers[roomId] =
+          StreamController<List<Message>>.broadcast();
     }
     // Seed initial data
-    getRoomMessages(roomId).then((msgs) => _roomStreamControllers[roomId]!.add(msgs));
-    
+    getRoomMessages(
+      roomId,
+    ).then((msgs) => _roomStreamControllers[roomId]!.add(msgs));
+
     return _roomStreamControllers[roomId]!.stream;
   }
 
@@ -181,22 +203,25 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> saveRoom(ChatSession room) async {
     final db = _db;
     if (db == null) return;
-    
+
     // Natively protect unreadCount preventing API calls from erasing unread badges
-    await db.rawInsert('''
+    await db.rawInsert(
+      '''
       INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId)
       VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?)
-    ''', [
-      room.id,
-      room.name,
-      room.lastMessage,
-      room.timestamp.toIso8601String(),
-      room.id,
-      room.isOnline ? 1 : 0,
-      room.avatarUrl,
-      room.phoneNumber,
-      room.lastMessageSenderId
-    ]);
+    ''',
+      [
+        room.id,
+        room.name,
+        room.lastMessage,
+        room.timestamp.toIso8601String(),
+        room.id,
+        room.isOnline ? 1 : 0,
+        room.avatarUrl,
+        room.phoneNumber,
+        room.lastMessageSenderId,
+      ],
+    );
 
     await _dispatchRecentChatsUpdate();
   }
@@ -236,6 +261,30 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     if (_roomStreamControllers.containsKey(roomId)) {
       _roomStreamControllers[roomId]?.close();
       _roomStreamControllers.remove(roomId);
+    }
+  }
+
+  @override
+  Future<void> clearAllData() async {
+    final db = _db;
+    if (db == null) return;
+
+    // 1. Physically nuke the tables
+    await db.delete('messages');
+    await db.delete('rooms');
+
+    // 2. Tear down reactive stream infra
+    for (final controller in _roomStreamControllers.values) {
+      if (!controller.isClosed) {
+        controller.add([]); // Push clean state
+        await controller.close(); // Sever listener
+      }
+    }
+    _roomStreamControllers.clear();
+
+    // 3. Flush the global inbox state
+    if (!_recentChatsController.isClosed) {
+      _recentChatsController.add([]);
     }
   }
 }
