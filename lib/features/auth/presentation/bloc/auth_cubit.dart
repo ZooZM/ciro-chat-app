@@ -6,7 +6,7 @@ import '../../domain/repositories/auth_repository.dart';
 
 part 'auth_state.dart';
 
-@injectable
+@lazySingleton
 class AuthCubit extends Cubit<AuthState> {
   final AuthRepository _repository;
 

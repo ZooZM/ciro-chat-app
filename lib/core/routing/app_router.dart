@@ -46,8 +46,8 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/auth',
-      builder: (context, state) => BlocProvider(
-        create: (context) => getIt<AuthCubit>(),
+      builder: (context, state) => BlocProvider.value(
+        value: getIt<AuthCubit>(),
         child: const MobileNumberScreen(),
       ),
       routes: [
@@ -55,8 +55,8 @@ final GoRouter appRouter = GoRouter(
           path: 'verify',
           builder: (context, state) {
             final phone = state.extra as String? ?? '';
-            return BlocProvider(
-              create: (context) => getIt<AuthCubit>(),
+            return BlocProvider.value(
+              value: getIt<AuthCubit>(),
               child: VerifyCodeScreen(phoneNumber: phone),
             );
           },

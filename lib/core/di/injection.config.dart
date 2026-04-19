@@ -113,7 +113,7 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i850.ContactsService>(),
       ),
     );
-    gh.factory<_i52.AuthCubit>(
+    gh.lazySingleton<_i52.AuthCubit>(
       () => _i52.AuthCubit(gh<_i787.AuthRepository>()),
     );
     gh.lazySingleton<_i639.PaymentRepository>(
