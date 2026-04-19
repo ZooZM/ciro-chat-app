@@ -68,11 +68,11 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i94.ChatLocalDataSource>(
       () => _i94.ChatLocalDataSourceImpl(),
     );
-    gh.lazySingleton<_i667.DioClient>(
-      () => _i667.DioClient(gh<_i558.FlutterSecureStorage>()),
-    );
     gh.lazySingleton<_i980.ChatRemoteDataSource>(
       () => _i980.ChatRemoteDataSourceImpl(gh<_i558.FlutterSecureStorage>()),
+    );
+    gh.lazySingleton<_i667.DioClient>(
+      () => _i667.DioClient(gh<_i852.AuthLocalDataSource>()),
     );
     gh.lazySingleton<_i420.ChatRepository>(
       () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
