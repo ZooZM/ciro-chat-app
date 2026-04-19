@@ -37,7 +37,7 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     if (accessToken != null && accessToken.isNotEmpty) {
-      final user = data?['user'] as Map<String, dynamic>?;
+      final user = response['user'] as Map<String, dynamic>?;
       final userId = user?['_id'] ?? user?['id'] ?? '';
       await _localDataSource.saveUserPhone(phoneNumber);
       await _localDataSource.saveUserId(userId);

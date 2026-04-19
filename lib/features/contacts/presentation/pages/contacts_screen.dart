@@ -138,6 +138,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 return ChatTileWidget(
                   chat: user,
                   onTap: () => _startPrivateChat(user),
+                  currentUserId: context.read<ChatCubit>().currentUserId,
                 );
               },
             );
