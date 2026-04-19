@@ -129,13 +129,6 @@ class SocketService {
     }
   }
 
-  void joinRoom(String roomId) {
-    if (_socket!.connected) {
-      _socket!.emit('joinRoom', {'roomId': roomId});
-      debugPrint('[Socket] Joined room: $roomId');
-    }
-  }
-
   void markAsRead({required String roomId, required String messageId}) {
     _socket?.emit('markRead', {'chatRoomId': roomId, 'messageId': messageId});
   }
