@@ -26,6 +26,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.livekitToken.trim().isEmpty || widget.livekitUrl.trim().isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+      return;
+    }
     _connectToRoom();
   }
 

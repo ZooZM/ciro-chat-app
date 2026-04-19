@@ -26,6 +26,15 @@ class OutgoingCallScreen extends StatelessWidget {
             'livekitToken': state.livekitToken,
           });
         } else if (state is CallEnded || state is CallIdle) {
+          if (state is CallEnded && state.reason == 'rejected') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Call was rejected by the receiver.', style: TextStyle(color: Colors.white)),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
           Navigator.pop(context); // Go back if rejected or canceled
         }
       },
