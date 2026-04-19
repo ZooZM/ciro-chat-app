@@ -85,6 +85,8 @@ final GoRouter appRouter = GoRouter(
         final data = state.extra as Map<String, dynamic>? ?? {};
         return VideoCallScreen(
           contactName: data['contactName'] as String? ?? 'Calling...',
+          livekitUrl: data['livekitUrl'] as String? ?? '',
+          livekitToken: data['livekitToken'] as String? ?? '',
         );
       },
     ),

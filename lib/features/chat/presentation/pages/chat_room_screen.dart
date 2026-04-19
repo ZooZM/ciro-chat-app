@@ -16,10 +16,7 @@ import '../../../video_call/presentation/pages/video_call_screen.dart';
 class ChatRoomScreen extends StatefulWidget {
   final ChatSession chatData;
 
-  const ChatRoomScreen({
-    Key? key,
-    required this.chatData,
-  }) : super(key: key);
+  const ChatRoomScreen({Key? key, required this.chatData}) : super(key: key);
 
   @override
   State<ChatRoomScreen> createState() => _ChatRoomScreenState();
@@ -139,7 +136,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           widget.chatData.name.isNotEmpty
                               ? widget.chatData.name[0].toUpperCase()
                               : '?',
-                          style: AppTypography.subtitle1.copyWith(color: AppColors.primary),
+                          style: AppTypography.subtitle1.copyWith(
+                            color: AppColors.primary,
+                          ),
                         )
                       : null,
                 ),
@@ -153,10 +152,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5.resW),
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 1.5.resW,
+                        ),
                       ),
                     ),
-                  )
+                  ),
               ],
             ),
             SizedBox(width: 12.resW),
@@ -169,16 +171,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
                 Text(
                   widget.chatData.isOnline ? 'online' : 'offline',
-                  style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
-                )
+                  style: AppTypography.body2.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
-            )
+            ),
           ],
         ),
         actions: [
-          IconButton(icon: Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 24.resW), onPressed: () {}),
           IconButton(
-            icon: Icon(Icons.videocam_outlined, color: AppColors.textSecondary, size: 24.resW),
+            icon: Icon(
+              Icons.phone_outlined,
+              color: AppColors.textSecondary,
+              size: 24.resW,
+            ),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.videocam_outlined,
+              color: AppColors.textSecondary,
+              size: 24.resW,
+            ),
             onPressed: () {
               // 1. Emit requestCall via socket (CallCubit handles the signaling)
               context.read<CallCubit>().initiateCall(
@@ -194,6 +209,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     value: context.read<CallCubit>(),
                     child: VideoCallScreen(
                       contactName: widget.chatData.name,
+                      livekitUrl: '',
+                      livekitToken: '',
                     ),
                   ),
                 ),
@@ -201,8 +218,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             },
           ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: AppColors.textSecondary, size: 24.resW),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            icon: Icon(
+              Icons.more_vert,
+              color: AppColors.textSecondary,
+              size: 24.resW,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             color: Colors.white,
             elevation: 8,
             offset: const Offset(0, 48), // push dropdown below the icon
@@ -213,11 +236,36 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               // Handle menu actions here
             },
             itemBuilder: (context) => [
-              _buildMenuItem('search',      Icons.search,                 'Search in conversation', AppColors.textPrimary),
-              _buildMenuItem('mute',        Icons.notifications_off_outlined,'Mute notification',   AppColors.textPrimary),
-              _buildMenuItem('block',       Icons.person_off_outlined,    'Block user',             Colors.red),
-              _buildMenuItem('report',      Icons.flag_outlined,          'Report',                 Colors.red),
-              _buildMenuItem('delete',      Icons.delete_outline,         'Delete chat',            Colors.red),
+              _buildMenuItem(
+                'search',
+                Icons.search,
+                'Search in conversation',
+                AppColors.textPrimary,
+              ),
+              _buildMenuItem(
+                'mute',
+                Icons.notifications_off_outlined,
+                'Mute notification',
+                AppColors.textPrimary,
+              ),
+              _buildMenuItem(
+                'block',
+                Icons.person_off_outlined,
+                'Block user',
+                Colors.red,
+              ),
+              _buildMenuItem(
+                'report',
+                Icons.flag_outlined,
+                'Report',
+                Colors.red,
+              ),
+              _buildMenuItem(
+                'delete',
+                Icons.delete_outline,
+                'Delete chat',
+                Colors.red,
+              ),
             ],
           ),
         ],
@@ -226,94 +274,119 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         duration: const Duration(milliseconds: 200),
         opacity: _isMenuOpen ? 0.3 : 1.0,
         child: Column(
-        children: [
-          Expanded(
-            child: BlocConsumer<ChatCubit, ChatState>(
-              listener: (context, state) {
-                 if (state is ChatRoomActive) {
-                     _scrollToBottom();
-                 }
-              },
-              builder: (context, state) {
-                if (state is ChatLoading) {
+          children: [
+            Expanded(
+              child: BlocConsumer<ChatCubit, ChatState>(
+                listener: (context, state) {
+                  if (state is ChatRoomActive) {
+                    _scrollToBottom();
+                  }
+                },
+                builder: (context, state) {
+                  if (state is ChatLoading) {
                     return const Center(child: CircularProgressIndicator());
-                }
+                  }
 
-                // Strictly mapping to the localized Stream
-                List<Message> displayMessages = [];
-                if (state is ChatRoomActive) {
+                  // Strictly mapping to the localized Stream
+                  List<Message> displayMessages = [];
+                  if (state is ChatRoomActive) {
                     displayMessages = state.messages.reversed.toList();
-                }
+                  }
 
-                return ListView.builder(
-                  reverse: true, // Forces keyboard constraints up correctly (WhatsApp spec)
-                  controller: _scrollController,
-                  padding: EdgeInsets.symmetric(vertical: 16.resH),
-                  itemCount: displayMessages.length,
-                  itemBuilder: (context, index) {
-                    return MessageBubbleWidget(
-                      message: displayMessages[index],
-                      currentUserId: _currentUserId,
-                    );
-                  },
-                );
-              },
+                  return ListView.builder(
+                    reverse:
+                        true, // Forces keyboard constraints up correctly (WhatsApp spec)
+                    controller: _scrollController,
+                    padding: EdgeInsets.symmetric(vertical: 16.resH),
+                    itemCount: displayMessages.length,
+                    itemBuilder: (context, index) {
+                      return MessageBubbleWidget(
+                        message: displayMessages[index],
+                        currentUserId: _currentUserId,
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-          
-          // Bottom Input Bar
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 12.resH),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.add, color: AppColors.textSecondary, size: 28.resW),
-                    onPressed: () => _showAttachmentSheet(context),
-                  ),
-                  SizedBox(width: 8.resW),
-                  Expanded(
-                    child: Container(
-                      height: 44.resH,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22.resR),
-                        border: Border.all(color: AppColors.divider, width: 1.5.resW),
+
+            // Bottom Input Bar
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 12.resW,
+                vertical: 12.resH,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: AppColors.divider, width: 0.5),
+                ),
+              ),
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.add,
+                        color: AppColors.textSecondary,
+                        size: 28.resW,
                       ),
-                      padding: EdgeInsets.symmetric(horizontal: 16.resW),
-                      alignment: Alignment.centerLeft,
-                      child: TextField(
-                        controller: _msgController,
-                        onSubmitted: (_) => _sendMessage(),
-                        style: AppTypography.body1.copyWith(color: Colors.black),
-                        decoration: InputDecoration(
-                          hintText: 'Type a message...',
-                          hintStyle: AppTypography.body1.copyWith(color: AppColors.textSecondary),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
+                      onPressed: () => _showAttachmentSheet(context),
+                    ),
+                    SizedBox(width: 8.resW),
+                    Expanded(
+                      child: Container(
+                        height: 44.resH,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22.resR),
+                          border: Border.all(
+                            color: AppColors.divider,
+                            width: 1.5.resW,
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(horizontal: 16.resW),
+                        alignment: Alignment.centerLeft,
+                        child: TextField(
+                          controller: _msgController,
+                          onSubmitted: (_) => _sendMessage(),
+                          style: AppTypography.body1.copyWith(
+                            color: Colors.black,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            hintStyle: AppTypography.body1.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 8.resW),
-                  IconButton(
-                    icon: Icon(Icons.camera_alt_outlined, color: AppColors.textSecondary, size: 26.resW),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.send, color: AppColors.primary, size: 26.resW),
-                    onPressed: _sendMessage, // Call _sendMessage on tap
-                  ),
-                ],
+                    SizedBox(width: 8.resW),
+                    IconButton(
+                      icon: Icon(
+                        Icons.camera_alt_outlined,
+                        color: AppColors.textSecondary,
+                        size: 26.resW,
+                      ),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.send,
+                        color: AppColors.primary,
+                        size: 26.resW,
+                      ),
+                      onPressed: _sendMessage, // Call _sendMessage on tap
+                    ),
+                  ],
+                ),
               ),
             ),
-          )
-        ],
+          ],
         ), // Column
       ), // AnimatedOpacity
     );
