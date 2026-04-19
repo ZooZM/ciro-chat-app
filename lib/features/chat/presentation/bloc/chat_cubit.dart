@@ -67,7 +67,10 @@ class ChatCubit extends Cubit<ChatState> {
       );
 
       final shouldIncrement = incoming.roomId != _activeRoomId;
-      await _localDataSource.saveMessage(incoming, incrementUnread: shouldIncrement);
+      await _localDataSource.saveMessage(
+        incoming,
+        incrementUnread: shouldIncrement,
+      );
 
       // Tell server we received it locally
       _socketService.markAsRead(
@@ -140,7 +143,22 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> syncContacts() async {
     emit(ChatLoading());
     try {
-      final contacts = await _contactsService.syncContacts();
+      final myPhoneNumber = await _authLocalDataSource.getUserPhone() ?? '';
+
+      String userCountryCode = '+20';
+
+      if (myPhoneNumber.isNotEmpty && myPhoneNumber.startsWith('+')) {
+        if (myPhoneNumber.startsWith('+20')) {
+          userCountryCode = '+20';
+        } else if (myPhoneNumber.length >= 4) {
+          userCountryCode = myPhoneNumber.substring(0, 4);
+        }
+      }
+
+      final contacts = await _contactsService.syncContacts(
+        defaultCountryCode: userCountryCode,
+      );
+
       emit(ChatContactsSynced(contacts));
     } catch (e) {
       emit(ChatError(e.toString()));

@@ -13,8 +13,10 @@ class ContactsService {
 
   ContactsService(this._dioClient);
 
-  Future<List<ChatSession>> syncContacts() async {
-    // 1. Request Permission using standard permission_handler
+  Future<List<ChatSession>> syncContacts({
+    String defaultCountryCode = '+20',
+  }) async {
+    // 1. Request Permission
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
       throw Exception('Contact permission denied');
@@ -25,41 +27,50 @@ class ContactsService {
       properties: {ContactProperty.phone},
     );
 
-    // 3. Normalize numbers
-    final List<Contact> rawNumbers = contacts;
-    // for (var contact in contacts) {
-    //   for (var phone in contact.phones) {
-    //     // Strip spaces, dashes, parentheses
-    //     var normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
+    // 3. Normalize numbers & Create a Lookup Map for fast O(1) matching
+    final Map<String, Contact> phoneToContactMap = {};
+    final Set<String> uniqueNumbers = {};
 
-    //     // Example logic: Default missing country codes to EG (+20)
-    //     if (!normalized.startsWith('+') && normalized.length >= 10) {
-    //        if (normalized.startsWith('0')) {
-    //          normalized = '+20${normalized.substring(1)}';
-    //        } else {
-    //          normalized = '+20$normalized';
-    //        }
-    //     }
+    for (var contact in contacts) {
+      if (contact.phones.isEmpty) continue;
 
-    //     if (normalized.isNotEmpty) rawNumbers.add(normalized);
-    //   }
-    // }
+      for (var phone in contact.phones) {
+        // Strip spaces, dashes, parentheses, keeping only digits and '+'
+        String normalized = phone.number.replaceAll(RegExp(r'[^\d+]'), '');
 
-    // Remove duplicates safely
-    final uniqueNumbers = rawNumbers.toSet().toList();
+        if (normalized.isEmpty) continue;
+
+        // Convert starting '00' to '+' (e.g., 002010 -> +2010)
+        if (normalized.startsWith('00')) {
+          normalized = '+${normalized.substring(2)}';
+        }
+
+        // Apply dynamic default country code if missing
+        if (!normalized.startsWith('+')) {
+          // If local number starts with '0' (like 010.. in EG), replace '0' with country code
+          if (normalized.startsWith('0')) {
+            normalized = '$defaultCountryCode${normalized.substring(1)}';
+          } else {
+            normalized = '$defaultCountryCode$normalized';
+          }
+        }
+
+        // Basic validation: Avoid adding abnormally short numbers
+        if (normalized.length >= 8) {
+          uniqueNumbers.add(normalized);
+          // Save in map to easily find the Contact name later using the clean number
+          phoneToContactMap[normalized] = contact;
+        }
+      }
+    }
+
     if (uniqueNumbers.isEmpty) return [];
 
-    // 4. Send bulk list to API to cross-reference registered users
+    // 4. Send bulk list to API
     try {
-      debugPrint(
-        '[ContactsService] Syncing ${uniqueNumbers.length} numbers: $uniqueNumbers',
-      );
+      debugPrint('[ContactsService] Syncing ${uniqueNumbers.length} numbers');
 
-      final payload = {
-        'phoneNumbers': uniqueNumbers
-            .map((e) => e.phones.first.number)
-            .toList(),
-      };
+      final payload = {'phoneNumbers': uniqueNumbers.toList()};
 
       final response = await _dioClient.dio.post(
         '/users/sync-contacts',
@@ -67,36 +78,32 @@ class ContactsService {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Handle both array and wrapped { data: [] } response shapes
         final raw = response.data;
         final List<dynamic> data = (raw is List)
             ? raw
             : (raw['data'] ?? raw['users'] ?? []);
 
-        return data
-            .map(
-              (json) => ChatSession(
-                id: json['id'] ?? json['_id'] ?? 'tmp',
-                name:
-                    rawNumbers
-                        .lastWhere(
-                          (contact) => contact.phones.any(
-                            (phone) => phone.number == json['phoneNumber'],
-                          ),
-                        )
-                        .displayName ??
-                    "Unknown",
-                lastMessage: 'Tap to start chatting',
-                timestamp: DateTime.now(),
-                avatarUrl:
-                    json['avatarUrl'] ??
-                    json['profilePicture'] ??
-                    'https://i.pravatar.cc/150?u=${json['id']}',
-                isOnline: json['isOnline'] == true,
-                phoneNumber: json['phoneNumber'] ?? '',
-              ),
-            )
-            .toList();
+        return data.map((json) {
+          // Extract the exact phone number returned from your backend
+          final String phoneFromApi = json['phoneNumber'] ?? '';
+
+          // Match it instantly using our Map
+          final Contact? matchedContact = phoneToContactMap[phoneFromApi];
+
+          return ChatSession(
+            id: json['id'] ?? json['_id'] ?? 'tmp',
+            // Fallback: 1. Contact Name -> 2. Backend Name -> 3. "Unknown"
+            name: matchedContact?.displayName ?? json['name'] ?? "Unknown",
+            lastMessage: 'Tap to start chatting',
+            timestamp: DateTime.now(),
+            avatarUrl:
+                json['avatarUrl'] ??
+                json['profilePicture'] ??
+                'https://i.pravatar.cc/150?u=${json['id'] ?? json['_id']}',
+            isOnline: json['isOnline'] == true,
+            phoneNumber: phoneFromApi,
+          );
+        }).toList();
       }
 
       return [];
