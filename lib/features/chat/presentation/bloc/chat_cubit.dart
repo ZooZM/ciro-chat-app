@@ -142,8 +142,17 @@ class ChatCubit extends Cubit<ChatState> {
         return;
       }
       try {
-        // Creates the room on the backend — fires only ONCE, on the first Send tap.
-        final newRoomId = await _chatApiService.createRoom(pendingContact.id);
+        // contactUserId is the MongoDB User _id, explicitly separated from
+        // the room id field. This is the ONLY safe value to pass to createRoom().
+        final targetUserId = pendingContact.contactUserId;
+        if (targetUserId.isEmpty) {
+          debugPrint('[ChatCubit] JIT aborted: contactUserId is empty on pending contact');
+          emit(const ChatError('Cannot create room: missing target user ID'));
+          return;
+        }
+
+        // 1. Create the room — fires only ONCE, on the very first Send tap.
+        final newRoomId = await _chatApiService.createRoom(targetUserId);
         _activeRoomId = newRoomId;
         _pendingContact = null;
 

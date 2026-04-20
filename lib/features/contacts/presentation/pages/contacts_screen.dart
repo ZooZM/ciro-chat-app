@@ -33,9 +33,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _startPrivateChat(ChatSession targetUser) async {
     // Navigate INSTANTLY — zero blocking API calls here.
-    // The backend room is created JIT when the user presses Send for the first time.
+    // copyWith semantics:
+    //   id = ''                        → signals ChatRoomScreen to take the JIT path
+    //   contactUserId = targetUser.id  → preserves the MongoDB User _id so ChatCubit
+    //                                    can call createRoom(contactUserId) on first Send
     if (mounted) {
-      context.pushReplacement('/chat_room', extra: targetUser);
+      context.pushReplacement(
+        '/chat_room',
+        extra: targetUser.copyWith(
+          id: '',
+          contactUserId: targetUser.id,
+        ),
+      );
     }
   }
 

@@ -1,6 +1,6 @@
 class ChatSession {
-  final String id; // roomId
-  final String name; // the other user's name or group name
+  final String id;             // Room ID (MongoDB room _id). Empty = JIT pending.
+  final String name;           // Other user's display name or group name
   final String lastMessage;
   final DateTime timestamp;
   final int unreadCount;
@@ -8,6 +8,11 @@ class ChatSession {
   final String avatarUrl;
   final String phoneNumber;
   final String lastMessageSenderId;
+
+  /// Carries the contact's MongoDB User _id during a JIT flow.
+  /// This is set by ContactsScreen before navigating so the Cubit can call
+  /// createRoom(contactUserId). It is intentionally NOT persisted to SQLite.
+  final String contactUserId;
 
   ChatSession({
     required this.id,
@@ -19,7 +24,37 @@ class ChatSession {
     required this.avatarUrl,
     required this.phoneNumber,
     this.lastMessageSenderId = '',
+    this.contactUserId = '',     // defaults to empty; only set for JIT contact flows
   });
+
+  /// Creates a copy with specific fields overridden.
+  /// Used by ContactsScreen to zero-out the room [id] and signal a JIT flow
+  /// while preserving the contact's User ID in a separate field.
+  ChatSession copyWith({
+    String? id,
+    String? name,
+    String? lastMessage,
+    DateTime? timestamp,
+    int? unreadCount,
+    bool? isOnline,
+    String? avatarUrl,
+    String? phoneNumber,
+    String? lastMessageSenderId,
+    String? contactUserId,
+  }) {
+    return ChatSession(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      lastMessage: lastMessage ?? this.lastMessage,
+      timestamp: timestamp ?? this.timestamp,
+      unreadCount: unreadCount ?? this.unreadCount,
+      isOnline: isOnline ?? this.isOnline,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      contactUserId: contactUserId ?? this.contactUserId,
+    );
+  }
 
   /// Parses a raw backend ChatRoom JSON object.
   /// The backend returns populated `participants` (array of User objects)
