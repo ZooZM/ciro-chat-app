@@ -20,6 +20,7 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
+  int _currentIndex = 0;
   @override
   void initState() {
     super.initState();
@@ -42,30 +43,41 @@ class _ChatListScreenState extends State<ChatListScreen> {
         elevation: 0,
         titleSpacing: 16.resW,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            AppLogoWidget(size: 44, showText: false),
-            SizedBox(width: 8.resW),
+            // ── Bubble icon — left side of logo ─────────────────────────────
+            Image.asset(
+              AppLogo.assetPath,
+              width: 80,
+              height: 80,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(width: 4.resW),
+            // ── CIRO / CONNECT stacked text — right side of logo ─────────────
             Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'CIRO',
                   style: AppTypography.logoMark.copyWith(
-                    fontSize: 20,
+                    fontSize: 16,
                     height: 1.1,
                     letterSpacing: 2,
+                    color: const Color(0xFF222222),
                   ),
                 ),
                 Text(
                   'CONNECT',
                   style: AppTypography.logoTagline.copyWith(
-                    fontSize: 9,
+                    fontSize: 8,
                     height: 1.1,
-                    letterSpacing: 3,
+                    letterSpacing: 2.5,
+                    color: AppColors.primary,
                   ),
                 ),
-                // WhatsApp-Style minimal connecting feedback seamlessly below the branding
+                // ── "Connecting..." subtle status below branding ────────────
                 ValueListenableBuilder<bool>(
                   valueListenable: getIt<SocketService>().isConnectedNotifier,
                   builder: (context, isConnected, _) {
@@ -74,7 +86,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       'Connecting...',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textSecondary,
-                        fontSize: 9, // Subtly styled
+                        fontSize: 8,
                         fontWeight: FontWeight.w500,
                       ),
                     );
@@ -84,16 +96,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
           ],
         ),
-
-        // SvgPicture.asset(
-        //   'assets/icons/logo.svg', // Assuming primary logo variant exists
-        //   height: 36.resH,
-        //   // Placeholder if missing
-        //   placeholderBuilder: (_) => Text(
-        //     'CIRO CONNECT',
-        //     style: AppTypography.headline2.copyWith(color: AppColors.primary),
-        //   ),
-        // ),
         actions: [
           IconButton(
             icon: Icon(
@@ -133,12 +135,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
               vertical: 8.resH,
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                   'Chats',
-                  style: AppTypography.headline1.copyWith(color: Colors.black),
+                  style: AppTypography.subtitle1.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                SizedBox(width: 16.resW),
+                SizedBox(width: 12.resW),
                 // Pill Search Bar
                 Expanded(
                   child: Container(
@@ -239,31 +245,71 @@ class _ChatListScreenState extends State<ChatListScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+          color: Colors.white,
         ),
         child: BottomNavigationBar(
           backgroundColor: Colors.white,
           type: BottomNavigationBarType.fixed,
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
           selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.textSecondary,
+          unselectedItemColor: Colors.grey[600],
           selectedLabelStyle: AppTypography.caption.copyWith(
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
           ),
-          unselectedLabelStyle: AppTypography.caption,
+          unselectedLabelStyle: AppTypography.caption.copyWith(
+            fontSize: 11,
+          ),
+          elevation: 0,
           items: [
+            // ── 1. Chats — logo asset ──────────────────────────────────────
             BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble, size: 24.resW),
+              icon: Image.asset(
+                AppLogo.assetPath,
+                width: 40.resW,
+                height: 40.resW,
+                fit: BoxFit.contain,
+              ),
+              activeIcon: Image.asset(
+                AppLogo.assetPath,
+                width: 40.resW,
+                height: 40.resW,
+                fit: BoxFit.contain,
+                // color: AppColors.primary,
+                colorBlendMode: BlendMode.srcIn,
+              ),
               label: 'Chats',
             ),
+            // ── 2. Updates ────────────────────────────────────────────────
             BottomNavigationBarItem(
-              icon: Icon(Icons.update, size: 24.resW),
+              icon: Icon(Icons.motion_photos_on_outlined, size: 24.resW),
+              activeIcon: Icon(Icons.motion_photos_on, size: 24.resW),
               label: 'Updates',
             ),
+            // ── 3. Map ────────────────────────────────────────────────────
             BottomNavigationBarItem(
-              icon: Icon(Icons.phone_outlined, size: 24.resW),
+              icon: Icon(Icons.map_outlined, size: 24.resW),
+              activeIcon: Icon(Icons.map, size: 24.resW),
+              label: 'Map',
+            ),
+            // ── 4. Calls ──────────────────────────────────────────────────
+            BottomNavigationBarItem(
+              icon: Icon(Icons.call_outlined, size: 24.resW),
+              activeIcon: Icon(Icons.call, size: 24.resW),
               label: 'Calls',
             ),
+            // ── 5. Profile ────────────────────────────────────────────────
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline, size: 24.resW),
+              activeIcon: Icon(Icons.person, size: 24.resW),
               label: 'Profile',
             ),
           ],
