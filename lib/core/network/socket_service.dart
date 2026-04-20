@@ -111,14 +111,19 @@ class SocketService {
 
     // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
     _socket?.on('messageDelivered', (data) {
-      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
-      if (id != null) onMessageDelivered?.call(id);
+      debugPrint('[SocketService] Message delivered: $data');
+      final id =
+          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
+      if (id != null) onMessageDelivered?.call(id.first);
     });
 
     // RECIPIENT read the message: delivered → read (2 blue ticks)
     _socket?.on('messageRead', (data) {
-      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
-      if (id != null) onMessageRead?.call(id);
+      debugPrint('[SocketService] Message read: $data');
+
+      final id =
+          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
+      if (id != null) onMessageRead?.call(id.first);
     });
 
     // Inbound message from another user.
@@ -165,7 +170,7 @@ class SocketService {
     if (_socket != null && _socket!.connected) {
       _socket!.emit('sendMessage', {
         'chatRoomId': roomId,
-        'messageId': messageId,
+        'clientMessageId': messageId,
         'content': text,
         'type': type,
       });
@@ -179,7 +184,7 @@ class SocketService {
   void markDelivered({required String roomId, required String messageId}) {
     _socket?.emit('markDelivered', {
       'chatRoomId': roomId,
-      'messageId': messageId,
+      'clientMessageId': messageId,
     });
   }
 
@@ -188,7 +193,7 @@ class SocketService {
   void markRead({required String roomId, required String messageId}) {
     _socket?.emit('markRead', {
       'chatRoomId': roomId,
-      'messageId': messageId,
+      'clientMessageId': messageId,
     });
   }
 
