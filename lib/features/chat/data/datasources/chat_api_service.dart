@@ -64,4 +64,31 @@ class ChatApiService {
     if (roomId == null) throw Exception('Backend returned no roomId');
     return roomId.toString();
   }
+
+  /// Polls the backend for the latest status of messages that are stuck in
+  /// [pending] or [sent] state locally (i.e., we may have missed socket events).
+  ///
+  /// POST /chat/messages/sync-statuses
+  /// Body: { clientMessageIds: ["uuid1", "uuid2", ...] }
+  /// Response: { statuses: { "uuid1": "sent", "uuid2": "delivered", ... } }
+  ///
+  /// Returns a map of clientMessageId → status string, or empty map on error.
+  Future<Map<String, String>> syncMessageStatuses(
+    List<String> clientMessageIds,
+  ) async {
+    if (clientMessageIds.isEmpty) return {};
+    try {
+      final response = await _dioClient.dio.post(
+        '/chat/messages/sync-statuses',
+        data: {'clientMessageIds': clientMessageIds},
+      );
+      final raw = response.data['statuses'] ?? response.data['data'] ?? {};
+      return Map<String, String>.from(
+        (raw as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+      );
+    } catch (e) {
+      debugPrint('[ChatApiService] syncMessageStatuses failed: $e');
+      return {};
+    }
+  }
 }

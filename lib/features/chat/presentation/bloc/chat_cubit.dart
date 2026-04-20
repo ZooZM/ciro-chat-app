@@ -61,22 +61,28 @@ class ChatCubit extends Cubit<ChatState> {
 
     // ── Sender-side status promotions ────────────────────────────────────────────
 
-    // Server stored the message → pending → sent (1 grey tick)
-    _socketService.onMessageDelivered = (messageId) async {
-      await _localDataSource.updateMessageStatus(messageId, MessageStatus.sent);
-      debugPrint('[ChatCubit] ACK: $messageId → sent');
+    // SERVER stored: pending → sent (1 grey tick)
+    _socketService.onMessageSent = (clientMessageId) async {
+      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.sent);
+      debugPrint('[ChatCubit] ✓  $clientMessageId → sent');
     };
 
-    // Recipient device received it → sent → delivered (2 grey ticks)
-    _socketService.onMessageDeliveryUpdate = (messageId) async {
-      await _localDataSource.updateMessageStatus(messageId, MessageStatus.delivered);
-      debugPrint('[ChatCubit] ACK: $messageId → delivered');
+    // RECIPIENT received: sent → delivered (2 grey ticks)
+    _socketService.onMessageDelivered = (clientMessageId) async {
+      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.delivered);
+      debugPrint('[ChatCubit] ✓✓  $clientMessageId → delivered');
     };
 
-    // Recipient read it → delivered → read (2 blue ticks)
-    _socketService.onMessageReadUpdate = (messageId) async {
-      await _localDataSource.updateMessageStatus(messageId, MessageStatus.read);
-      debugPrint('[ChatCubit] ACK: $messageId → read');
+    // RECIPIENT read: delivered → read (2 blue ticks)
+    _socketService.onMessageRead = (clientMessageId) async {
+      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.read);
+      debugPrint('[ChatCubit] ✓✓📘 $clientMessageId → read');
+    };
+
+    // Socket reconnected — trigger REST sync to catch missed events.
+    _socketService.onReconnected = () {
+      debugPrint('[ChatCubit] Socket reconnected — triggering REST status sync');
+      syncStatusesFromRest().ignore();
     };
 
     // ── Recipient-side: incoming message ───────────────────────────────────────
@@ -114,6 +120,10 @@ class ChatCubit extends Cubit<ChatState> {
         await _localDataSource.updateMessageStatus(incoming.id, MessageStatus.read);
       }
     };
+
+    // Cold-boot REST sync: catch any delivery/read events we missed between
+    // the last session and now. Runs in the background after DB is ready.
+    syncStatusesFromRest().ignore();
   }
 
   /// Called when User opens a ChatRoom.
@@ -295,6 +305,62 @@ class ChatCubit extends Cubit<ChatState> {
   void connectNetwork(String jwtToken) async {
     _socketService.connect(jwtToken);
     await hydrateRooms(); // Always sync rooms after connecting
+  }
+
+  /// REST-based status reconciliation for messages that got stuck while offline.
+  ///
+  /// Triggered on:
+  ///   1. App cold boot (called from [_initServices] after DB is ready)
+  ///   2. Socket reconnect (wired via [SocketService.onReconnected])
+  ///
+  /// Flow:
+  ///   1. Query SQLite for all [pending] + [sent] messages (may have missed events)
+  ///   2. POST their clientMessageIds to POST /chat/messages/sync-statuses
+  ///   3. Apply each returned status to SQLite
+  Future<void> syncStatusesFromRest() async {
+    try {
+      final stuck = await _localDataSource.getStuckMessages();
+      if (stuck.isEmpty) {
+        debugPrint('[ChatCubit] REST sync: no stuck messages');
+        return;
+      }
+
+      final ids = stuck.map((m) => m.id).toList();
+      debugPrint('[ChatCubit] REST sync: checking ${ids.length} stuck message(s)');
+
+      final statuses = await _chatApiService.syncMessageStatuses(ids);
+      if (statuses.isEmpty) return;
+
+      // Apply each returned status. We only promote, never demote.
+      // (A message cannot go from delivered → sent due to a race.)
+      const _rankOf = {
+        'pending': 0,
+        'sent': 1,
+        'delivered': 2,
+        'read': 3,
+      };
+
+      for (final msg in stuck) {
+        final serverStatusStr = statuses[msg.id];
+        if (serverStatusStr == null) continue;
+
+        final serverStatus = MessageStatus.values.firstWhere(
+          (e) => e.name == serverStatusStr,
+          orElse: () => msg.status,
+        );
+
+        // Only apply if it's a promotion.
+        final currentRank = _rankOf[msg.status.name] ?? 0;
+        final newRank     = _rankOf[serverStatus.name] ?? 0;
+        if (newRank > currentRank) {
+          await _localDataSource.updateMessageStatus(msg.id, serverStatus);
+          debugPrint('[ChatCubit] REST sync: ${msg.id} → ${serverStatus.name}');
+        }
+      }
+    } catch (e) {
+      // Silent fail — sync will retry on next reconnect.
+      debugPrint('[ChatCubit] REST sync failed: $e');
+    }
   }
 
   /// Replays all [MessageStatus.pending] messages over the socket.

@@ -28,6 +28,10 @@ abstract class ChatLocalDataSource {
   /// Returns all messages with [MessageStatus.pending], oldest-first.
   /// Used by [ChatCubit.syncPendingMessages] to replay queued messages.
   Future<List<Message>> getPendingMessages();
+
+  /// Returns all messages stuck in [pending] OR [sent] state, oldest-first.
+  /// Used by the REST status sync to reconcile statuses missed during offline periods.
+  Future<List<Message>> getStuckMessages();
 }
 
 @LazySingleton(as: ChatLocalDataSource)
@@ -192,6 +196,22 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       'messages',
       where: 'status = ?',
       whereArgs: [MessageStatus.pending.name],
+      orderBy: 'timestamp ASC',
+    );
+    return maps.map((e) => Message.fromMap(e)).toList();
+  }
+
+  /// Returns messages in [pending] OR [sent] state, ordered oldest → newest.
+  /// These are messages whose socket delivery/read events may have been missed
+  /// while the app was offline and must be reconciled via the REST sync endpoint.
+  @override
+  Future<List<Message>> getStuckMessages() async {
+    final db = _db;
+    if (db == null) return [];
+    final maps = await db.query(
+      'messages',
+      where: 'status IN (?, ?)',
+      whereArgs: [MessageStatus.pending.name, MessageStatus.sent.name],
       orderBy: 'timestamp ASC',
     );
     return maps.map((e) => Message.fromMap(e)).toList();

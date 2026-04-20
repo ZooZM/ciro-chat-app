@@ -18,20 +18,20 @@ class SocketService {
 
   // ── Chat callbacks ────────────────────────────────────────────────────────
 
-  /// Fired when the SERVER confirms it stored our message (sender side).
-  /// Promotes: pending → sent (1 grey tick)
-  void Function(String messageId)? onMessageDelivered;
+  /// Fired when SERVER confirms it stored our message. pending → sent (1 grey tick)
+  void Function(String clientMessageId)? onMessageSent;
 
-  /// Fired when the RECIPIENT's device received our message.
-  /// Promotes: sent → delivered (2 grey ticks)
-  void Function(String messageId)? onMessageDeliveryUpdate;
+  /// Fired when RECIPIENT device received our message. sent → delivered (2 grey ticks)
+  void Function(String clientMessageId)? onMessageDelivered;
 
-  /// Fired when the RECIPIENT read our message.
-  /// Promotes: delivered → read (2 blue ticks)
-  void Function(String messageId)? onMessageReadUpdate;
+  /// Fired when RECIPIENT read our message. delivered → read (2 blue ticks)
+  void Function(String clientMessageId)? onMessageRead;
 
   /// Fired when WE receive a new message from another user.
   void Function(Map<String, dynamic> data)? onNewMessage;
+
+  /// Fired after a successful socket reconnect — use to trigger REST status sync.
+  void Function()? onReconnected;
 
   // ── Call signaling callbacks (set by CallCubit) ───────────────────────────
   void Function(Map<String, dynamic> data)? onIncomingCall;
@@ -70,9 +70,11 @@ class SocketService {
     _socket?.connect();
 
     _socket?.onConnect((_) {
-      debugPrint('Socket Connected to WS namespace');
+      debugPrint('[SocketService] Connected');
       isConnectedNotifier.value = true;
-      _isRefreshing = false; // Reset lock strictly on successful pass
+      _isRefreshing = false;
+      // Notify Cubit so it can trigger the REST status sync for missed events.
+      onReconnected?.call();
     });
 
     _socket?.onConnectError((err) async {
@@ -101,32 +103,29 @@ class SocketService {
 
     // ── Chat events ───────────────────────────────────────────────────────
 
-    // Sender receives this when the SERVER has stored the message.
-    // pending → sent
+    // SERVER confirmed storage: pending → sent (1 grey tick)
+    _socket?.on('messageSent', (data) {
+      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
+      if (id != null) onMessageSent?.call(id);
+    });
+
+    // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
     _socket?.on('messageDelivered', (data) {
-      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
-      if (msgId != null) onMessageDelivered?.call(msgId);
+      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
+      if (id != null) onMessageDelivered?.call(id);
     });
 
-    // Sender receives this when the RECIPIENT's device acknowledged receipt.
-    // sent → delivered
-    _socket?.on('messageDeliveredUpdate', (data) {
-      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
-      if (msgId != null) onMessageDeliveryUpdate?.call(msgId);
+    // RECIPIENT read the message: delivered → read (2 blue ticks)
+    _socket?.on('messageRead', (data) {
+      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
+      if (id != null) onMessageRead?.call(id);
     });
 
-    // Sender receives this when the RECIPIENT has read the message.
-    // delivered → read
-    _socket?.on('messageReadUpdate', (data) {
-      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
-      if (msgId != null) onMessageReadUpdate?.call(msgId);
-    });
-
-    // WE receive a new inbound message.
+    // Inbound message from another user.
     _socket?.on('receiveMessage', (data) {
       onNewMessage?.call(data as Map<String, dynamic>);
     });
-    // Legacy event name — keep both so backend naming doesn't matter.
+    // Legacy name — keep both until backend is fully migrated.
     _socket?.on('newMessage', (data) {
       onNewMessage?.call(data as Map<String, dynamic>);
     });
