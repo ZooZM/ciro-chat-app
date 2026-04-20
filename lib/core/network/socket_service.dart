@@ -13,6 +13,9 @@ class SocketService {
   // Exposes declarative binding for WhatsApp-style Connecting... banner
   final ValueNotifier<bool> isConnectedNotifier = ValueNotifier(false);
 
+  /// Synchronous connectivity check for guard clauses.
+  bool get isConnected => _socket?.connected ?? false;
+
   // ── Chat callbacks ────────────────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onNewMessage;
   void Function(String messageId)? onMessageDelivered;

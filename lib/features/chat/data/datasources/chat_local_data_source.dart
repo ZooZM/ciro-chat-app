@@ -24,6 +24,10 @@ abstract class ChatLocalDataSource {
   Future<void> resetUnreadCount(String roomId);
   void closeRoomStream(String roomId);
   Future<void> clearAllData();
+
+  /// Returns all messages with [MessageStatus.pending], oldest-first.
+  /// Used by [ChatCubit.syncPendingMessages] to replay queued messages.
+  Future<List<Message>> getPendingMessages();
 }
 
 @LazySingleton(as: ChatLocalDataSource)
@@ -176,6 +180,21 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     // Push reactive updates to both the room stream and the inbox stream
     await _dispatchUpdateForRoom(message.roomId);
     await _dispatchRecentChatsUpdate();
+  }
+
+  /// Returns all messages with status = 'pending', ordered oldest → newest.
+  /// Safe to call even when offline: no network involved.
+  @override
+  Future<List<Message>> getPendingMessages() async {
+    final db = _db;
+    if (db == null) return [];
+    final maps = await db.query(
+      'messages',
+      where: 'status = ?',
+      whereArgs: [MessageStatus.pending.name],
+      orderBy: 'timestamp ASC',
+    );
+    return maps.map((e) => Message.fromMap(e)).toList();
   }
 
   @override

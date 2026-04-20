@@ -252,6 +252,42 @@ class ChatCubit extends Cubit<ChatState> {
     await hydrateRooms(); // Always sync rooms after connecting
   }
 
+  /// Replays all [MessageStatus.pending] messages over the socket.
+  ///
+  /// Call this whenever network connectivity is restored or the socket
+  /// reconnects. Each message is sent in chronological order. The server's
+  /// `messageDelivered` ACK will update the status to `sent` via the existing
+  /// [onMessageDelivered] callback — no additional logic needed here.
+  ///
+  /// Design decisions:
+  /// - We do NOT update status to `sent` here; only the server ACK does that.
+  /// - We do NOT emit any state; the StreamBuilder already reflects SQLite state.
+  /// - If the socket is offline, the send is a no-op and the message stays pending.
+  Future<void> syncPendingMessages() async {
+    final pending = await _localDataSource.getPendingMessages();
+    if (pending.isEmpty) return;
+
+    debugPrint('[ChatCubit] Syncing ${pending.length} pending message(s)...');
+
+    for (final msg in pending) {
+      // Skip messages that belong to rooms we haven't joined this session.
+      // They will be retried on the next sync call after openRoom() is called.
+      if (!_socketService.isConnected) {
+        debugPrint('[ChatCubit] Socket offline — stopping pending sync early');
+        break;
+      }
+
+      _socketService.sendMessage(
+        roomId: msg.roomId,
+        messageId: msg.id,
+        text: msg.text,
+        type: 'text',
+      );
+
+      debugPrint('[ChatCubit] Re-sent pending: ${msg.id}');
+    }
+  }
+
   /// Fetches rooms from the API and saves to local SQLite.
   /// Safe to call on every ChatListScreen open — rooms table uses REPLACE conflict.
   Future<void> hydrateRooms() async {
