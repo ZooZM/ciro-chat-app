@@ -3,6 +3,7 @@ import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
+import 'package:intl/intl.dart';
 
 class MessageBubbleWidget extends StatelessWidget {
   final Message message;
@@ -48,9 +49,8 @@ class MessageBubbleWidget extends StatelessWidget {
         : const Color(0xFFDFFAC4); // Light green for incoming
     final radius = Radius.circular(16.resR);
 
-    // Format HH:mm from DateTime
-    final formattedTime =
-        "${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+    // Format time using intl package (e.g., 10:30 AM)
+    final formattedTime = DateFormat('hh:mm a').format(message.timestamp);
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,

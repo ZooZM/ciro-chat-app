@@ -12,6 +12,7 @@ import '../widgets/attachment_sheet_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../video_call/presentation/pages/outgoing_call_screen.dart';
+import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final ChatSession chatData;
@@ -150,65 +151,75 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
             onPressed: () => context.go('/home'),
           ),
-          title: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 18.resR,
-                    backgroundColor: AppColors.divider,
-                    backgroundImage: widget.chatData.avatarUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
-                        : null,
-                    child: widget.chatData.avatarUrl.isEmpty
-                        ? Text(
-                            widget.chatData.name.isNotEmpty
-                                ? widget.chatData.name[0].toUpperCase()
-                                : '?',
-                            style: AppTypography.subtitle1.copyWith(
-                              color: AppColors.primary,
+          title: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatInfoScreen(chatData: widget.chatData),
+                ),
+              );
+            },
+            child: Row(
+              children: [
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 18.resR,
+                      backgroundColor: AppColors.divider,
+                      backgroundImage: widget.chatData.avatarUrl.isNotEmpty
+                          ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
+                          : null,
+                      child: widget.chatData.avatarUrl.isEmpty
+                          ? Text(
+                              widget.chatData.name.isNotEmpty
+                                  ? widget.chatData.name[0].toUpperCase()
+                                  : '?',
+                              style: AppTypography.subtitle1.copyWith(
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : null,
+                    ),
+                    if (widget.chatData.isOnline)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 10.resW,
+                          height: 10.resW,
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 1.5.resW,
                             ),
-                          )
-                        : null,
-                  ),
-                  if (widget.chatData.isOnline)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: 10.resW,
-                        height: 10.resW,
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 1.5.resW,
                           ),
                         ),
                       ),
+                  ],
+                ),
+                SizedBox(width: 12.resW),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.chatData.name,
+                      style: AppTypography.subtitle1.copyWith(
+                        color: Colors.black,
+                      ),
                     ),
-                ],
-              ),
-              SizedBox(width: 12.resW),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.chatData.name,
-                    style: AppTypography.subtitle1.copyWith(
-                      color: Colors.black,
+                    Text(
+                      widget.chatData.isOnline ? 'online' : 'offline',
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  Text(
-                    widget.chatData.isOnline ? 'online' : 'offline',
-                    style: AppTypography.body2.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             IconButton(
