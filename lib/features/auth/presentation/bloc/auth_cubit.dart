@@ -37,6 +37,11 @@ class AuthCubit extends Cubit<AuthState> {
         if (freshToken.isNotEmpty) {
           getIt<SocketService>().connect(freshToken);
           debugPrint('[AuthCubit] Socket connected on app start with fresh token');
+
+          // Fire-and-forget: pre-warm the contacts cache BEFORE the user
+          // opens ContactsScreen so there is zero empty-state flash.
+          // This runs fully in the background — Authenticated() emits immediately.
+          getIt<ChatCubit>().silentSyncContacts().ignore();
         }
         emit(const Authenticated());
       } else {
@@ -75,6 +80,10 @@ class AuthCubit extends Cubit<AuthState> {
       if (freshToken.isNotEmpty) {
         getIt<SocketService>().connect(freshToken);
         debugPrint('[AuthCubit] Socket connected after OTP verification');
+
+        // Fire-and-forget: pre-warm the contacts cache immediately after login.
+        // .ignore() suppresses the unawaited-future lint without blocking navigation.
+        getIt<ChatCubit>().silentSyncContacts().ignore();
       }
 
       emit(Authenticated(userData: response));

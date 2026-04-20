@@ -282,8 +282,40 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> _dispatchRecentChatsUpdate() async {
     final db = _db;
     if (db == null) return;
-    final maps = await db.query('rooms', orderBy: 'timestamp DESC', limit: 20);
-    final rooms = maps.map((e) => ChatSession.fromMap(e)).toList();
+
+    // LEFT JOIN: overlay contact name/avatar onto each room row.
+    // Priority: contacts.name > rooms.name > rooms.phoneNumber
+    // The join key is rooms.phoneNumber = contacts.phoneNumber, which is the
+    // canonical link between a stored room and a device contact.
+    final maps = await db.rawQuery('''
+      SELECT
+        r.id,
+        COALESCE(NULLIF(c.name, ''), NULLIF(r.name, ''), r.phoneNumber) AS name,
+        r.lastMessage,
+        r.timestamp,
+        r.unreadCount,
+        r.isOnline,
+        COALESCE(NULLIF(c.avatarUrl, ''), NULLIF(r.avatarUrl, '')) AS avatarUrl,
+        r.phoneNumber,
+        r.lastMessageSenderId
+      FROM rooms r
+      LEFT JOIN contacts c ON c.phoneNumber = r.phoneNumber
+      ORDER BY r.timestamp DESC
+      LIMIT 20
+    ''');
+
+    final rooms = maps.map((e) => ChatSession(
+      id:                  e['id'] as String,
+      name:                (e['name'] as String?) ?? '',
+      lastMessage:         (e['lastMessage'] as String?) ?? '',
+      timestamp:           DateTime.tryParse(e['timestamp'] as String? ?? '') ?? DateTime.now(),
+      unreadCount:         (e['unreadCount'] as int?) ?? 0,
+      isOnline:            ((e['isOnline'] as int?) ?? 0) == 1,
+      avatarUrl:           (e['avatarUrl'] as String?) ?? '',
+      phoneNumber:         (e['phoneNumber'] as String?) ?? '',
+      lastMessageSenderId: (e['lastMessageSenderId'] as String?) ?? '',
+    )).toList();
+
     if (!_recentChatsController.isClosed) {
       _recentChatsController.add(rooms);
     }
