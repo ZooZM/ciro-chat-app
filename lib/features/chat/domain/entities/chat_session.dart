@@ -1,5 +1,3 @@
-import 'package:permission_handler/permission_handler.dart';
-
 class ChatSession {
   final String id; // roomId
   final String name; // the other user's name or group name

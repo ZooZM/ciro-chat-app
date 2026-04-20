@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
@@ -79,10 +78,12 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
       _filtered = q.isEmpty
           ? List.from(_all)
           : _all
-              .where((c) =>
-                  c.name.toLowerCase().contains(q) ||
-                  c.phoneCode.contains(q))
-              .toList();
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(q) ||
+                      c.phoneCode.contains(q),
+                )
+                .toList();
     });
   }
 
@@ -121,8 +122,10 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
 
           // Search bar
           Padding(
-            padding:
-                EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: 16.resW,
+              vertical: 4.resH,
+            ),
             child: Container(
               height: 46.resH,
               decoration: BoxDecoration(
@@ -135,13 +138,16 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
                 cursorColor: AppColors.primary,
                 decoration: InputDecoration(
                   hintText: 'Search country',
-                  hintStyle:
-                      AppTypography.body2.copyWith(color: Colors.grey[400]),
-                  prefixIcon: Icon(Icons.search,
-                      color: Colors.grey[400], size: 20.resW),
+                  hintStyle: AppTypography.body2.copyWith(
+                    color: Colors.grey[400],
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: Colors.grey[400],
+                    size: 20.resW,
+                  ),
                   border: InputBorder.none,
-                  contentPadding:
-                      EdgeInsets.symmetric(vertical: 13.resH),
+                  contentPadding: EdgeInsets.symmetric(vertical: 13.resH),
                 ),
               ),
             ),
@@ -156,8 +162,7 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
               itemCount: _filtered.length,
               itemBuilder: (ctx, i) {
                 final c = _filtered[i];
-                final isSelected =
-                    c.countryCode == widget.selected.countryCode;
+                final isSelected = c.countryCode == widget.selected.countryCode;
 
                 return InkWell(
                   onTap: () {
@@ -167,7 +172,9 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
                   borderRadius: BorderRadius.circular(8.resR),
                   child: Container(
                     padding: EdgeInsets.symmetric(
-                        horizontal: 16.resW, vertical: 14.resH),
+                      horizontal: 16.resW,
+                      vertical: 14.resH,
+                    ),
                     decoration: isSelected
                         ? BoxDecoration(
                             color: AppColors.primary.withOpacity(0.06),
@@ -177,8 +184,7 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
                     child: Row(
                       children: [
                         // Flag
-                        Text(c.flagEmoji,
-                            style: TextStyle(fontSize: 26.resSp)),
+                        Text(c.flagEmoji, style: TextStyle(fontSize: 26.resSp)),
                         SizedBox(width: 16.resW),
                         // Country name
                         Expanded(
@@ -198,8 +204,9 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
                         // Dial code — right aligned, muted
                         Text(
                           '+${c.phoneCode}',
-                          style: AppTypography.body2
-                              .copyWith(color: Colors.grey[500]),
+                          style: AppTypography.body2.copyWith(
+                            color: Colors.grey[500],
+                          ),
                         ),
                       ],
                     ),
@@ -271,7 +278,8 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start, // align to top so counter sits below field
+      crossAxisAlignment:
+          CrossAxisAlignment.start, // align to top so counter sits below field
       children: [
         // ── Country Code Button ─────────────────────────────────────────────
         GestureDetector(
@@ -294,8 +302,7 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(_country.flagEmoji,
-                    style: TextStyle(fontSize: 22.resSp)),
+                Text(_country.flagEmoji, style: TextStyle(fontSize: 22.resSp)),
                 SizedBox(width: 6.resW),
                 Text(
                   '+${_country.phoneCode}',
@@ -305,8 +312,11 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
                   ),
                 ),
                 SizedBox(width: 4.resW),
-                const Icon(Icons.keyboard_arrow_down,
-                    color: Colors.black54, size: 20),
+                const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.black54,
+                  size: 20,
+                ),
               ],
             ),
           ),
@@ -321,20 +331,24 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
             keyboardType: TextInputType.number,
             inputFormatters: [_PhoneNumberFormatter()],
             // Custom counter: counts only digits, ignores the inserted spaces
-            buildCounter: (context,
-                {required currentLength, required isFocused, maxLength}) {
-              final digitCount =
-                  _ctrl.text.replaceAll(' ', '').length;
-              return Text(
-                '$digitCount / 10',
-                style: AppTypography.caption.copyWith(
-                  color: digitCount == 10
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
-                  fontSize: 11,
-                ),
-              );
-            },
+            buildCounter:
+                (
+                  context, {
+                  required currentLength,
+                  required isFocused,
+                  maxLength,
+                }) {
+                  final digitCount = _ctrl.text.replaceAll(' ', '').length;
+                  return Text(
+                    '$digitCount / 10',
+                    style: AppTypography.caption.copyWith(
+                      color: digitCount == 10
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  );
+                },
             style: AppTypography.body1.copyWith(color: Colors.black87),
             cursorColor: AppColors.primary,
             validator: widget.validator,
@@ -344,20 +358,29 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
                 color: AppColors.primary.withOpacity(0.35),
               ),
               contentPadding: EdgeInsets.symmetric(
-                  horizontal: 16.resW, vertical: 14.resH),
+                horizontal: 16.resW,
+                vertical: 14.resH,
+              ),
               border: const OutlineInputBorder(
-                  borderRadius: _radius, borderSide: _borderSide),
+                borderRadius: _radius,
+                borderSide: _borderSide,
+              ),
               enabledBorder: const OutlineInputBorder(
-                  borderRadius: _radius, borderSide: _borderSide),
+                borderRadius: _radius,
+                borderSide: _borderSide,
+              ),
               focusedBorder: OutlineInputBorder(
-                  borderRadius: _radius,
-                  borderSide: _borderSide.copyWith(width: 2.0)),
+                borderRadius: _radius,
+                borderSide: _borderSide.copyWith(width: 2.0),
+              ),
               errorBorder: OutlineInputBorder(
-                  borderRadius: _radius,
-                  borderSide: BorderSide(color: AppColors.error, width: 1.5)),
+                borderRadius: _radius,
+                borderSide: BorderSide(color: AppColors.error, width: 1.5),
+              ),
               focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: _radius,
-                  borderSide: BorderSide(color: AppColors.error, width: 2.0)),
+                borderRadius: _radius,
+                borderSide: BorderSide(color: AppColors.error, width: 2.0),
+              ),
             ),
           ),
         ),
@@ -365,4 +388,3 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
     );
   }
 }
-

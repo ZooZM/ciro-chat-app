@@ -1,6 +1,7 @@
+import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/network/socket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -40,12 +41,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 16.resW,
-         title: Row(
+        title: Row(
           children: [
-            AppLogoWidget(
-              size: 44,
-              showText: false,
-            ),
+            AppLogoWidget(size: 44, showText: false),
             SizedBox(width: 8.resW),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,7 +83,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ],
             ),
           ],
-         ),
+        ),
+
         // SvgPicture.asset(
         //   'assets/icons/logo.svg', // Assuming primary logo variant exists
         //   height: 36.resH,
@@ -95,7 +94,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         //     style: AppTypography.headline2.copyWith(color: AppColors.primary),
         //   ),
         // ),
-         
         actions: [
           IconButton(
             icon: Icon(
@@ -179,11 +177,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
             child: BlocBuilder<ChatCubit, ChatState>(
               builder: (context, state) {
                 return StreamBuilder<List<ChatSession>>(
-                  stream: context.read<ChatCubit>().recentChatsStream, // Direct pure SQLite hook!
+                  stream: context
+                      .read<ChatCubit>()
+                      .recentChatsStream, // Direct pure SQLite hook!
                   builder: (context, snapshot) {
-                    
                     // Offline-First UX: Prevent 1-frame flashes while SQLite boots or network spins
-                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData) {
                       return const SizedBox.shrink(); // Silent buffer
                     }
 
@@ -192,9 +192,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     // Do NOT show empty state permanently unless DB is truly empty AND Hydration natively finished!
                     if (activeChats.isEmpty) {
                       if (!context.read<ChatCubit>().isHydrationComplete) {
-                        return const Center(child: CircularProgressIndicator()); // Subtle fallback if zero cache
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        ); // Subtle fallback if zero cache
                       }
-                      
+
                       return Center(
                         child: Text(
                           'No active chats yet.\nTap the + button to start one!',
@@ -218,7 +220,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         return ChatTileWidget(
                           key: ValueKey(chat.id),
                           chat: chat,
-                          currentUserId: context.read<ChatCubit>().currentUserId,
+                          currentUserId: context
+                              .read<ChatCubit>()
+                              .currentUserId,
                           onTap: () {
                             context.push('/chat_room', extra: chat);
                           },
@@ -227,7 +231,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     );
                   },
                 );
-              }
+              },
             ),
           ),
         ],

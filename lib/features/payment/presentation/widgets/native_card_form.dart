@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_credit_card/flutter_credit_card.dart';
 import '../bloc/payment_cubit.dart';
@@ -7,7 +6,7 @@ import '../bloc/payment_state.dart';
 
 class NativeCardForm extends StatefulWidget {
   final double amount;
-  
+
   const NativeCardForm({super.key, required this.amount});
 
   @override
@@ -16,7 +15,7 @@ class NativeCardForm extends StatefulWidget {
 
 class _NativeCardFormState extends State<NativeCardForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  
+
   String _cardNumber = '';
   String _expiryDate = '';
   String _cardHolderName = '';
@@ -60,9 +59,16 @@ class _NativeCardFormState extends State<NativeCardForm> {
     return BlocConsumer<PaymentCubit, PaymentState>(
       listener: (context, state) {
         if (state is PaymentFailure) {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.error), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.error), backgroundColor: Colors.red),
+          );
         } else if (state is PaymentSuccess) {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment Successful!'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment Successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       },
       builder: (context, state) {
@@ -104,12 +110,23 @@ class _NativeCardFormState extends State<NativeCardForm> {
                           borderRadius: BorderRadius.circular(8.0),
                         ),
                         backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         minimumSize: const Size(double.infinity, 50),
                       ),
-                      onPressed: _cardNumber.isNotEmpty && _cvvCode.isNotEmpty ? _submitPayment : null,
-                      child: Text('Pay \$${widget.amount}', style: const TextStyle(color: Colors.white, fontSize: 16)),
-                    )
+                      onPressed: _cardNumber.isNotEmpty && _cvvCode.isNotEmpty
+                          ? _submitPayment
+                          : null,
+                      child: Text(
+                        'Pay \$${widget.amount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

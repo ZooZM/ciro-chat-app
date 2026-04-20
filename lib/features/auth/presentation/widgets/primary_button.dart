@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_constants.dart';
 
@@ -30,7 +29,9 @@ class PrimaryButton extends StatelessWidget {
           disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.circularBorderRadius),
+            borderRadius: BorderRadius.circular(
+              AppConstants.circularBorderRadius,
+            ),
           ),
         ),
         child: isLoading
@@ -42,10 +43,7 @@ class PrimaryButton extends StatelessWidget {
                   strokeWidth: 2.5,
                 ),
               )
-            : Text(
-                text,
-                style: AppTypography.buttonText,
-              ),
+            : Text(text, style: AppTypography.buttonText),
       ),
     );
   }

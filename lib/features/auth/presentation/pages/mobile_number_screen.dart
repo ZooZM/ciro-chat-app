@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/phone_field_widget.dart';
@@ -37,10 +35,10 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
   void _onSendCode() {
     if (_formKey.currentState?.validate() ?? false) {
       if (_phoneNumber.isEmpty) {
-         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter a valid phone number')),
-         );
-         return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid phone number')),
+        );
+        return;
       }
       context.read<AuthCubit>().submitPhoneNumber(_phoneNumber);
     }
@@ -58,7 +56,7 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
             ),
           );
         } else if (state is Unauthenticated && _phoneNumber.isNotEmpty) {
-          // Send OTP was successful natively. 
+          // Send OTP was successful natively.
           context.push('/auth/verify', extra: _phoneNumber);
         }
       },
@@ -78,53 +76,52 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                    SizedBox(height: 48.resH), // Spacing from top
-                    
-                    // Centered Logo
-                    const AppLogoWidget(
-                      size: 180,
-                      showText: false, // Icon only on auth screen
-                    ),
+                          SizedBox(height: 48.resH), // Spacing from top
+                          // Centered Logo
+                          const AppLogoWidget(
+                            size: 180,
+                            showText: false, // Icon only on auth screen
+                          ),
 
-                    SizedBox(height: 32.resH),
+                          SizedBox(height: 32.resH),
 
-                    // Instruction Text
-                    Text(
-                      'Enter your mobile number to\ncontinue',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.body1.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                          // Instruction Text
+                          Text(
+                            'Enter your mobile number to\ncontinue',
+                            textAlign: TextAlign.center,
+                            style: AppTypography.body1.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
 
-                    SizedBox(height: 48.resH),
+                          SizedBox(height: 48.resH),
 
-                    // Mobile Number Label
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Mobile Number',
-                        style: AppTypography.subtitle1.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                          // Mobile Number Label
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Mobile Number',
+                              style: AppTypography.subtitle1.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
 
-                    const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                    // Phone Input (CiroPhoneField = full custom UI control)
-                    CiroPhoneField(
-                      onChanged: (fullNumber) {
-                        _phoneNumber = fullNumber;
-                      },
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a valid phone number';
-                        }
-                        return null;
-                      },
-                    ),
+                          // Phone Input (CiroPhoneField = full custom UI control)
+                          CiroPhoneField(
+                            onChanged: (fullNumber) {
+                              _phoneNumber = fullNumber;
+                            },
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter a valid phone number';
+                              }
+                              return null;
+                            },
+                          ),
 
                           SizedBox(height: 32.resH),
                         ],
@@ -136,14 +133,12 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                         alignment: Alignment.bottomCenter,
                         padding: EdgeInsets.only(bottom: 16.resH),
                         child:
-
-                    // Primary Button
-                    PrimaryButton(
-                      isLoading: isLoading,
-                      onPressed: _onSendCode,
-                      text: 'Send Code',
-                    ),
-                    
+                            // Primary Button
+                            PrimaryButton(
+                              isLoading: isLoading,
+                              onPressed: _onSendCode,
+                              text: 'Send Code',
+                            ),
                       ),
                     ),
                   ],

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:badges/badges.dart' as pk_badges;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
@@ -23,7 +22,10 @@ class ChatTileWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
-      contentPadding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 16.resW,
+        vertical: 4.resH,
+      ),
       leading: Stack(
         children: [
           CircleAvatar(
@@ -59,7 +61,9 @@ class ChatTileWidget extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: AppTypography.body2.copyWith(
-          color: chat.unreadCount > 0 ? Colors.black87 : AppColors.textSecondary,
+          color: chat.unreadCount > 0
+              ? Colors.black87
+              : AppColors.textSecondary,
         ),
       ),
       trailing: Column(
@@ -69,7 +73,9 @@ class ChatTileWidget extends StatelessWidget {
           Text(
             "${chat.timestamp.hour}:${chat.timestamp.minute.toString().padLeft(2, '0')}",
             style: AppTypography.caption.copyWith(
-              color: chat.unreadCount > 0 ? Colors.black : AppColors.textSecondary,
+              color: chat.unreadCount > 0
+                  ? Colors.black
+                  : AppColors.textSecondary,
             ),
           ),
           SizedBox(height: 6.resH),
@@ -84,11 +90,14 @@ class ChatTileWidget extends StatelessWidget {
                 padding: EdgeInsets.all(5.resW),
               ),
             )
-          else if (!chat.isOnline && chat.unreadCount == 0 && chat.lastMessageSenderId == currentUserId && chat.lastMessageSenderId.isNotEmpty)
-             // Only display ticks natively if the sender matches EXACTLY the local auth identity
-             Icon(Icons.done_all, size: 16.resW, color: Colors.blue) 
-          else 
-             SizedBox(height: 16.resH)
+          else if (!chat.isOnline &&
+              chat.unreadCount == 0 &&
+              chat.lastMessageSenderId == currentUserId &&
+              chat.lastMessageSenderId.isNotEmpty)
+            // Only display ticks natively if the sender matches EXACTLY the local auth identity
+            Icon(Icons.done_all, size: 16.resW, color: Colors.blue)
+          else
+            SizedBox(height: 16.resH),
         ],
       ),
     );

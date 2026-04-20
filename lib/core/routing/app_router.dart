@@ -6,11 +6,9 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
-import 'package:ciro_chat_app/features/video_call/presentation/bloc/call_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../di/injection.dart';
@@ -33,7 +31,7 @@ final GoRouter appRouter = GoRouter(
     final location = state.matchedLocation;
 
     final isAuthRoute = location == '/auth' || location.startsWith('/auth/');
-    final isSplash   = location == '/splash';
+    final isSplash = location == '/splash';
 
     // While auth is still being determined, stay on the splash screen.
     if (authState is AuthInitial || authState is AuthLoading) {
@@ -53,7 +51,10 @@ final GoRouter appRouter = GoRouter(
   routes: [
     GoRoute(
       path: '/splash',
-      builder: (context, state) => const SplashScreen(),
+      builder: (context, state) => BlocProvider.value(
+        value: getIt<AuthCubit>(),
+        child: const SplashScreen(),
+      ),
     ),
     GoRoute(
       path: '/auth',
@@ -85,10 +86,7 @@ final GoRouter appRouter = GoRouter(
         ),
       ),
     ),
-    GoRoute(
-      path: '/home',
-      builder: (context, state) => const ChatListScreen(),
-    ),
+    GoRoute(path: '/home', builder: (context, state) => const ChatListScreen()),
     GoRoute(
       path: '/chat_room',
       builder: (context, state) {

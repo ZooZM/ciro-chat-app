@@ -1,6 +1,4 @@
-import 'dart:isolate';
 import 'package:flutter/foundation.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';

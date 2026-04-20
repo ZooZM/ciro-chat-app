@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
@@ -18,11 +17,19 @@ class MessageBubbleWidget extends StatelessWidget {
   Widget _buildStatusIcon() {
     switch (message.status) {
       case MessageStatus.pending:
-        return Icon(Icons.access_time, size: 14.resW, color: AppColors.textSecondary);
+        return Icon(
+          Icons.access_time,
+          size: 14.resW,
+          color: AppColors.textSecondary,
+        );
       case MessageStatus.sent:
         return Icon(Icons.check, size: 14.resW, color: AppColors.textSecondary);
       case MessageStatus.delivered:
-        return Icon(Icons.done_all, size: 14.resW, color: AppColors.textSecondary);
+        return Icon(
+          Icons.done_all,
+          size: 14.resW,
+          color: AppColors.textSecondary,
+        );
       case MessageStatus.read:
         return Icon(Icons.done_all, size: 14.resW, color: Colors.blue);
       default:
@@ -34,13 +41,16 @@ class MessageBubbleWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     // Determine right-align vs left-align logic
     final isMine = message.senderId == currentUserId;
-    
+
     // Bubble colors based on mockup
-    final bgColor = isMine ? AppColors.surface : const Color(0xFFDFFAC4); // Light green for incoming
+    final bgColor = isMine
+        ? AppColors.surface
+        : const Color(0xFFDFFAC4); // Light green for incoming
     final radius = Radius.circular(16.resR);
 
     // Format HH:mm from DateTime
-    final formattedTime = "${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}";
+    final formattedTime =
+        "${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}";
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -63,9 +73,13 @@ class MessageBubbleWidget extends StatelessWidget {
             ),
           ],
         ),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
         child: Column(
-          crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isMine
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             Text(
               message.text,
@@ -77,14 +91,14 @@ class MessageBubbleWidget extends StatelessWidget {
               children: [
                 Text(
                   formattedTime,
-                  style: AppTypography.caption.copyWith(fontSize: 10.resSp, color: AppColors.textSecondary),
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 10.resSp,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-                if (isMine) ...[
-                  SizedBox(width: 4.resW),
-                  _buildStatusIcon(),
-                ]
+                if (isMine) ...[SizedBox(width: 4.resW), _buildStatusIcon()],
               ],
-            )
+            ),
           ],
         ),
       ),

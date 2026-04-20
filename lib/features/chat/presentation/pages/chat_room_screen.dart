@@ -11,7 +11,6 @@ import '../widgets/message_bubble_widget.dart';
 import '../widgets/attachment_sheet_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
-import '../../../video_call/presentation/pages/video_call_screen.dart';
 import '../../../video_call/presentation/pages/outgoing_call_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {

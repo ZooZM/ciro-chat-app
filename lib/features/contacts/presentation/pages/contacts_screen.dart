@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../chat/domain/entities/chat_session.dart';
 import '../../../chat/presentation/widgets/chat_tile_widget.dart';
 import '../../../chat/presentation/bloc/chat_cubit.dart';
-import '../../data/contacts_service.dart';
-import '../../../../core/di/injection.dart';
 
 import 'package:permission_handler/permission_handler.dart';
 
@@ -49,7 +46,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.perm_contact_calendar, size: 60.resW, color: Colors.grey),
+            Icon(
+              Icons.perm_contact_calendar,
+              size: 60.resW,
+              color: Colors.grey,
+            ),
             SizedBox(height: 16.resH),
             Text(
               'We need access to your contacts to automatically connect you with your friends on Ciro Connect.',
@@ -59,9 +60,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
             SizedBox(height: 24.resH),
             ElevatedButton(
               onPressed: () => openAppSettings(),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text('Open Settings', style: TextStyle(color: Colors.white)),
-            )
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text(
+                'Open Settings',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
           ],
         ),
       ),
@@ -73,9 +79,20 @@ class _ContactsScreenState extends State<ContactsScreen> {
       itemCount: 8,
       separatorBuilder: (context, index) => Divider(height: 1, indent: 80.resW),
       itemBuilder: (context, index) => ListTile(
-        leading: CircleAvatar(backgroundColor: Colors.grey[200], radius: 24.resW),
-        title: Container(height: 14.resH, width: double.infinity, color: Colors.grey[200]),
-        subtitle: Container(height: 12.resH, width: 100.resW, color: Colors.grey[200]),
+        leading: CircleAvatar(
+          backgroundColor: Colors.grey[200],
+          radius: 24.resW,
+        ),
+        title: Container(
+          height: 14.resH,
+          width: double.infinity,
+          color: Colors.grey[200],
+        ),
+        subtitle: Container(
+          height: 12.resH,
+          width: 100.resW,
+          color: Colors.grey[200],
+        ),
       ),
     );
   }
@@ -101,7 +118,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
           : StreamBuilder<List<ChatSession>>(
               stream: context.read<ChatCubit>().watchLocalContacts,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return _buildShimmer();
                 }
 
