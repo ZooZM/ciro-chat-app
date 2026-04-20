@@ -63,20 +63,18 @@ class ChatCubit extends Cubit<ChatState> {
 
     // SERVER stored: pending → sent (1 grey tick)
     _socketService.onMessageSent = (clientMessageId) async {
-      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.sent);
-      debugPrint('[ChatCubit] ✓  $clientMessageId → sent');
+      await _promoteMessageStatus(clientMessageId, MessageStatus.sent);
     };
 
     // RECIPIENT received: sent → delivered (2 grey ticks)
+    // The backend now sends clientMessageIds as a List — handle both forms.
     _socketService.onMessageDelivered = (clientMessageId) async {
-      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.delivered);
-      debugPrint('[ChatCubit] ✓✓  $clientMessageId → delivered');
+      await _promoteMessageStatus(clientMessageId, MessageStatus.delivered);
     };
 
     // RECIPIENT read: delivered → read (2 blue ticks)
     _socketService.onMessageRead = (clientMessageId) async {
-      await _localDataSource.updateMessageStatus(clientMessageId, MessageStatus.read);
-      debugPrint('[ChatCubit] ✓✓📘 $clientMessageId → read');
+      await _promoteMessageStatus(clientMessageId, MessageStatus.read);
     };
 
     // Socket reconnected — trigger REST sync to catch missed events.
@@ -431,5 +429,59 @@ class ChatCubit extends Cubit<ChatState> {
     _roomStreamSub?.cancel();
     _socketService.disconnect();
     return super.close();
+  }
+
+  // ── Status promotion engine ───────────────────────────────────────────────
+  //
+  // All status updates MUST flow through _promoteMessageStatus. It enforces:
+  //   1. Strict hierarchy — never downgrade (read can't become delivered again)
+  //   2. Forced list clone — BlocBuilder only rebuilds when the list reference
+  //      changes. Emitting the same List instance is silently ignored by Equatable.
+
+  static const _statusRank = {
+    MessageStatus.pending:   0,
+    MessageStatus.sent:      1,
+    MessageStatus.delivered: 2,
+    MessageStatus.read:      3,
+  };
+
+  /// Updates [clientMessageId] to [newStatus] in SQLite if and only if [newStatus]
+  /// is a promotion over the current persisted status.
+  /// After a successful write, re-emits the active room state with a cloned message
+  /// list so that BlocBuilder always detects the change and triggers a rebuild.
+  Future<void> _promoteMessageStatus(
+    String clientMessageId,
+    MessageStatus newStatus,
+  ) async {
+    // ── 1. Hierarchy guard ───────────────────────────────────────────────────
+    // Read the current status directly from SQLite so we always have ground truth,
+    // never stale in-memory state.
+    final current = await _localDataSource.getMessageStatus(clientMessageId);
+    if (current != null) {
+      final currentRank = _statusRank[current] ?? 0;
+      final newRank     = _statusRank[newStatus] ?? 0;
+      if (newRank <= currentRank) {
+        debugPrint(
+          '[ChatCubit] Ignored downgrade: $clientMessageId '
+          '${current.name} → ${newStatus.name}',
+        );
+        return;
+      }
+    }
+
+    // ── 2. Persist ───────────────────────────────────────────────────────────
+    await _localDataSource.updateMessageStatus(clientMessageId, newStatus);
+    debugPrint('[ChatCubit] $clientMessageId → ${newStatus.name}');
+
+    // ── 3. Force UI rebuild ──────────────────────────────────────────────────
+    // If the user is currently viewing a room, re-emit its message list.
+    // We MUST produce a new List instance — Equatable compares by identity for
+    // lists, so emitting the same reference is silently swallowed.
+    final currentState = state;
+    if (currentState is ChatRoomActive && _activeRoomId != null) {
+      final fresh = await _localDataSource.getRoomMessages(_activeRoomId!);
+      // List.unmodifiable creates a new identity, guaranteeing a rebuild.
+      emit(ChatRoomActive(_activeRoomId!, List.unmodifiable(fresh)));
+    }
   }
 }
