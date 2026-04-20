@@ -22,12 +22,20 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
 
-  /// Connects to the NestJS WebSocket Gateway
-  void connect(String token) async {
-    final authLocal = getIt<AuthLocalDataSource>();
-    if (token.isEmpty) return; // Prevent ghost connections
-    final isLoggedIn = await authLocal.getLoggedInStatus();
-    if (!isLoggedIn) return; // Strictly only connect if Auth flow completed
+  /// Connects to the NestJS WebSocket Gateway.
+  /// ONLY call this after the backend has definitively verified the token
+  /// (i.e., inside AuthCubit after checkAuthStatus() or verifyOtp() succeeds).
+  /// This method is a pure primitive — it trusts its caller completely.
+  void connect(String token) {
+    if (token.isEmpty) {
+      debugPrint('[SocketService] connect() called with empty token — ignored');
+      return;
+    }
+
+    // Tear down any previous socket cleanly before creating a new one.
+    // This prevents duplicate listeners if connect() is called more than once
+    // (e.g., during mid-session token refresh via DioClient).
+    disconnect();
 
     final url = const String.fromEnvironment(
       'API_URL',
