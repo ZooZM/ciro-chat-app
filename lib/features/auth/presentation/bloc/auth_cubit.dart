@@ -63,7 +63,20 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> submitOtp(String phone, String code) async {
     emit(const AuthLoading());
     try {
+      // AuthRepositoryImpl.verifyOtp() saves the new token to secure storage internally.
       final response = await _repository.verifyOtp(phone, code);
+
+      // Read the token back from secure storage so we use exactly what was saved
+      // (handles any normalisation the repository does before persisting).
+      final freshToken = await _localDataSource.getAccessToken() ?? '';
+
+      // Connect the socket BEFORE emitting Authenticated so the home screen
+      // never has a window where the router has navigated but the socket is offline.
+      if (freshToken.isNotEmpty) {
+        getIt<SocketService>().connect(freshToken);
+        debugPrint('[AuthCubit] Socket connected after OTP verification');
+      }
+
       emit(Authenticated(userData: response));
     } catch (e) {
       emit(AuthError(e.toString()));
