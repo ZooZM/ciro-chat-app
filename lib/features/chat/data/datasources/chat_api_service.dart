@@ -2,9 +2,7 @@ import 'package:ciro_chat_app/core/network/dio_client.dart';
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:injectable/injectable.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 @lazySingleton
 class ChatApiService {
@@ -15,7 +13,7 @@ class ChatApiService {
 
   Future<List<ChatSession>> fetchRooms() async {
     try {
-      // Needed to resolve which participant is "the other person" in PRIVATE rooms
+      // Needed to resolve which participant is "the other person" in PRIVATE rooms.
       final currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
 
       final response = await _dioClient.dio.get('/chat/rooms');
@@ -27,32 +25,26 @@ class ChatApiService {
           : (raw['data'] ?? raw['rooms'] ?? []);
 
       debugPrint('[ChatApiService] Fetched ${roomsJson.length} room(s)');
-      final status = await Permission.contacts.request();
-      if (!status.isGranted) {
-        throw Exception('Contact permission denied');
-      }
 
-      // 2. Fetch raw device contacts (with phones)
-      final contacts = await FlutterContacts.getAll(
-        properties: {ContactProperty.phone},
-      );
-
-      // 3. Normalize numbers
-      final List<Contact> rawNumbers = contacts;
+      // Parse each room individually. Use a fold so a single malformed room
+      // never crashes the entire list — it is silently skipped with a log.
       final List<ChatSession> chatSessions = [];
-      for (var json in roomsJson) {
-        final contact = rawNumbers.firstWhere(
-          (contact) => contact.phones.any(
-            (phone) => phone.number == json['participants'][1]['phoneNumber'],
-          ),
-        );
-        json['participants'][1]['name'] = contact.displayName;
-        final chatSession = ChatSession.fromJson(
-          json as Map<String, dynamic>,
-          currentUserPhone,
-        );
-        chatSessions.add(chatSession);
+      for (final json in roomsJson) {
+        try {
+          final chatSession = ChatSession.fromJson(
+            json as Map<String, dynamic>,
+            currentUserPhone,
+          );
+          chatSessions.add(chatSession);
+        } catch (parseError) {
+          // One bad room must not kill the rest.
+          debugPrint('[ChatApiService] Skipped malformed room: $parseError');
+        }
       }
+
+      // Contact name resolution is intentionally NOT done here.
+      // The SQLite LEFT JOIN in _dispatchRecentChatsUpdate already overlays
+      // the saved contact name/avatar at query time — no FlutterContacts call needed.
       return chatSessions;
     } catch (e) {
       debugPrint('[ChatApiService] fetchRooms failed: $e');
