@@ -58,34 +58,61 @@ class ChatCubit extends Cubit<ChatState> {
     await _localDataSource.initDB();
 
     // Wire socket callbacks
+
+    // ── Sender-side status promotions ────────────────────────────────────────────
+
+    // Server stored the message → pending → sent (1 grey tick)
     _socketService.onMessageDelivered = (messageId) async {
-      // Server ACKed the message!
       await _localDataSource.updateMessageStatus(messageId, MessageStatus.sent);
+      debugPrint('[ChatCubit] ACK: $messageId → sent');
     };
+
+    // Recipient device received it → sent → delivered (2 grey ticks)
+    _socketService.onMessageDeliveryUpdate = (messageId) async {
+      await _localDataSource.updateMessageStatus(messageId, MessageStatus.delivered);
+      debugPrint('[ChatCubit] ACK: $messageId → delivered');
+    };
+
+    // Recipient read it → delivered → read (2 blue ticks)
+    _socketService.onMessageReadUpdate = (messageId) async {
+      await _localDataSource.updateMessageStatus(messageId, MessageStatus.read);
+      debugPrint('[ChatCubit] ACK: $messageId → read');
+    };
+
+    // ── Recipient-side: incoming message ───────────────────────────────────────
 
     _socketService.onNewMessage = (data) async {
       final incoming = Message(
-        id: data['id'] ?? _uuid.v4(),
+        id: data['_id'] ?? data['id'] ?? _uuid.v4(),
         roomId: data['chatRoomId'] ?? 'unknown',
-        senderId: data['senderId'] ?? 'them',
+        senderId: data['senderId'] ?? '',
         text: data['content'] ?? '',
-        timestamp: DateTime.now(),
-        status: MessageStatus.delivered,
+        timestamp: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+        status: MessageStatus.delivered, // We have it → delivered by definition
       );
 
-      final shouldIncrement = incoming.roomId != _activeRoomId;
+      final isActiveRoom = incoming.roomId == _activeRoomId;
       await _localDataSource.saveMessage(
         incoming,
-        incrementUnread: shouldIncrement,
-        // No room metadata needed for incoming: the room was already
-        // created when the other user sent via our JIT path.
+        incrementUnread: !isActiveRoom, // Only badge if user is NOT in this room
       );
 
-      // Tell server we received it locally
-      _socketService.markAsRead(
+      // STEP 1: Always emit markDelivered — the sender's tick goes to 2 grey.
+      _socketService.markDelivered(
         roomId: incoming.roomId,
         messageId: incoming.id,
       );
+
+      // STEP 2: Only emit markRead if user is ACTIVELY in this room right now.
+      // Otherwise markRoomMessagesRead() will handle it when they open the room.
+      if (isActiveRoom) {
+        _socketService.markRead(
+          roomId: incoming.roomId,
+          messageId: incoming.id,
+        );
+        // Promote our own local copy to read immediately for consistency.
+        await _localDataSource.updateMessageStatus(incoming.id, MessageStatus.read);
+      }
     };
   }
 
@@ -125,6 +152,24 @@ class ChatCubit extends Cubit<ChatState> {
       _activeRoomId = null;
     }
     _pendingContact = null;
+  }
+
+  /// Call this when the user OPENS a ChatRoom or the screen becomes foreground-active.
+  ///
+  /// Finds all messages in this room that are still [MessageStatus.delivered]
+  /// (i.e., we have them locally but haven't told the sender the user read them)
+  /// and emits `markRead` for each. SQLite is updated to [MessageStatus.read]
+  /// immediately so the UI reflects truth before the server ACKs.
+  Future<void> markRoomMessagesRead(String roomId) async {
+    final messages = await _localDataSource.getRoomMessages(roomId);
+    for (final msg in messages) {
+      // Only process messages sent BY OTHERS that we haven't marked read yet.
+      if (msg.senderId != currentUserId && msg.status == MessageStatus.delivered) {
+        _socketService.markRead(roomId: roomId, messageId: msg.id);
+        await _localDataSource.updateMessageStatus(msg.id, MessageStatus.read);
+      }
+    }
+    debugPrint('[ChatCubit] Marked ${messages.length} messages as read in $roomId');
   }
 
   /// Sends a local-first message.

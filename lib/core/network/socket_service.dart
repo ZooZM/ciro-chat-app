@@ -17,8 +17,21 @@ class SocketService {
   bool get isConnected => _socket?.connected ?? false;
 
   // ── Chat callbacks ────────────────────────────────────────────────────────
-  void Function(Map<String, dynamic> data)? onNewMessage;
+
+  /// Fired when the SERVER confirms it stored our message (sender side).
+  /// Promotes: pending → sent (1 grey tick)
   void Function(String messageId)? onMessageDelivered;
+
+  /// Fired when the RECIPIENT's device received our message.
+  /// Promotes: sent → delivered (2 grey ticks)
+  void Function(String messageId)? onMessageDeliveryUpdate;
+
+  /// Fired when the RECIPIENT read our message.
+  /// Promotes: delivered → read (2 blue ticks)
+  void Function(String messageId)? onMessageReadUpdate;
+
+  /// Fired when WE receive a new message from another user.
+  void Function(Map<String, dynamic> data)? onNewMessage;
 
   // ── Call signaling callbacks (set by CallCubit) ───────────────────────────
   void Function(Map<String, dynamic> data)? onIncomingCall;
@@ -87,13 +100,35 @@ class SocketService {
     });
 
     // ── Chat events ───────────────────────────────────────────────────────
-    _socket?.on('newMessage', (data) {
-      onNewMessage?.call(data as Map<String, dynamic>);
+
+    // Sender receives this when the SERVER has stored the message.
+    // pending → sent
+    _socket?.on('messageDelivered', (data) {
+      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
+      if (msgId != null) onMessageDelivered?.call(msgId);
     });
 
-    _socket?.on('messageDelivered', (data) {
-      final msgId = (data as Map<String, dynamic>)['messageId'];
-      onMessageDelivered?.call(msgId as String);
+    // Sender receives this when the RECIPIENT's device acknowledged receipt.
+    // sent → delivered
+    _socket?.on('messageDeliveredUpdate', (data) {
+      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
+      if (msgId != null) onMessageDeliveryUpdate?.call(msgId);
+    });
+
+    // Sender receives this when the RECIPIENT has read the message.
+    // delivered → read
+    _socket?.on('messageReadUpdate', (data) {
+      final msgId = (data as Map<String, dynamic>)['messageId'] as String?;
+      if (msgId != null) onMessageReadUpdate?.call(msgId);
+    });
+
+    // WE receive a new inbound message.
+    _socket?.on('receiveMessage', (data) {
+      onNewMessage?.call(data as Map<String, dynamic>);
+    });
+    // Legacy event name — keep both so backend naming doesn't matter.
+    _socket?.on('newMessage', (data) {
+      onNewMessage?.call(data as Map<String, dynamic>);
     });
 
     // ── Call signaling events ─────────────────────────────────────────────
@@ -140,8 +175,22 @@ class SocketService {
     }
   }
 
-  void markAsRead({required String roomId, required String messageId}) {
-    _socket?.emit('markRead', {'chatRoomId': roomId, 'messageId': messageId});
+  /// Emits `markDelivered` so the SENDER's UI promotes to 2 grey ticks.
+  /// Call this immediately when WE receive a message (recipient side).
+  void markDelivered({required String roomId, required String messageId}) {
+    _socket?.emit('markDelivered', {
+      'chatRoomId': roomId,
+      'messageId': messageId,
+    });
+  }
+
+  /// Emits `markRead` so the SENDER's UI promotes to 2 blue ticks.
+  /// Only call this when the user is ACTIVELY viewing the room.
+  void markRead({required String roomId, required String messageId}) {
+    _socket?.emit('markRead', {
+      'chatRoomId': roomId,
+      'messageId': messageId,
+    });
   }
 
   // ── Call signaling emitters ───────────────────────────────────────────────
