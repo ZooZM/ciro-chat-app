@@ -28,23 +28,28 @@ final GoRouter appRouter = GoRouter(
     FlutterNativeSplash.remove();
 
     final authState = getIt<AuthCubit>().state;
-    final location = state.matchedLocation;
+    final location = state.uri.toString();
 
     final isAuthRoute = location == '/auth' || location.startsWith('/auth/');
     final isSplash = location == '/splash';
 
-    // While auth is still being determined, stay on the splash screen.
+    // ── RULE 1: Transient states — do NOT redirect ────────────────────────────
+    // AuthLoading fires during OTP send, token refresh, and initial boot.
+    // AuthInitial is the cold-start state before verifyAuthStatus() runs.
+    // Returning null keeps the user exactly where they are so loading spinners work.
     if (authState is AuthInitial || authState is AuthLoading) {
-      return isSplash ? null : '/splash';
+      return null;
     }
 
-    // Fully authenticated: move out of splash/auth into the app.
+    // ── RULE 2: Authenticated ─────────────────────────────────────────────────
+    // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
       if (isSplash || isAuthRoute) return '/home';
-      return null; // already on a valid screen
+      return null;
     }
 
-    // Unauthenticated (or AuthError): keep out of the app.
+    // ── RULE 3: Unauthenticated or AuthError ──────────────────────────────────
+    // Redirect to /auth only if not already there.
     if (!isAuthRoute) return '/auth';
     return null;
   },
