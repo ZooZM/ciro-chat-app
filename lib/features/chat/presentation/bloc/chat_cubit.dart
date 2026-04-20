@@ -62,19 +62,18 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Sender-side status promotions ────────────────────────────────────────────
 
     // SERVER stored: pending → sent (1 grey tick)
-    _socketService.onMessageSent = (clientMessageId) async {
-      await _promoteMessageStatus(clientMessageId, MessageStatus.sent);
+    _socketService.onMessageSent = (clientMessageId) {
+      handleMessageStatusUpdate(clientMessageId, MessageStatus.sent);
     };
 
     // RECIPIENT received: sent → delivered (2 grey ticks)
-    // The backend now sends clientMessageIds as a List — handle both forms.
-    _socketService.onMessageDelivered = (clientMessageId) async {
-      await _promoteMessageStatus(clientMessageId, MessageStatus.delivered);
+    _socketService.onMessageDelivered = (clientMessageId) {
+      handleMessageStatusUpdate(clientMessageId, MessageStatus.delivered);
     };
 
     // RECIPIENT read: delivered → read (2 blue ticks)
-    _socketService.onMessageRead = (clientMessageId) async {
-      await _promoteMessageStatus(clientMessageId, MessageStatus.read);
+    _socketService.onMessageRead = (clientMessageId) {
+      handleMessageStatusUpdate(clientMessageId, MessageStatus.read);
     };
 
     // Socket reconnected — trigger REST sync to catch missed events.
@@ -86,8 +85,11 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Recipient-side: incoming message ───────────────────────────────────────
 
     _socketService.onNewMessage = (data) async {
+      // 1. FIX: ID Mismatch. Extract clientMessageId specifically so sender's SQLite UUID is retained
+      final clientMsgId = data['clientMessageId'] ?? data['_id'] ?? data['id'] ?? _uuid.v4();
+
       final incoming = Message(
-        id: data['_id'] ?? data['id'] ?? _uuid.v4(),
+        id: clientMsgId,
         roomId: data['chatRoomId'] ?? 'unknown',
         senderId: data['senderId'] ?? '',
         text: data['content'] ?? '',
@@ -104,7 +106,7 @@ class ChatCubit extends Cubit<ChatState> {
       // STEP 1: Always emit markDelivered — the sender's tick goes to 2 grey.
       _socketService.markDelivered(
         roomId: incoming.roomId,
-        messageId: incoming.id,
+        messageId: incoming.id, // This is now properly the UUID
       );
 
       // STEP 2: Only emit markRead if user is ACTIVELY in this room right now.
@@ -432,56 +434,53 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   // ── Status promotion engine ───────────────────────────────────────────────
-  //
-  // All status updates MUST flow through _promoteMessageStatus. It enforces:
-  //   1. Strict hierarchy — never downgrade (read can't become delivered again)
-  //   2. Forced list clone — BlocBuilder only rebuilds when the list reference
-  //      changes. Emitting the same List instance is silently ignored by Equatable.
 
-  static const _statusRank = {
-    MessageStatus.pending:   0,
-    MessageStatus.sent:      1,
-    MessageStatus.delivered: 2,
-    MessageStatus.read:      3,
-  };
+  int getStatusWeight(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.pending: return 0;
+      case MessageStatus.sent: return 1;
+      case MessageStatus.delivered: return 2;
+      case MessageStatus.read: return 3;
+      default: return -1;
+    }
+  }
 
-  /// Updates [clientMessageId] to [newStatus] in SQLite if and only if [newStatus]
-  /// is a promotion over the current persisted status.
-  /// After a successful write, re-emits the active room state with a cloned message
-  /// list so that BlocBuilder always detects the change and triggers a rebuild.
-  Future<void> _promoteMessageStatus(
-    String clientMessageId,
-    MessageStatus newStatus,
-  ) async {
-    // ── 1. Hierarchy guard ───────────────────────────────────────────────────
-    // Read the current status directly from SQLite so we always have ground truth,
-    // never stale in-memory state.
-    final current = await _localDataSource.getMessageStatus(clientMessageId);
-    if (current != null) {
-      final currentRank = _statusRank[current] ?? 0;
-      final newRank     = _statusRank[newStatus] ?? 0;
-      if (newRank <= currentRank) {
-        debugPrint(
-          '[ChatCubit] Ignored downgrade: $clientMessageId '
-          '${current.name} → ${newStatus.name}',
-        );
-        return;
+  void handleMessageStatusUpdate(String clientMessageId, MessageStatus incomingStatus) async {
+    final incomingWeight = getStatusWeight(incomingStatus);
+
+    if (state is ChatRoomActive) {
+      final activeState = state as ChatRoomActive;
+      final currentRoomId = activeState.roomId;
+      final currentMessages = activeState.messages;
+      
+      final messageIndex = currentMessages.indexWhere((m) => m.id == clientMessageId);
+      
+      if (messageIndex != -1) {
+        final currentMessage = currentMessages[messageIndex];
+        final currentWeight = getStatusWeight(currentMessage.status);
+
+        // STRICT RULE: Only update if the new status has a HIGHER weight. Never downgrade.
+        if (incomingWeight > currentWeight) {
+          // 1. Update SQLite without blocking UI replacement
+          await _localDataSource.updateMessageStatus(clientMessageId, incomingStatus);
+
+          // 2. Clone the list for UI rebuild immediately stopping stream races
+          final updatedMessages = List<Message>.from(currentMessages);
+          updatedMessages[messageIndex] = currentMessage.copyWith(status: incomingStatus);
+          
+          emit(ChatRoomActive(currentRoomId, updatedMessages));
+        }
+        return; 
       }
     }
 
-    // ── 2. Persist ───────────────────────────────────────────────────────────
-    await _localDataSource.updateMessageStatus(clientMessageId, newStatus);
-    debugPrint('[ChatCubit] $clientMessageId → ${newStatus.name}');
-
-    // ── 3. Force UI rebuild ──────────────────────────────────────────────────
-    // If the user is currently viewing a room, re-emit its message list.
-    // We MUST produce a new List instance — Equatable compares by identity for
-    // lists, so emitting the same reference is silently swallowed.
-    final currentState = state;
-    if (currentState is ChatRoomActive && _activeRoomId != null) {
-      final fresh = await _localDataSource.getRoomMessages(_activeRoomId!);
-      // List.unmodifiable creates a new identity, guaranteeing a rebuild.
-      emit(ChatRoomActive(_activeRoomId!, List.unmodifiable(fresh)));
+    // Fallback if not actively looking at the room's stream
+    final currentStatusDB = await _localDataSource.getMessageStatus(clientMessageId);
+    if (currentStatusDB != null) {
+      final currentWeightDB = getStatusWeight(currentStatusDB);
+      if (incomingWeight > currentWeightDB) {
+        await _localDataSource.updateMessageStatus(clientMessageId, incomingStatus);
+      }
     }
   }
 }
