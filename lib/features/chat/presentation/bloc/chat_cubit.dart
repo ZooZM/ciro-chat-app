@@ -132,7 +132,9 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> sendLocalMessage(String text) async {
     // Snapshot _pendingContact NOW, before any async gap or null-clear below.
     final pendingContact = _pendingContact;
-
+    debugPrint('--- SENDING MESSAGE ---');
+    debugPrint('Active Room ID is: $_activeRoomId');
+    debugPrint('Pending Contact is: ${_pendingContact?.id}');
     // ── JIT Room Creation ─────────────────────────────────────────────────────
     if (_activeRoomId == null) {
       if (pendingContact == null) {

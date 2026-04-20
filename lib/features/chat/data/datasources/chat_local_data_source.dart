@@ -42,7 +42,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> initDB() async {
     if (_db != null) return;
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'ciro_chat.db');
+    final path = join(dbPath, 'ciro_chat.db_v1');
 
     _db = await openDatabase(
       path,
