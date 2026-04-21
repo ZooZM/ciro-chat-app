@@ -53,46 +53,48 @@ class _ChatListScreenState extends State<ChatListScreen> {
               height: 80,
               fit: BoxFit.contain,
             ),
-            SizedBox(width: 4.resW),
             // ── CIRO / CONNECT stacked text — right side of logo ─────────────
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'CIRO',
-                  style: AppTypography.logoMark.copyWith(
-                    fontSize: 16,
-                    height: 1.1,
-                    letterSpacing: 2,
-                    color: const Color(0xFF222222),
+            Transform.translate(
+              offset: Offset(-6.resW, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CIRO',
+                    style: AppTypography.logoMark.copyWith(
+                      fontSize: 16,
+                      height: 1.1,
+                      letterSpacing: 2,
+                      color: const Color(0xFF222222),
+                    ),
                   ),
-                ),
-                Text(
-                  'CONNECT',
-                  style: AppTypography.logoTagline.copyWith(
-                    fontSize: 8,
-                    height: 1.1,
-                    letterSpacing: 2.5,
-                    color: AppColors.primary,
+                  Text(
+                    'CONNECT',
+                    style: AppTypography.logoTagline.copyWith(
+                      fontSize: 8,
+                      height: 1.1,
+                      letterSpacing: 2.5,
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
-                // ── "Connecting..." subtle status below branding ────────────
-                ValueListenableBuilder<bool>(
-                  valueListenable: getIt<SocketService>().isConnectedNotifier,
-                  builder: (context, isConnected, _) {
-                    if (isConnected) return const SizedBox.shrink();
-                    return Text(
-                      'Connecting...',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    );
-                  },
-                ),
-              ],
+                  // ── "Connecting..." subtle status below branding ────────────
+                  ValueListenableBuilder<bool>(
+                    valueListenable: getIt<SocketService>().isConnectedNotifier,
+                    builder: (context, isConnected, _) {
+                      if (isConnected) return const SizedBox.shrink();
+                      return Text(
+                        'Connecting...',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
