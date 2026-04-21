@@ -80,10 +80,12 @@ class ChatCubit extends Cubit<ChatState> {
       }
     };
 
-    // Socket reconnected — trigger REST sync to catch missed events.
+    // Socket reconnected — trigger REST sync to catch missed events,
+    // then replay any pending messages that were queued while offline.
     _socketService.onReconnected = () {
-      debugPrint('[ChatCubit] Socket reconnected — triggering REST status sync');
+      debugPrint('[ChatCubit] Socket reconnected — triggering REST status sync + pending replay');
       syncStatusesFromRest().ignore();
+      syncPendingMessages().ignore();
     };
 
     // ── Recipient-side: incoming message ───────────────────────────────────────
@@ -127,9 +129,15 @@ class ChatCubit extends Cubit<ChatState> {
       }
     };
 
-    // Cold-boot REST sync: catch any delivery/read events we missed between
-    // the last session and now. Runs in the background after DB is ready.
-    syncStatusesFromRest().ignore();
+    // Cold-boot path: runs once after DB is ready and socket callbacks are wired.
+    //   1. REST sync  → promotes any `sent` messages whose ACKs were missed.
+    //   2. Pending flush → re-transmits any `pending` messages that were queued offline.
+    // A 1-second delay gives the socket time to connect and auto-join rooms
+    // before we attempt to emit the queued payloads.
+    Future.delayed(const Duration(seconds: 1), () {
+      syncStatusesFromRest().ignore();
+      syncPendingMessages().ignore();
+    });
   }
 
   /// Called when User opens a ChatRoom.

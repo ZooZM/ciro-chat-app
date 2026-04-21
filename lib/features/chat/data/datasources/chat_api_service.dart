@@ -69,8 +69,9 @@ class ChatApiService {
   /// [pending] or [sent] state locally (i.e., we may have missed socket events).
   ///
   /// POST /chat/messages/sync-statuses
-  /// Body: { clientMessageIds: ["uuid1", "uuid2", ...] }
-  /// Response: { statuses: { "uuid1": "sent", "uuid2": "delivered", ... } }
+  /// Body:     { "clientMessageIds": ["uuid1", "uuid2", ...] }
+  /// Response: Array<{ clientMessageId: string, status: string }>
+  ///           e.g. [{ "clientMessageId": "uuid1", "status": "delivered" }, ...]
   ///
   /// Returns a map of clientMessageId → status string, or empty map on error.
   Future<Map<String, String>> syncMessageStatuses(
@@ -78,16 +79,56 @@ class ChatApiService {
   ) async {
     if (clientMessageIds.isEmpty) return {};
     try {
+      debugPrint(
+        '[ChatApiService] syncStatuses → sending ${clientMessageIds.length} ids',
+      );
+
       final response = await _dioClient.dio.post(
         '/chat/messages/sync-statuses',
         data: {'clientMessageIds': clientMessageIds},
       );
-      final raw = response.data['statuses'] ?? response.data['data'] ?? {};
-      return Map<String, String>.from(
-        (raw as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+
+      // --- Diagnostic: log raw shape before parsing ---
+      final rawData = response.data;
+      debugPrint(
+        '[ChatApiService] syncStatuses ← type: ${rawData.runtimeType}, body: $rawData',
       );
-    } catch (e) {
-      debugPrint('[ChatApiService] syncMessageStatuses failed: $e');
+
+      // Resolve the list regardless of whether the backend returns a bare array
+      // or wraps it in a NestJS global interceptor envelope { success, data: [...] }.
+      List<dynamic> rawList;
+      if (rawData is List) {
+        rawList = rawData;
+      } else if (rawData is Map) {
+        final inner = rawData['data'] ?? rawData['statuses'];
+        if (inner is List) {
+          rawList = inner;
+        } else {
+          debugPrint(
+            '[ChatApiService] syncStatuses: unexpected map — no list in "data"/"statuses". Keys: ${rawData.keys.toList()}',
+          );
+          return {};
+        }
+      } else {
+        debugPrint(
+          '[ChatApiService] syncStatuses: unexpected response type ${rawData.runtimeType}',
+        );
+        return {};
+      }
+
+      debugPrint(
+        '[ChatApiService] syncStatuses: parsed ${rawList.length} status update(s)',
+      );
+
+      return {
+        for (final item in rawList)
+          if (item is Map &&
+              item['clientMessageId'] != null &&
+              item['status'] != null)
+            item['clientMessageId'].toString(): item['status'].toString(),
+      };
+    } catch (e, st) {
+      debugPrint('[ChatApiService] syncMessageStatuses failed: $e\n$st');
       return {};
     }
   }

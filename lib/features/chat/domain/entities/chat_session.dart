@@ -1,3 +1,5 @@
+import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
+
 class ChatSession {
   final String id;             // Room ID (MongoDB room _id). Empty = JIT pending.
   final String name;           // Other user's display name or group name
@@ -8,6 +10,7 @@ class ChatSession {
   final String avatarUrl;
   final String phoneNumber;
   final String lastMessageSenderId;
+  final MessageStatus lastMessageStatus;
 
   /// Carries the contact's MongoDB User _id during a JIT flow.
   /// This is set by ContactsScreen before navigating so the Cubit can call
@@ -24,6 +27,7 @@ class ChatSession {
     required this.avatarUrl,
     required this.phoneNumber,
     this.lastMessageSenderId = '',
+    this.lastMessageStatus = MessageStatus.pending,
     this.contactUserId = '',     // defaults to empty; only set for JIT contact flows
   });
 
@@ -40,6 +44,7 @@ class ChatSession {
     String? avatarUrl,
     String? phoneNumber,
     String? lastMessageSenderId,
+    MessageStatus? lastMessageStatus,
     String? contactUserId,
   }) {
     return ChatSession(
@@ -52,6 +57,7 @@ class ChatSession {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      lastMessageStatus: lastMessageStatus ?? this.lastMessageStatus,
       contactUserId: contactUserId ?? this.contactUserId,
     );
   }
@@ -91,10 +97,17 @@ class ChatSession {
     String lastMsgText = '';
     DateTime lastMsgTime = DateTime.now();
     String lastMsgSender = '';
+    MessageStatus lastMsgStatus = MessageStatus.pending;
     final lastMsg = json['lastMessage'];
     if (lastMsg is Map) {
       lastMsgText = lastMsg['content'] ?? '';
       lastMsgSender = lastMsg['senderId'] ?? '';
+      if (lastMsg['status'] != null) {
+        lastMsgStatus = MessageStatus.values.firstWhere(
+          (e) => e.name == lastMsg['status'],
+          orElse: () => MessageStatus.pending,
+        );
+      }
       lastMsgTime =
           DateTime.tryParse(
             lastMsg['createdAt'] ?? lastMsg['updatedAt'] ?? '',
@@ -118,6 +131,7 @@ class ChatSession {
       isOnline: otherIsOnline,
       phoneNumber: otherPhone,
       lastMessageSenderId: lastMsgSender,
+      lastMessageStatus: lastMsgStatus,
     );
   }
 
@@ -134,6 +148,7 @@ class ChatSession {
       'avatarUrl': avatarUrl,
       'phoneNumber': phoneNumber,
       'lastMessageSenderId': lastMessageSenderId,
+      'lastMessageStatus': lastMessageStatus.name,
     };
   }
 
@@ -148,6 +163,10 @@ class ChatSession {
       avatarUrl: map['avatarUrl'] ?? '',
       phoneNumber: map['phoneNumber'] ?? '',
       lastMessageSenderId: map['lastMessageSenderId'] ?? '',
+      lastMessageStatus: MessageStatus.values.firstWhere(
+        (e) => e.name == map['lastMessageStatus'],
+        orElse: () => MessageStatus.pending,
+      ),
     );
   }
 }
