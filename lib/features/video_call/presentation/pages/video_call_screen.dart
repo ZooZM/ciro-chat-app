@@ -65,6 +65,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   void _onRoomUpdate() {
     if (mounted) {
+      if (_room != null && _room!.remoteParticipants.isEmpty && !_isConnecting) {
+        _room?.disconnect();
+        Navigator.of(context).pop();
+        return;
+      }
       setState(() {});
     }
   }
@@ -97,9 +102,16 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     final localParticipant = _room!.localParticipant;
     final remoteParticipant = _room!.remoteParticipants.values.firstOrNull;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _room?.disconnect();
+        if (context.mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
         children: [
           // Background - Remote VideoTrack
           Positioned.fill(
@@ -143,9 +155,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       color: _isMicMuted ? Colors.red : Colors.white,
                     ),
                     onPressed: () async {
-                      final targetState = !_isMicMuted;
-                      await _room!.localParticipant?.setMicrophoneEnabled(!targetState);
-                      setState(() => _isMicMuted = targetState);
+                      try {
+                        final targetMuted = !_isMicMuted;
+                        await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                        setState(() => _isMicMuted = targetMuted);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to toggle microphone: $e')),
+                          );
+                        }
+                      }
                     },
                   ),
                   IconButton(
@@ -162,9 +182,34 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       color: _isCameraDisabled ? Colors.red : Colors.white,
                     ),
                     onPressed: () async {
-                      final targetState = !_isCameraDisabled;
-                      await _room!.localParticipant?.setCameraEnabled(!targetState);
-                      setState(() => _isCameraDisabled = targetState);
+                      try {
+                        final targetDisabled = !_isCameraDisabled;
+                        await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                        setState(() => _isCameraDisabled = targetDisabled);
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to toggle camera: $e')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
+                    onPressed: () async {
+                      try {
+                        final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                        if (track is LocalVideoTrack) {
+                          await track.restartTrack();
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to switch camera: $e')),
+                          );
+                        }
+                      }
                     },
                   ),
                 ],
@@ -173,7 +218,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
