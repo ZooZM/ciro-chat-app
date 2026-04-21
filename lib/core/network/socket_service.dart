@@ -22,10 +22,10 @@ class SocketService {
   void Function(String clientMessageId)? onMessageSent;
 
   /// Fired when RECIPIENT device received our message. sent → delivered (2 grey ticks)
-  void Function(String clientMessageId)? onMessageDelivered;
+  void Function(List<String> clientMessageIds)? onMessageDelivered;
 
   /// Fired when RECIPIENT read our message. delivered → read (2 blue ticks)
-  void Function(String clientMessageId)? onMessageRead;
+  void Function(List<String> clientMessageIds)? onMessageRead;
 
   /// Fired when WE receive a new message from another user.
   void Function(Map<String, dynamic> data)? onNewMessage;
@@ -112,18 +112,18 @@ class SocketService {
     // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
     _socket?.on('messageDelivered', (data) {
       debugPrint('[SocketService] Message delivered: $data');
-      final id =
+      final ids =
           (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (id != null) onMessageDelivered?.call(id.first);
+      if (ids != null) onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
     });
 
     // RECIPIENT read the message: delivered → read (2 blue ticks)
     _socket?.on('messageRead', (data) {
       debugPrint('[SocketService] Message read: $data');
 
-      final id =
+      final ids =
           (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (id != null) onMessageRead?.call(id.first);
+      if (ids != null) onMessageRead?.call(ids.map((e) => e.toString()).toList());
     });
 
     // Inbound message from another user.
@@ -181,19 +181,19 @@ class SocketService {
 
   /// Emits `markDelivered` so the SENDER's UI promotes to 2 grey ticks.
   /// Call this immediately when WE receive a message (recipient side).
-  void markDelivered({required String roomId, required String messageId}) {
+  void markDelivered({required String roomId, required List<String> messageIds}) {
     _socket?.emit('markDelivered', {
       'chatRoomId': roomId,
-      'clientMessageId': messageId,
+      'clientMessageIds': messageIds,
     });
   }
 
   /// Emits `markRead` so the SENDER's UI promotes to 2 blue ticks.
   /// Only call this when the user is ACTIVELY viewing the room.
-  void markRead({required String roomId, required String messageId}) {
+  void markRead({required String roomId, required List<String> messageIds}) {
     _socket?.emit('markRead', {
       'chatRoomId': roomId,
-      'clientMessageId': messageId,
+      'clientMessageIds': messageIds,
     });
   }
 

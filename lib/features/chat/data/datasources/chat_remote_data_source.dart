@@ -38,6 +38,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       if (data is Map<String, dynamic>) {
         final message = Message(
           id: data['id']?.toString() ?? '',
+          clientMessageId: data['clientMessageId']?.toString() ?? data['id']?.toString() ?? '',
           roomId: data['roomId']?.toString() ?? 'unknown',
           senderId: data['senderId']?.toString() ?? '',
           text: data['text']?.toString() ?? '',

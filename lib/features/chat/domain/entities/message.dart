@@ -4,6 +4,7 @@ enum MessageStatus { pending, sent, delivered, read, error }
 
 class Message extends Equatable {
   final String id;
+  final String clientMessageId;
   final String roomId;
   final String senderId;
   final String text;
@@ -12,6 +13,7 @@ class Message extends Equatable {
 
   const Message({
     required this.id,
+    required this.clientMessageId,
     required this.roomId,
     required this.senderId,
     required this.text,
@@ -21,6 +23,7 @@ class Message extends Equatable {
 
   Message copyWith({
     String? id,
+    String? clientMessageId,
     String? roomId,
     String? senderId,
     String? text,
@@ -29,6 +32,7 @@ class Message extends Equatable {
   }) {
     return Message(
       id: id ?? this.id,
+      clientMessageId: clientMessageId ?? this.clientMessageId,
       roomId: roomId ?? this.roomId,
       senderId: senderId ?? this.senderId,
       text: text ?? this.text,
@@ -40,6 +44,7 @@ class Message extends Equatable {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'client_message_id': clientMessageId,
       'room_id': roomId,
       'sender_id': senderId,
       'text': text,
@@ -51,6 +56,7 @@ class Message extends Equatable {
   factory Message.fromMap(Map<String, dynamic> map) {
     return Message(
       id: map['id'] ?? '',
+      clientMessageId: map['client_message_id'] ?? map['id'] ?? '',
       roomId: map['room_id'] ?? '',
       senderId: map['sender_id'] ?? '',
       text: map['text'] ?? '',
@@ -63,5 +69,5 @@ class Message extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, roomId, senderId, text, timestamp, status];
+  List<Object?> get props => [id, clientMessageId, roomId, senderId, text, timestamp, status];
 }

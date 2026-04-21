@@ -67,13 +67,17 @@ class ChatCubit extends Cubit<ChatState> {
     };
 
     // RECIPIENT received: sent → delivered (2 grey ticks)
-    _socketService.onMessageDelivered = (clientMessageId) {
-      handleMessageStatusUpdate(clientMessageId, MessageStatus.delivered);
+    _socketService.onMessageDelivered = (clientMessageIds) {
+      for (final id in clientMessageIds) {
+        handleMessageStatusUpdate(id, MessageStatus.delivered);
+      }
     };
 
     // RECIPIENT read: delivered → read (2 blue ticks)
-    _socketService.onMessageRead = (clientMessageId) {
-      handleMessageStatusUpdate(clientMessageId, MessageStatus.read);
+    _socketService.onMessageRead = (clientMessageIds) {
+      for (final id in clientMessageIds) {
+        handleMessageStatusUpdate(id, MessageStatus.read);
+      }
     };
 
     // Socket reconnected — trigger REST sync to catch missed events.
@@ -86,10 +90,12 @@ class ChatCubit extends Cubit<ChatState> {
 
     _socketService.onNewMessage = (data) async {
       // 1. FIX: ID Mismatch. Extract clientMessageId specifically so sender's SQLite UUID is retained
-      final clientMsgId = data['clientMessageId'] ?? data['_id'] ?? data['id'] ?? _uuid.v4();
+      final clientMsgId = data['clientMessageId'] ?? _uuid.v4();
+      final mongoId = data['_id'] ?? data['id'] ?? _uuid.v4();
 
       final incoming = Message(
-        id: clientMsgId,
+        id: mongoId,
+        clientMessageId: clientMsgId,
         roomId: data['chatRoomId'] ?? 'unknown',
         senderId: data['senderId'] ?? '',
         text: data['content'] ?? '',
@@ -106,7 +112,7 @@ class ChatCubit extends Cubit<ChatState> {
       // STEP 1: Always emit markDelivered — the sender's tick goes to 2 grey.
       _socketService.markDelivered(
         roomId: incoming.roomId,
-        messageId: incoming.id, // This is now properly the UUID
+        messageIds: [incoming.clientMessageId], // This is now explicitly the UUID
       );
 
       // STEP 2: Only emit markRead if user is ACTIVELY in this room right now.
@@ -114,7 +120,7 @@ class ChatCubit extends Cubit<ChatState> {
       if (isActiveRoom) {
         _socketService.markRead(
           roomId: incoming.roomId,
-          messageId: incoming.id,
+          messageIds: [incoming.clientMessageId],
         );
         // Promote our own local copy to read immediately for consistency.
         await _localDataSource.updateMessageStatus(incoming.id, MessageStatus.read);
@@ -172,14 +178,18 @@ class ChatCubit extends Cubit<ChatState> {
   /// immediately so the UI reflects truth before the server ACKs.
   Future<void> markRoomMessagesRead(String roomId) async {
     final messages = await _localDataSource.getRoomMessages(roomId);
+    final idsToMark = <String>[];
     for (final msg in messages) {
       // Only process messages sent BY OTHERS that we haven't marked read yet.
       if (msg.senderId != currentUserId && msg.status == MessageStatus.delivered) {
-        _socketService.markRead(roomId: roomId, messageId: msg.id);
+        idsToMark.add(msg.clientMessageId);
         await _localDataSource.updateMessageStatus(msg.id, MessageStatus.read);
       }
     }
-    debugPrint('[ChatCubit] Marked ${messages.length} messages as read in $roomId');
+    if (idsToMark.isNotEmpty) {
+      _socketService.markRead(roomId: roomId, messageIds: idsToMark);
+    }
+    debugPrint('[ChatCubit] Marked ${idsToMark.length} messages as read in $roomId');
   }
 
   /// Sends a local-first message.
@@ -242,6 +252,7 @@ class ChatCubit extends Cubit<ChatState> {
     final msgId = _uuid.v4();
     final newMsg = Message(
       id: msgId,
+      clientMessageId: msgId,
       roomId: roomId,
       senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
       text: text,
@@ -325,7 +336,7 @@ class ChatCubit extends Cubit<ChatState> {
         return;
       }
 
-      final ids = stuck.map((m) => m.id).toList();
+      final ids = stuck.map((m) => m.clientMessageId).toList();
       debugPrint('[ChatCubit] REST sync: checking ${ids.length} stuck message(s)');
 
       final statuses = await _chatApiService.syncMessageStatuses(ids);
@@ -341,7 +352,7 @@ class ChatCubit extends Cubit<ChatState> {
       };
 
       for (final msg in stuck) {
-        final serverStatusStr = statuses[msg.id];
+        final serverStatusStr = statuses[msg.clientMessageId];
         if (serverStatusStr == null) continue;
 
         final serverStatus = MessageStatus.values.firstWhere(
@@ -390,7 +401,7 @@ class ChatCubit extends Cubit<ChatState> {
 
       _socketService.sendMessage(
         roomId: msg.roomId,
-        messageId: msg.id,
+        messageId: msg.clientMessageId,
         text: msg.text,
         type: 'text',
       );
@@ -453,7 +464,7 @@ class ChatCubit extends Cubit<ChatState> {
       final currentRoomId = activeState.roomId;
       final currentMessages = activeState.messages;
       
-      final messageIndex = currentMessages.indexWhere((m) => m.id == clientMessageId);
+      final messageIndex = currentMessages.indexWhere((m) => m.clientMessageId == clientMessageId);
       
       if (messageIndex != -1) {
         final currentMessage = currentMessages[messageIndex];

@@ -59,11 +59,12 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 4, // Bumped: mapped contacts table directly
+      version: 5, // Bumped: mapped contacts table directly and added client_message_id
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages(
             id TEXT PRIMARY KEY,
+            client_message_id TEXT,
             room_id TEXT,
             sender_id TEXT,
             text TEXT,
@@ -104,6 +105,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         await db.execute('''
           CREATE TABLE messages(
             id TEXT PRIMARY KEY,
+            client_message_id TEXT,
             room_id TEXT,
             sender_id TEXT,
             text TEXT,
