@@ -12,6 +12,7 @@ import '../widgets/attachment_sheet_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../video_call/presentation/pages/outgoing_call_screen.dart';
+import '../../../video_call/presentation/pages/voice_call_screen.dart';
 import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -231,7 +232,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 color: AppColors.textSecondary,
                 size: 24.resW,
               ),
-              onPressed: () {},
+              onPressed: () {
+                final initials = widget.chatData.name.isNotEmpty 
+                    ? (widget.chatData.name.length >= 2 ? widget.chatData.name.substring(0, 2).toUpperCase() : widget.chatData.name[0].toUpperCase()) 
+                    : 'AK';
+                    
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => VoiceCallScreen(
+                      contactName: widget.chatData.name,
+                      avatarInitials: initials,
+                    ),
+                  ),
+                );
+              },
             ),
             IconButton(
               icon: Icon(
