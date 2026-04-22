@@ -243,6 +243,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     builder: (_) => VoiceCallScreen(
                       contactName: widget.chatData.name,
                       avatarInitials: initials,
+                      livekitUrl: '', // TODO: Integrate with CallCubit CallActive state
+                      livekitToken: '', // TODO: Integrate with CallCubit CallActive state
                     ),
                   ),
                 );

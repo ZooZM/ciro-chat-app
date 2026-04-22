@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:livekit_client/livekit_client.dart';
+import '../bloc/call_cubit.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String contactName;
@@ -23,6 +25,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isMicMuted = false;
   bool _isCameraDisabled = false;
   bool _hasRemoteParticipantJoined = false;
+  bool _isFrontCamera = true;
 
   @override
   void initState() {
@@ -130,7 +133,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         children: [
           // Background - Remote VideoTrack
           Positioned.fill(
-            child: _ParticipantVideoView(participant: remoteParticipant),
+            child: _ParticipantVideoView(
+              participant: remoteParticipant, 
+              name: widget.contactName,
+            ),
           ),
 
           // PiP - Local VideoTrack
@@ -146,7 +152,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 border: Border.all(color: Colors.white24),
               ),
               clipBehavior: Clip.antiAlias,
-              child: _ParticipantVideoView(participant: localParticipant, isLocal: true),
+              child: _ParticipantVideoView(
+                participant: localParticipant, 
+                isLocal: true,
+                name: 'Me',
+              ),
             ),
           ),
 
@@ -187,6 +197,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     icon: const Icon(Icons.call_end, color: Colors.white, size: 32),
                     style: IconButton.styleFrom(backgroundColor: Colors.red),
                     onPressed: () async {
+                      context.read<CallCubit>().endCall();
                       await _room?.disconnect();
                       if (context.mounted) Navigator.of(context).pop();
                     },
@@ -216,7 +227,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       try {
                         final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
                         if (track is LocalVideoTrack) {
-                          await track.restartTrack();
+                          _isFrontCamera = !_isFrontCamera;
+                          final options = CameraCaptureOptions(
+                            cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
+                          );
+                          await track.restartTrack(options);
+                          setState(() {});
                         }
                       } catch (e) {
                         if (mounted) {
@@ -240,8 +256,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 class _ParticipantVideoView extends StatelessWidget {
   final Participant? participant;
   final bool isLocal;
+  final String name;
 
-  const _ParticipantVideoView({this.participant, this.isLocal = false});
+  const _ParticipantVideoView({
+    this.participant, 
+    this.isLocal = false,
+    required this.name,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -262,13 +283,26 @@ class _ParticipantVideoView extends StatelessWidget {
         .map((pub) => pub.track as VideoTrack)
         .firstOrNull;
 
-    if (videoTrack != null) {
+    if (videoTrack != null && !videoTrack.muted) {
       return VideoTrackRenderer(videoTrack);
     }
 
     return Container(
       color: Colors.grey[900],
-      child: const Center(child: Icon(Icons.person, color: Colors.white24, size: 80)),
+      child: Center(
+        child: CircleAvatar(
+          radius: isLocal ? 40 : 80,
+          backgroundColor: Colors.purple.withOpacity(0.6),
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: TextStyle(
+              color: Colors.white, 
+              fontSize: isLocal ? 32 : 64,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
