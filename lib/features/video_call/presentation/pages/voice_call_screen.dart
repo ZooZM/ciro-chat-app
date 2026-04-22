@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -33,7 +34,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.livekitToken.trim().isEmpty || widget.livekitUrl.trim().isEmpty) {
+    if (widget.livekitToken.trim().isEmpty ||
+        widget.livekitUrl.trim().isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).pop();
       });
@@ -51,7 +53,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
       // Publish local audio immediately upon connecting
       await _room!.localParticipant?.setMicrophoneEnabled(true);
-      
+
       // Default to earpiece for voice calls if possible, but user might toggle to speaker
       _isSpeakerOn = Hardware.instance.speakerOn ?? false;
 
@@ -64,7 +66,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       if (mounted) {
         setState(() => _isConnecting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to connect: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed to connect: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -76,10 +81,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         _hasRemoteParticipantJoined = true;
       }
 
-      final isDisconnected = _room?.connectionState == ConnectionState.disconnected;
+      final isDisconnected =
+          _room?.connectionState == ConnectionState.disconnected;
 
       if (_room != null && !_isConnecting) {
-        if ((_room!.remoteParticipants.isEmpty && _hasRemoteParticipantJoined) || isDisconnected) {
+        if ((_room!.remoteParticipants.isEmpty &&
+                _hasRemoteParticipantJoined) ||
+            isDisconnected) {
           _room?.disconnect();
           if (Navigator.of(context).canPop()) {
             Navigator.of(context).pop();
@@ -104,7 +112,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       return const Scaffold(backgroundColor: Color(0xFF555555));
     }
 
-    final isConnected = !_isConnecting && _room != null && _hasRemoteParticipantJoined;
+    final isConnected =
+        !_isConnecting && _room != null && _hasRemoteParticipantJoined;
 
     return PopScope(
       canPop: false,
@@ -115,7 +124,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         if (context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF555555), // Dark grey background matching the image
+        backgroundColor: const Color(
+          0xFF555555,
+        ), // Dark grey background matching the image
         body: SafeArea(
           child: Column(
             children: [
@@ -146,56 +157,60 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
               SizedBox(height: 8.resH),
               // Calling Status
               Text(
-                _isConnecting 
-                    ? 'Connecting...' 
-                    : (!isConnected ? 'Ringing...' : 'Connected'), 
+                _isConnecting
+                    ? 'Connecting...'
+                    : (!isConnected ? 'Ringing...' : 'Connected'),
                 style: AppTypography.body1.copyWith(
                   color: Colors.grey[400],
                   fontSize: 16,
                 ),
               ),
-              
+
               const Spacer(flex: 4),
-              
+
               // ── Bottom Controls ──────────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Mute / Mic Toggle
                   _buildControlButton(
-                    _isMicMuted ? Icons.mic_off : Icons.mic, 
-                    _isMicMuted ? Colors.white : Colors.white24, 
+                    _isMicMuted ? Icons.mic_off : Icons.mic,
+                    _isMicMuted ? Colors.white : Colors.white24,
                     _isMicMuted ? Colors.red : Colors.white,
                     onPressed: () async {
                       try {
                         final targetMuted = !_isMicMuted;
-                        await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                        await _room!.localParticipant?.setMicrophoneEnabled(
+                          !targetMuted,
+                        );
                         setState(() => _isMicMuted = targetMuted);
                       } catch (e) {
                         debugPrint('Failed to toggle mic: $e');
                       }
-                    }
+                    },
                   ),
                   SizedBox(width: 32.resW),
                   // Speaker Toggle
                   _buildControlButton(
-                    _isSpeakerOn ? Icons.volume_up : Icons.volume_off, 
-                    _isSpeakerOn ? Colors.white : Colors.white24, 
+                    _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
+                    _isSpeakerOn ? Colors.white : Colors.white24,
                     _isSpeakerOn ? Colors.green : Colors.white,
                     onPressed: () async {
                       try {
                         final targetSpeaker = !_isSpeakerOn;
-                        await Hardware.instance.setSpeakerphoneOn(targetSpeaker);
+                        await Hardware.instance.setSpeakerphoneOn(
+                          targetSpeaker,
+                        );
                         setState(() => _isSpeakerOn = targetSpeaker);
                       } catch (e) {
                         debugPrint('Failed to toggle speaker: $e');
                       }
-                    }
+                    },
                   ),
                 ],
               ),
               SizedBox(height: 32.resH),
-              
+
               // ── End Call Button ──────────────────────────────────────────────
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40.resW),
@@ -206,7 +221,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) Navigator.of(context).pop();
+                      if (context.mounted) context.go('/home');
                     },
                     icon: const Icon(Icons.phone_missed, color: Colors.white),
                     label: const Text(
@@ -218,7 +233,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53935), // Exact red from design
+                      backgroundColor: const Color(
+                        0xFFE53935,
+                      ), // Exact red from design
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28.resR),
                       ),
@@ -235,16 +252,18 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     );
   }
 
-  Widget _buildControlButton(IconData icon, Color bgColor, Color iconColor, {VoidCallback? onPressed}) {
+  Widget _buildControlButton(
+    IconData icon,
+    Color bgColor,
+    Color iconColor, {
+    VoidCallback? onPressed,
+  }) {
     return GestureDetector(
       onTap: onPressed,
       child: Container(
         width: 60.resW,
         height: 60.resW,
-        decoration: BoxDecoration(
-          color: bgColor,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
         child: Center(
           child: Icon(icon, color: iconColor, size: 28.resW),
         ),
