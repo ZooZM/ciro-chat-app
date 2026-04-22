@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
@@ -15,6 +16,15 @@ abstract class ChatLocalDataSource {
     String roomPhoneNumber = '',
   });
   Future<void> updateMessageStatus(String messageId, MessageStatus status);
+
+  /// Updates the [fileUrl] and [metadata] of an already-saved message.
+  /// Called after a successful upload to replace the optimistic placeholder.
+  Future<void> updateMessageMedia(
+    String messageId,
+    String fileUrl,
+    Map<String, dynamic> metadata,
+  );
+
   Future<List<Message>> getRoomMessages(String roomId);
   Stream<List<Message>> watchRoomMessages(String roomId);
   Future<void> saveRoom(ChatSession room);
@@ -26,30 +36,89 @@ abstract class ChatLocalDataSource {
   Future<void> clearAllData();
 
   /// Returns all messages with [MessageStatus.pending], oldest-first.
-  /// Used by [ChatCubit.syncPendingMessages] to replay queued messages.
   Future<List<Message>> getPendingMessages();
 
   /// Returns all messages stuck in [pending] OR [sent] state, oldest-first.
-  /// Used by the REST status sync to reconcile statuses missed during offline periods.
   Future<List<Message>> getStuckMessages();
 
-  /// Returns the current [MessageStatus] of a single message by its ID,
-  /// or null if the message is not in the local database.
-  /// Used by [ChatCubit._promoteMessageStatus] to enforce the strict hierarchy guard.
+  /// Returns the current [MessageStatus] of a single message by its ID.
   Future<MessageStatus?> getMessageStatus(String messageId);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Returns a short, human-readable preview for the inbox "last message" row.
+String _mediaPreview(MessageType type) {
+  switch (type) {
+    case MessageType.image:
+      return '📷 Photo';
+    case MessageType.file:
+      return '📎 File';
+    case MessageType.voiceNote:
+      return '🎤 Voice note';
+    case MessageType.contact:
+      return '👤 Contact';
+    case MessageType.text:
+      return '';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 @LazySingleton(as: ChatLocalDataSource)
 class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Database? _db;
 
-  // Local stream controllers for reactive UI updates per room
   final Map<String, StreamController<List<Message>>> _roomStreamControllers =
       {};
   final StreamController<List<ChatSession>> _recentChatsController =
       StreamController<List<ChatSession>>.broadcast();
   final StreamController<List<ChatSession>> _contactsController =
       StreamController<List<ChatSession>>.broadcast();
+
+  // ── Schema helpers ──────────────────────────────────────────────────────────
+
+  static const _messagesSchema = '''
+    CREATE TABLE messages(
+      id                TEXT PRIMARY KEY,
+      client_message_id TEXT,
+      room_id           TEXT,
+      sender_id         TEXT,
+      text              TEXT,
+      timestamp         INTEGER,
+      status            TEXT,
+      type              TEXT DEFAULT 'text',
+      file_url          TEXT DEFAULT '',
+      metadata          TEXT DEFAULT ''
+    )
+  ''';
+
+  static const _roomsSchema = '''
+    CREATE TABLE rooms(
+      id                  TEXT PRIMARY KEY,
+      name                TEXT,
+      lastMessage         TEXT,
+      timestamp           TEXT,
+      unreadCount         INTEGER,
+      isOnline            INTEGER,
+      avatarUrl           TEXT,
+      phoneNumber         TEXT DEFAULT '',
+      lastMessageSenderId TEXT DEFAULT '',
+      lastMessageStatus   TEXT DEFAULT 'pending'
+    )
+  ''';
+
+  static const _contactsSchema = '''
+    CREATE TABLE contacts(
+      id          TEXT PRIMARY KEY,
+      name        TEXT,
+      phoneNumber TEXT,
+      avatarUrl   TEXT,
+      isOnline    INTEGER
+    )
+  ''';
+
+  // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
   Future<void> initDB() async {
@@ -59,87 +128,26 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 6, // Bumped: Added lastMessageStatus to rooms
+      // Version 7: adds type, file_url, metadata columns to messages table.
+      version: 7,
       onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE messages(
-            id TEXT PRIMARY KEY,
-            client_message_id TEXT,
-            room_id TEXT,
-            sender_id TEXT,
-            text TEXT,
-            timestamp INTEGER,
-            status TEXT
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE rooms(
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            lastMessage TEXT,
-            timestamp TEXT,
-            unreadCount INTEGER,
-            isOnline INTEGER,
-            avatarUrl TEXT,
-            phoneNumber TEXT DEFAULT '',
-            lastMessageSenderId TEXT DEFAULT '',
-            lastMessageStatus TEXT DEFAULT 'pending'
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE contacts(
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            phoneNumber TEXT,
-            avatarUrl TEXT,
-            isOnline INTEGER
-          )
-        ''');
+        await db.execute(_messagesSchema);
+        await db.execute(_roomsSchema);
+        await db.execute(_contactsSchema);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Strict development mode constraint — Drop completely mapping to clear migrations natively
+        // Development-mode strategy: drop & recreate for a clean slate.
         await db.execute('DROP TABLE IF EXISTS rooms');
         await db.execute('DROP TABLE IF EXISTS messages');
         await db.execute('DROP TABLE IF EXISTS contacts');
-
-        // Re-execute onCreate directly bridging logic
-        await db.execute('''
-          CREATE TABLE messages(
-            id TEXT PRIMARY KEY,
-            client_message_id TEXT,
-            room_id TEXT,
-            sender_id TEXT,
-            text TEXT,
-            timestamp INTEGER,
-            status TEXT
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE rooms(
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            lastMessage TEXT,
-            timestamp TEXT,
-            unreadCount INTEGER,
-            isOnline INTEGER,
-            avatarUrl TEXT,
-            phoneNumber TEXT DEFAULT '',
-            lastMessageSenderId TEXT DEFAULT '',
-            lastMessageStatus TEXT DEFAULT 'pending'
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE contacts(
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            phoneNumber TEXT,
-            avatarUrl TEXT,
-            isOnline INTEGER
-          )
-        ''');
+        await db.execute(_messagesSchema);
+        await db.execute(_roomsSchema);
+        await db.execute(_contactsSchema);
       },
     );
   }
+
+  // ── saveMessage ─────────────────────────────────────────────────────────────
 
   @override
   Future<void> saveMessage(
@@ -158,9 +166,12 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    // GHOST CHAT FIX: UPSERT the room row so that a brand-new room created
-    // JIT (just-in-time on first send) is always visible in the Inbox stream.
-    // COALESCE preserves the existing unreadCount if the row already exists.
+    // Determine a human-readable last-message preview for the inbox.
+    final lastMsgPreview = message.type == MessageType.text
+        ? message.text
+        : _mediaPreview(message.type);
+
+    // GHOST CHAT FIX: UPSERT the room row so JIT rooms appear immediately.
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms
@@ -180,25 +191,136 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       ''',
       [
         message.roomId, // id
-        message.roomId, roomName, // name  (keep existing or use provided)
+        message.roomId, roomName, // name
         message.roomId, roomAvatarUrl, // avatarUrl
         message.roomId, roomPhoneNumber, // phoneNumber
-        message.text, // lastMessage
+        lastMsgPreview, // lastMessage
         message.timestamp.toIso8601String(), // timestamp
-        message.roomId, incrementUnread ? 1 : 0, // unreadCount += 0 or 1
+        message.roomId, incrementUnread ? 1 : 0, // unreadCount
         message.roomId, // isOnline
         message.senderId, // lastMessageSenderId
         message.status.name, // lastMessageStatus
       ],
     );
 
-    // Push reactive updates to both the room stream and the inbox stream
     await _dispatchUpdateForRoom(message.roomId);
     await _dispatchRecentChatsUpdate();
   }
 
-  /// Returns all messages with status = 'pending', ordered oldest → newest.
-  /// Safe to call even when offline: no network involved.
+  // ── updateMessageMedia ──────────────────────────────────────────────────────
+
+  @override
+  Future<void> updateMessageMedia(
+    String messageId,
+    String fileUrl,
+    Map<String, dynamic> metadata,
+  ) async {
+    final db = _db;
+    if (db == null) throw Exception('Database not initialized');
+
+    final records = await db.query(
+      'messages',
+      columns: ['room_id'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+
+    await db.update(
+      'messages',
+      {
+        'file_url': fileUrl,
+        'metadata': jsonEncode(metadata),
+      },
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+
+    if (records.isNotEmpty) {
+      final roomId = records.first['room_id'] as String;
+      await _dispatchUpdateForRoom(roomId);
+      await _dispatchRecentChatsUpdate();
+    }
+  }
+
+  // ── updateMessageStatus ─────────────────────────────────────────────────────
+
+  @override
+  Future<void> updateMessageStatus(
+    String messageId,
+    MessageStatus status,
+  ) async {
+    final db = _db;
+    if (db == null) throw Exception('Database not initialized');
+
+    final records = await db.query(
+      'messages',
+      columns: ['room_id'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+
+    await db.update(
+      'messages',
+      {'status': status.name},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+
+    if (records.isNotEmpty) {
+      final roomId = records.first['room_id'] as String;
+      await db.update(
+        'rooms',
+        {'lastMessageStatus': status.name},
+        where: 'id = ?',
+        whereArgs: [roomId],
+      );
+      await _dispatchUpdateForRoom(roomId);
+      await _dispatchRecentChatsUpdate();
+    }
+  }
+
+  // ── getRoomMessages ─────────────────────────────────────────────────────────
+
+  @override
+  Future<List<Message>> getRoomMessages(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+      orderBy: 'timestamp DESC',
+      limit: 20,
+    );
+
+    return maps.map((e) => Message.fromMap(e)).toList().reversed.toList();
+  }
+
+  // ── watchRoomMessages ───────────────────────────────────────────────────────
+
+  @override
+  Stream<List<Message>> watchRoomMessages(String roomId) {
+    if (!_roomStreamControllers.containsKey(roomId)) {
+      _roomStreamControllers[roomId] =
+          StreamController<List<Message>>.broadcast();
+    }
+    getRoomMessages(roomId).then(
+      (msgs) => _roomStreamControllers[roomId]!.add(msgs),
+    );
+    return _roomStreamControllers[roomId]!.stream;
+  }
+
+  Future<void> _dispatchUpdateForRoom(String roomId) async {
+    if (_roomStreamControllers.containsKey(roomId)) {
+      final messages = await getRoomMessages(roomId);
+      _roomStreamControllers[roomId]!.add(messages);
+    }
+  }
+
+  // ── getPendingMessages ──────────────────────────────────────────────────────
+
   @override
   Future<List<Message>> getPendingMessages() async {
     final db = _db;
@@ -212,9 +334,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     return maps.map((e) => Message.fromMap(e)).toList();
   }
 
-  /// Returns messages in [pending] OR [sent] state, ordered oldest → newest.
-  /// These are messages whose socket delivery/read events may have been missed
-  /// while the app was offline and must be reconciled via the REST sync endpoint.
+  // ── getStuckMessages ────────────────────────────────────────────────────────
+
   @override
   Future<List<Message>> getStuckMessages() async {
     final db = _db;
@@ -228,8 +349,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     return maps.map((e) => Message.fromMap(e)).toList();
   }
 
-  /// Returns the current [MessageStatus] for [messageId], or null if not found.
-  /// Fetches only the status column to keep this lookup as cheap as possible.
+  // ── getMessageStatus ────────────────────────────────────────────────────────
+
   @override
   Future<MessageStatus?> getMessageStatus(String messageId) async {
     final db = _db;
@@ -250,90 +371,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     );
   }
 
-  @override
-  Future<void> updateMessageStatus(
-    String messageId,
-    MessageStatus status,
-  ) async {
-    final db = _db;
-    if (db == null) throw Exception('Database not initialized');
-
-    // We need to find the room id to notify the stream.
-    // Faster query:
-    final records = await db.query(
-      'messages',
-      columns: ['room_id'],
-      where: 'id = ?',
-      whereArgs: [messageId],
-    );
-
-    await db.update(
-      'messages',
-      {'status': status.name},
-      where: 'id = ?',
-      whereArgs: [messageId],
-    );
-
-    if (records.isNotEmpty) {
-      final roomId = records.first['room_id'] as String;
-
-      // Also update the room's lastMessageStatus so the inbox reflects it immediately
-      await db.update(
-        'rooms',
-        {'lastMessageStatus': status.name},
-        where: 'id = ?',
-        whereArgs: [roomId],
-      );
-
-      await _dispatchUpdateForRoom(roomId);
-      await _dispatchRecentChatsUpdate();
-    }
-  }
-
-  @override
-  Future<List<Message>> getRoomMessages(String roomId) async {
-    final db = _db;
-    if (db == null) return [];
-
-    final List<Map<String, dynamic>> maps = await db.query(
-      'messages',
-      where: 'room_id = ?',
-      whereArgs: [roomId],
-      orderBy: 'timestamp DESC', // Read newest messages
-      limit: 20, // Strict buffer constraint
-    );
-
-    // Reverse memory stack so chronological flow is restored for ListView bottom-gravity
-    return maps.map((e) => Message.fromMap(e)).toList().reversed.toList();
-  }
-
-  @override
-  Stream<List<Message>> watchRoomMessages(String roomId) {
-    if (!_roomStreamControllers.containsKey(roomId)) {
-      _roomStreamControllers[roomId] =
-          StreamController<List<Message>>.broadcast();
-    }
-    // Seed initial data
-    getRoomMessages(
-      roomId,
-    ).then((msgs) => _roomStreamControllers[roomId]!.add(msgs));
-
-    return _roomStreamControllers[roomId]!.stream;
-  }
-
-  Future<void> _dispatchUpdateForRoom(String roomId) async {
-    if (_roomStreamControllers.containsKey(roomId)) {
-      final messages = await getRoomMessages(roomId);
-      _roomStreamControllers[roomId]!.add(messages);
-    }
-  }
+  // ── saveRoom ────────────────────────────────────────────────────────────────
 
   @override
   Future<void> saveRoom(ChatSession room) async {
     final db = _db;
     if (db == null) return;
 
-    // Natively protect unreadCount preventing API calls from erasing unread badges
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus)
@@ -356,6 +400,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await _dispatchRecentChatsUpdate();
   }
 
+  // ── watchRecentChats ────────────────────────────────────────────────────────
+
   @override
   Stream<List<ChatSession>> watchRecentChats() {
     _dispatchRecentChatsUpdate();
@@ -366,10 +412,6 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final db = _db;
     if (db == null) return;
 
-    // LEFT JOIN: overlay contact name/avatar onto each room row.
-    // Priority: contacts.name > rooms.name > rooms.phoneNumber
-    // The join key is rooms.phoneNumber = contacts.phoneNumber, which is the
-    // canonical link between a stored room and a device contact.
     final maps = await db.rawQuery('''
       SELECT
         r.id,
@@ -388,32 +430,39 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       LIMIT 20
     ''');
 
-    final rooms = maps.map((e) => ChatSession(
-      id:                  e['id'] as String,
-      name:                (e['name'] as String?) ?? '',
-      lastMessage:         (e['lastMessage'] as String?) ?? '',
-      timestamp:           DateTime.tryParse(e['timestamp'] as String? ?? '') ?? DateTime.now(),
-      unreadCount:         (e['unreadCount'] as int?) ?? 0,
-      isOnline:            ((e['isOnline'] as int?) ?? 0) == 1,
-      avatarUrl:           (e['avatarUrl'] as String?) ?? '',
-      phoneNumber:         (e['phoneNumber'] as String?) ?? '',
-      lastMessageSenderId: (e['lastMessageSenderId'] as String?) ?? '',
-      lastMessageStatus:   MessageStatus.values.firstWhere(
-        (st) => st.name == e['lastMessageStatus'],
-        orElse: () => MessageStatus.pending,
-      ),
-    )).toList();
+    final rooms = maps
+        .map(
+          (e) => ChatSession(
+            id: e['id'] as String,
+            name: (e['name'] as String?) ?? '',
+            lastMessage: (e['lastMessage'] as String?) ?? '',
+            timestamp:
+                DateTime.tryParse(e['timestamp'] as String? ?? '') ??
+                DateTime.now(),
+            unreadCount: (e['unreadCount'] as int?) ?? 0,
+            isOnline: ((e['isOnline'] as int?) ?? 0) == 1,
+            avatarUrl: (e['avatarUrl'] as String?) ?? '',
+            phoneNumber: (e['phoneNumber'] as String?) ?? '',
+            lastMessageSenderId: (e['lastMessageSenderId'] as String?) ?? '',
+            lastMessageStatus: MessageStatus.values.firstWhere(
+              (st) => st.name == e['lastMessageStatus'],
+              orElse: () => MessageStatus.pending,
+            ),
+          ),
+        )
+        .toList();
 
     if (!_recentChatsController.isClosed) {
       _recentChatsController.add(rooms);
     }
   }
 
+  // ── watchContacts ───────────────────────────────────────────────────────────
+
   @override
   Stream<List<ChatSession>> watchContacts() async* {
     final db = _db;
     if (db != null) {
-      // Yield strictly synchronously blocking logic cleanly before joining streams natively!
       final maps = await db.query(
         'contacts',
         orderBy: 'name COLLATE NOCASE ASC',
@@ -425,29 +474,39 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     yield* _contactsController.stream;
   }
 
+  // ── upsertContacts ──────────────────────────────────────────────────────────
+
   @override
   Future<void> upsertContacts(List<ChatSession> contacts) async {
     final db = _db;
     if (db == null || contacts.isEmpty) return;
 
-    Batch batch = db.batch();
-    for (var contact in contacts) {
-      batch.insert('contacts', {
-        'id': contact.id,
-        'name': contact.name,
-        'phoneNumber': contact.phoneNumber,
-        'avatarUrl': contact.avatarUrl,
-        'isOnline': contact.isOnline ? 1 : 0,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    final batch = db.batch();
+    for (final contact in contacts) {
+      batch.insert(
+        'contacts',
+        {
+          'id': contact.id,
+          'name': contact.name,
+          'phoneNumber': contact.phoneNumber,
+          'avatarUrl': contact.avatarUrl,
+          'isOnline': contact.isOnline ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
     await batch.commit(noResult: true);
 
-    // Refresh memory cache instantly avoiding lag arrays
-    final maps = await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
+    final maps =
+        await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
     if (!_contactsController.isClosed) {
-      _contactsController.add(maps.map((e) => ChatSession.fromMap(e)).toList());
+      _contactsController.add(
+        maps.map((e) => ChatSession.fromMap(e)).toList(),
+      );
     }
   }
+
+  // ── resetUnreadCount ────────────────────────────────────────────────────────
 
   @override
   Future<void> resetUnreadCount(String roomId) async {
@@ -463,6 +522,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await _dispatchRecentChatsUpdate();
   }
 
+  // ── closeRoomStream ─────────────────────────────────────────────────────────
+
   @override
   void closeRoomStream(String roomId) {
     if (_roomStreamControllers.containsKey(roomId)) {
@@ -471,31 +532,26 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     }
   }
 
+  // ── clearAllData ────────────────────────────────────────────────────────────
+
   @override
   Future<void> clearAllData() async {
     final db = _db;
     if (db == null) return;
 
-    // 1. Physically nuke the tables
     await db.delete('messages');
     await db.delete('rooms');
     await db.delete('contacts');
 
-    // 2. Tear down reactive stream infra
     for (final controller in _roomStreamControllers.values) {
       if (!controller.isClosed) {
-        controller.add([]); // Push clean state
-        await controller.close(); // Sever listener
+        controller.add([]);
+        await controller.close();
       }
     }
     _roomStreamControllers.clear();
 
-    // 3. Flush the global inbox state
-    if (!_recentChatsController.isClosed) {
-      _recentChatsController.add([]);
-    }
-    if (!_contactsController.isClosed) {
-      _contactsController.add([]);
-    }
+    if (!_recentChatsController.isClosed) _recentChatsController.add([]);
+    if (!_contactsController.isClosed) _contactsController.add([]);
   }
 }

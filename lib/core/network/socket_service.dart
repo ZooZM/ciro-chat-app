@@ -166,14 +166,20 @@ class SocketService {
     required String messageId,
     required String text,
     required String type,
+    String? fileUrl,
+    Map<String, dynamic>? metadata,
   }) {
     if (_socket != null && _socket!.connected) {
-      _socket!.emit('sendMessage', {
+      final payload = <String, dynamic>{
         'chatRoomId': roomId,
         'clientMessageId': messageId,
         'content': text,
         'type': type,
-      });
+      };
+      if (fileUrl != null && fileUrl.isNotEmpty) payload['fileUrl'] = fileUrl;
+      if (metadata != null && metadata.isNotEmpty) payload['metadata'] = metadata;
+
+      _socket!.emit('sendMessage', payload);
     } else {
       debugPrint('Socket offline: Cannot send message instantly');
     }

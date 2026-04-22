@@ -73,7 +73,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void _sendMessage() {
     final text = _msgController.text.trim();
     if (text.isNotEmpty) {
-      context.read<ChatCubit>().sendLocalMessage(text);
+      context.read<ChatCubit>().sendLocalMessage(
+            MessageDraft(text: text),
+          );
       _msgController.clear();
       _scrollToBottom();
     }
