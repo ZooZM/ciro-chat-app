@@ -207,7 +207,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) context.go('/home  ');
+                      if (context.mounted) context.go('/home');
                     },
                   ),
                   IconButton(
