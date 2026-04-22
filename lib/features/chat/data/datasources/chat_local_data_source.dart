@@ -59,7 +59,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 5, // Bumped: mapped contacts table directly and added client_message_id
+      version: 6, // Bumped: Added lastMessageStatus to rooms
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE messages(
@@ -82,7 +82,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             isOnline INTEGER,
             avatarUrl TEXT,
             phoneNumber TEXT DEFAULT '',
-            lastMessageSenderId TEXT DEFAULT ''
+            lastMessageSenderId TEXT DEFAULT '',
+            lastMessageStatus TEXT DEFAULT 'pending'
           )
         ''');
         await db.execute('''
@@ -123,7 +124,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             isOnline INTEGER,
             avatarUrl TEXT,
             phoneNumber TEXT DEFAULT '',
-            lastMessageSenderId TEXT DEFAULT ''
+            lastMessageSenderId TEXT DEFAULT '',
+            lastMessageStatus TEXT DEFAULT 'pending'
           )
         ''');
         await db.execute('''
@@ -162,7 +164,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms
-        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId)
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus)
       VALUES (
         ?,
         COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
@@ -172,6 +174,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         ?,
         COALESCE((SELECT unreadCount   FROM rooms WHERE id = ?), 0) + ?,
         COALESCE((SELECT isOnline      FROM rooms WHERE id = ?), 0),
+        ?,
         ?
       )
       ''',
@@ -185,6 +188,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         message.roomId, incrementUnread ? 1 : 0, // unreadCount += 0 or 1
         message.roomId, // isOnline
         message.senderId, // lastMessageSenderId
+        message.status.name, // lastMessageStatus
       ],
     );
 
@@ -272,7 +276,17 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     if (records.isNotEmpty) {
       final roomId = records.first['room_id'] as String;
+
+      // Also update the room's lastMessageStatus so the inbox reflects it immediately
+      await db.update(
+        'rooms',
+        {'lastMessageStatus': status.name},
+        where: 'id = ?',
+        whereArgs: [roomId],
+      );
+
       await _dispatchUpdateForRoom(roomId);
+      await _dispatchRecentChatsUpdate();
     }
   }
 
@@ -322,8 +336,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     // Natively protect unreadCount preventing API calls from erasing unread badges
     await db.rawInsert(
       '''
-      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId)
-      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?)
+      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus)
+      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?)
     ''',
       [
         room.id,
@@ -335,6 +349,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         room.avatarUrl,
         room.phoneNumber,
         room.lastMessageSenderId,
+        room.lastMessageStatus.name,
       ],
     );
 
@@ -365,7 +380,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         r.isOnline,
         COALESCE(NULLIF(c.avatarUrl, ''), NULLIF(r.avatarUrl, '')) AS avatarUrl,
         r.phoneNumber,
-        r.lastMessageSenderId
+        r.lastMessageSenderId,
+        r.lastMessageStatus
       FROM rooms r
       LEFT JOIN contacts c ON c.phoneNumber = r.phoneNumber
       ORDER BY r.timestamp DESC
@@ -382,6 +398,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       avatarUrl:           (e['avatarUrl'] as String?) ?? '',
       phoneNumber:         (e['phoneNumber'] as String?) ?? '',
       lastMessageSenderId: (e['lastMessageSenderId'] as String?) ?? '',
+      lastMessageStatus:   MessageStatus.values.firstWhere(
+        (st) => st.name == e['lastMessageStatus'],
+        orElse: () => MessageStatus.pending,
+      ),
     )).toList();
 
     if (!_recentChatsController.isClosed) {

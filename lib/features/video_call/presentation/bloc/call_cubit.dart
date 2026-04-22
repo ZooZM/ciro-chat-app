@@ -129,7 +129,7 @@ class CallCubit extends Cubit<CallState> {
 
       emit(
         CallActive(
-          livekitToken: data['token'] as String? ?? '',
+          livekitToken: data['livekitToken'] as String? ?? '',
           livekitUrl: data['livekitUrl'] as String? ?? 'wss://ciro-chat-qc2pe2cz.livekit.cloud',
           contactName: contactName,
         ),
