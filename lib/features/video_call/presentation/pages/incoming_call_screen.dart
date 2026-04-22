@@ -260,6 +260,8 @@ class _AnimatedAcceptButton extends StatefulWidget {
 class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _animation;
+  double _dragOffset = 0.0;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -281,14 +283,36 @@ class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with Singl
     super.dispose();
   }
 
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _isDragging = true;
+      // Allow dragging upwards (negative offset)
+      _dragOffset += details.primaryDelta ?? 0;
+      if (_dragOffset > 0) _dragOffset = 0; // Prevent dragging downwards
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDragging = false;
+    });
+    
+    // If dragged up by more than 80 pixels or flicked upwards
+    if (_dragOffset < -80 || (details.primaryVelocity != null && details.primaryVelocity! < -300)) {
+      context.read<CallCubit>().acceptCall();
+    }
+    
+    // Snap back to original position
+    setState(() {
+      _dragOffset = 0.0;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onVerticalDragEnd: (details) {
-        if (details.primaryVelocity != null && details.primaryVelocity! < -100) {
-          context.read<CallCubit>().acceptCall();
-        }
-      },
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
       onTap: () {
         context.read<CallCubit>().acceptCall();
       },
@@ -297,8 +321,10 @@ class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with Singl
           AnimatedBuilder(
             animation: _animation,
             builder: (context, child) {
+              // Prioritize drag offset if user is interacting, else bounce
+              final currentOffset = _isDragging ? _dragOffset : _animation.value;
               return Transform.translate(
-                offset: Offset(0, _animation.value),
+                offset: Offset(0, currentOffset),
                 child: child,
               );
             },
@@ -318,7 +344,7 @@ class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with Singl
           ),
           SizedBox(height: 12.resH),
           const Text(
-            'Swap up to accept', // Updated to match user's screenshot
+            'Swap up to accept', // Matches user's screenshot
             style: TextStyle(color: Colors.white, fontSize: 13),
           ),
         ],
