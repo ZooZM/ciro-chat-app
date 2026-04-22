@@ -111,6 +111,7 @@ final GoRouter appRouter = GoRouter(
         final data = state.extra as Map<String, dynamic>? ?? {};
         return IncomingCallScreen(
           callerName: data['callerName'] as String? ?? 'Unknown',
+          callerId: data['callerId'] as String? ?? '',
           callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
           isVideo: data['isVideo'] == true,
         );

@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../bloc/call_cubit.dart';
 
 /// Shown on the receiving device when someone calls us.
 /// Displayed as a full-page route pushed by the global CallCubit listener.
 class IncomingCallScreen extends StatelessWidget {
   final String callerName;
+  final String callerId;
   final String callerAvatarUrl;
   final bool isVideo;
 
   const IncomingCallScreen({
     super.key,
     required this.callerName,
+    this.callerId = '',
     this.callerAvatarUrl = '',
     this.isVideo = true,
   });
@@ -53,116 +55,110 @@ class IncomingCallScreen extends StatelessWidget {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF1A1A2E),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ── Dark gradient background ──────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFF1A1A2E),
-                    AppColors.primary.withOpacity(0.15),
-                    const Color(0xFF1A1A2E),
+        backgroundColor: const Color(0xFF555555), // Solid dark grey background matching the mockup
+        body: SafeArea(
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
+              
+              // ── Avatar ──────────────────────────────────────────────────────
+              CircleAvatar(
+                radius: 75.resR,
+                backgroundColor: const Color(0xFF8E6FB1), // Muted purple from mockup
+                backgroundImage: callerAvatarUrl.isNotEmpty
+                    ? NetworkImage(callerAvatarUrl)
+                    : null,
+                child: callerAvatarUrl.isEmpty
+                    ? Text(
+                        callerName.isNotEmpty 
+                            ? (callerName.length >= 2 ? callerName.substring(0, 2).toUpperCase() : callerName[0].toUpperCase()) 
+                            : 'AK',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 54,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : null,
+              ),
+              SizedBox(height: 24.resH),
+              
+              // ── Caller Name ─────────────────────────────────────────────────
+              Text(
+                callerName,
+                style: AppTypography.headline3.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 26,
+                ),
+              ),
+              SizedBox(height: 8.resH),
+              
+              // ── Caller Number ───────────────────────────────────────────────
+              Text(
+                callerId, // Using callerId as the phone number
+                style: AppTypography.body1.copyWith(
+                  color: const Color(0xFFAAAAAA), // Light grey
+                  fontSize: 18,
+                ),
+              ),
+              
+              const Spacer(flex: 3),
+              
+              // ── Animated Swipe Chevrons ─────────────────────────────────────
+              const _AnimatedChevrons(),
+              
+              // ── Action Buttons Row ──────────────────────────────────────────
+              Padding(
+                padding: EdgeInsets.only(bottom: 40.resH, left: 30.resW, right: 30.resW),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Messaging Button
+                    _CallActionButton(
+                      icon: Icons.message,
+                      color: const Color(0xFF888888),
+                      label: 'Messaging',
+                      onTap: () {
+                        context.read<CallCubit>().rejectCall();
+                      },
+                    ),
+
+                    // Swipe up to Accept
+                    _AnimatedAcceptButton(isVideo: isVideo),
+
+                    // Reject Button
+                    _CallActionButton(
+                      icon: Icons.call_end,
+                      color: const Color(0xFFE53935), // Red
+                      label: 'Reject',
+                      onTap: () {
+                        context.read<CallCubit>().rejectCall();
+                      },
+                    ),
                   ],
                 ),
               ),
-            ),
-
-            // ── Ringing pulse animation around avatar ─────────────────────────
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 2),
-
-                  // Animated rings
-                  _PulseAvatar(avatarUrl: callerAvatarUrl, name: callerName),
-
-                  const SizedBox(height: 28),
-
-                  // Caller name
-                  Text(
-                    callerName,
-                    style: AppTypography.headline2.copyWith(
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Status
-                  Text(
-                    'جاري الاتصال...',
-                    style: AppTypography.body1.copyWith(color: Colors.white54),
-                  ),
-
-                  const Spacer(flex: 3),
-
-                  // ── Action buttons row ────────────────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 60,
-                      vertical: 48,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Decline
-                        _CallActionButton(
-                          icon: Icons.call_end,
-                          color: Colors.red,
-                          label: 'رفض',
-                          onTap: () {
-                            context.read<CallCubit>().rejectCall();
-                            // Removed manual Navigator.pop() because BlocListener handles it.
-                          },
-                        ),
-
-                        // Accept
-                        _CallActionButton(
-                          icon: isVideo ? Icons.videocam : Icons.phone,
-                          color: AppColors.primary,
-                          label: 'قبول',
-                          onTap: () {
-                            // Tap Accept: State goes to CallConnecting until server acknowledges.
-                            // The BlocListener directly above will intercept CallActive when ready.
-                            context.read<CallCubit>().acceptCall();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ── Pulsing avatar ─────────────────────────────────────────────────────────────
+// ── Animated Chevrons ────────────────────────────────────────────────────────
 
-class _PulseAvatar extends StatefulWidget {
-  final String avatarUrl;
-  final String name;
-
-  const _PulseAvatar({required this.avatarUrl, required this.name});
+class _AnimatedChevrons extends StatefulWidget {
+  const _AnimatedChevrons();
 
   @override
-  State<_PulseAvatar> createState() => _PulseAvatarState();
+  State<_AnimatedChevrons> createState() => _AnimatedChevronsState();
 }
 
-class _PulseAvatarState extends State<_PulseAvatar>
-    with SingleTickerProviderStateMixin {
+class _AnimatedChevronsState extends State<_AnimatedChevrons> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double> _pulse;
 
   @override
   void initState() {
@@ -170,11 +166,7 @@ class _PulseAvatarState extends State<_PulseAvatar>
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(
-      begin: 1.0,
-      end: 1.18,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    )..repeat();
   }
 
   @override
@@ -186,37 +178,29 @@ class _PulseAvatarState extends State<_PulseAvatar>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _pulse,
-      builder: (_, child) => Transform.scale(scale: _pulse.value, child: child),
-      child: Container(
-        width: 120,
-        height: 120,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.primary.withOpacity(0.25),
-          border: Border.all(
-            color: AppColors.primary.withOpacity(0.6),
-            width: 3,
-          ),
-        ),
-        child: CircleAvatar(
-          radius: 56,
-          backgroundColor: AppColors.primary,
-          backgroundImage: widget.avatarUrl.isNotEmpty
-              ? NetworkImage(widget.avatarUrl)
-              : null,
-          child: widget.avatarUrl.isEmpty
-              ? Text(
-                  widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 42,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : null,
-        ),
-      ),
+      animation: _ctrl,
+      builder: (context, child) {
+        return Column(
+          children: List.generate(4, (index) {
+            // Calculate a wave effect for each chevron
+            final double phase = (index * 0.2);
+            final double opacity = ((_ctrl.value - phase + 1.0) % 1.0);
+            
+            // Invert index so the top chevron is the faintest/oldest in the wave
+            return Opacity(
+              opacity: (1.0 - opacity).clamp(0.0, 1.0),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Icon(
+                  Icons.keyboard_arrow_up,
+                  color: Colors.white54,
+                  size: 28.resW,
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -239,32 +223,132 @@ class _CallActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 72,
-            height: 72,
+            width: 60.resW,
+            height: 60.resW,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.45),
-                  blurRadius: 18,
-                  spreadRadius: 2,
-                ),
-              ],
             ),
-            child: Icon(icon, color: Colors.white, size: 32),
+            child: Icon(icon, color: Colors.white, size: 28.resW),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12.resH),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
         ),
       ],
+    );
+  }
+}
+
+// ── Animated Accept Button ───────────────────────────────────────────────────
+
+class _AnimatedAcceptButton extends StatefulWidget {
+  final bool isVideo;
+  const _AnimatedAcceptButton({required this.isVideo});
+
+  @override
+  State<_AnimatedAcceptButton> createState() => _AnimatedAcceptButtonState();
+}
+
+class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _animation;
+  double _dragOffset = 0.0;
+  bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    
+    // A subtle bounce up and down
+    _animation = Tween<double>(begin: 0, end: -15).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _isDragging = true;
+      // Allow dragging upwards (negative offset)
+      _dragOffset += details.primaryDelta ?? 0;
+      if (_dragOffset > 0) _dragOffset = 0; // Prevent dragging downwards
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDragging = false;
+    });
+    
+    // If dragged up by more than 80 pixels or flicked upwards
+    if (_dragOffset < -80 || (details.primaryVelocity != null && details.primaryVelocity! < -300)) {
+      context.read<CallCubit>().acceptCall();
+    }
+    
+    // Snap back to original position
+    setState(() {
+      _dragOffset = 0.0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      onTap: () {
+        context.read<CallCubit>().acceptCall();
+      },
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              // Prioritize drag offset if user is interacting, else bounce
+              final currentOffset = _isDragging ? _dragOffset : _animation.value;
+              return Transform.translate(
+                offset: Offset(0, currentOffset),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 72.resW,
+              height: 72.resW,
+              decoration: const BoxDecoration(
+                color: Color(0xFF4CAF50), // Green
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                widget.isVideo ? Icons.videocam : Icons.phone, 
+                color: Colors.white, 
+                size: 36.resW,
+              ),
+            ),
+          ),
+          SizedBox(height: 12.resH),
+          const Text(
+            'Swap up to accept', // Matches user's screenshot
+            style: TextStyle(color: Colors.white, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 }

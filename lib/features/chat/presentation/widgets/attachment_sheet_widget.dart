@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../bloc/chat_cubit.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL
@@ -85,11 +89,86 @@ final List<AttachmentOptionModel> _attachmentOptions = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET
+// SHEET WIDGET
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AttachmentSheetWidget extends StatelessWidget {
   const AttachmentSheetWidget({Key? key}) : super(key: key);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  Future<void> _handleGallery(BuildContext context) async {
+    Navigator.pop(context);
+    await context.read<ChatCubit>().sendImageMessage(context);
+  }
+
+  Future<void> _handleDocument(BuildContext context) async {
+    Navigator.pop(context);
+    await context.read<ChatCubit>().sendFileMessage(context);
+  }
+
+  Future<void> _handleContact(BuildContext context) async {
+    Navigator.pop(context);
+
+    // Request contacts permission first.
+    final status = await Permission.contacts.request();
+    if (!status.isGranted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contacts permission denied')),
+        );
+      }
+      return;
+    }
+
+    // Fetch all contacts with phone numbers.
+    List<Contact> contacts;
+    try {
+      contacts = await FlutterContacts.getAll(
+        properties: {ContactProperty.phone, ContactProperty.name},
+      );
+      contacts = contacts.where((c) => c.phones.isNotEmpty).toList();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load contacts: $e')),
+        );
+      }
+      return;
+    }
+
+    if (contacts.isEmpty || !context.mounted) return;
+
+    // Show a simple list picker dialog.
+    final Contact? picked = await showDialog<Contact>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick a contact'),
+        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: contacts.length,
+            itemBuilder: (_, i) {
+              final c = contacts[i];
+              return ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person)),
+                title: Text(c.displayName ?? ''),
+                subtitle: Text(c.phones.first.number ?? ''),
+                onTap: () => Navigator.pop(ctx, c),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (picked == null || !context.mounted) return;
+    await context.read<ChatCubit>().sendContactMessage(picked);
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +177,7 @@ class AttachmentSheetWidget extends StatelessWidget {
         margin: EdgeInsets.only(
           left: 16.resW,
           right: 16.resW,
-          bottom: 16.resH, // Floats nicely above the text input
+          bottom: 16.resH,
         ),
         padding: EdgeInsets.only(
           top: 32.resH,
@@ -107,8 +186,8 @@ class AttachmentSheetWidget extends StatelessWidget {
           bottom: 24.resH,
         ),
         decoration: BoxDecoration(
-          color: Colors.white, // Pure white background
-          borderRadius: BorderRadius.circular(24.resR), // Rounded all corners
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24.resR),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -131,11 +210,32 @@ class AttachmentSheetWidget extends StatelessWidget {
           crossAxisSpacing: 0,
           childAspectRatio: 0.8,
           children: _attachmentOptions
-              .map((opt) => _AttachmentItem(option: opt))
+              .map((opt) => _AttachmentItem(
+                    option: opt,
+                    onTap: (context) => _routeTap(opt.label, context),
+                  ))
               .toList(),
         ),
       ),
     );
+  }
+
+  void _routeTap(String label, BuildContext context) {
+    switch (label) {
+      case 'Gallery':
+        _handleGallery(context);
+        break;
+      case 'Document':
+        _handleDocument(context);
+        break;
+      case 'Contact':
+        _handleContact(context);
+        break;
+      default:
+        // Not yet implemented options — close the sheet.
+        Navigator.pop(context);
+        debugPrint('[AttachmentSheet] $label tapped — not yet implemented');
+    }
   }
 }
 
@@ -145,20 +245,18 @@ class AttachmentSheetWidget extends StatelessWidget {
 
 class _AttachmentItem extends StatelessWidget {
   final AttachmentOptionModel option;
-  const _AttachmentItem({required this.option});
+  final void Function(BuildContext context) onTap;
+
+  const _AttachmentItem({required this.option, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        // TODO: wire up actual attachment feature
-        debugPrint('${option.label} tapped');
-        Navigator.pop(context); // Close the sheet on tap
-      },
+      onTap: () => onTap(context),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── White circle with light gray border + icon ──────────────────
+          // ── Icon circle ─────────────────────────────────────────────────────
           Container(
             width: 52.resW,
             height: 52.resW,
@@ -166,7 +264,7 @@ class _AttachmentItem extends StatelessWidget {
               color: Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.grey[300]!, // Thin light gray border
+                color: Colors.grey[300]!,
                 width: 1.5,
               ),
             ),
@@ -179,7 +277,7 @@ class _AttachmentItem extends StatelessWidget {
             ),
           ),
           SizedBox(height: 8.resH),
-          // ── Label ──────────────────────────────────────────────────────
+          // ── Label ───────────────────────────────────────────────────────────
           Text(
             option.label,
             textAlign: TextAlign.center,
