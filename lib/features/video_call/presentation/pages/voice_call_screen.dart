@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -27,8 +28,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Room? _room;
   bool _isConnecting = true;
   bool _isMicMuted = false;
-  bool _isSpeakerOn = false;
+  bool _isSpeakerOn = false; // Speaker is typically off for voice calls
   bool _hasRemoteParticipantJoined = false;
+  bool _isUpgrading = false;
 
   @override
   void initState() {
@@ -94,7 +96,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void dispose() {
     _room?.removeListener(_onRoomUpdate);
-    _room?.disconnect();
+    if (!_isUpgrading) {
+      _room?.disconnect();
+    }
     super.dispose();
   }
 
@@ -176,7 +180,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                       }
                     }
                   ),
-                  SizedBox(width: 32.resW),
+                  SizedBox(width: 24.resW),
                   // Speaker Toggle
                   _buildControlButton(
                     _isSpeakerOn ? Icons.volume_up : Icons.volume_off, 
@@ -189,6 +193,32 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                         setState(() => _isSpeakerOn = targetSpeaker);
                       } catch (e) {
                         debugPrint('Failed to toggle speaker: $e');
+                      }
+                    }
+                  ),
+                  SizedBox(width: 24.resW),
+                  // Video Upgrade
+                  _buildControlButton(
+                    Icons.videocam, 
+                    Colors.white24, 
+                    Colors.white,
+                    onPressed: () async {
+                      if (context.mounted) {
+                        setState(() => _isUpgrading = true);
+                        try {
+                          // Enable camera early for a seamless transition feel
+                          await _room?.localParticipant?.setCameraEnabled(true);
+                        } catch (e) {
+                          debugPrint('Failed to enable camera before upgrade: $e');
+                        }
+                        
+                        if (context.mounted) {
+                          context.pushReplacement('/video_call', extra: {
+                            'contactName': widget.contactName,
+                            'livekitUrl': widget.livekitUrl,
+                            'livekitToken': widget.livekitToken,
+                          });
+                        }
                       }
                     }
                   ),
@@ -206,7 +236,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) Navigator.of(context).pop();
+                      if (context.mounted) context.go('/home');
                     },
                     icon: const Icon(Icons.phone_missed, color: Colors.white),
                     label: const Text(
