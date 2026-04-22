@@ -111,105 +111,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
     final isConnected = !_isConnecting && _room != null && _hasRemoteParticipantJoined;
 
-    if (_isUpgrading) {
-      return PopScope(
-        canPop: false,
-        onPopInvoked: (didPop) async {
-          if (didPop) return;
-          context.read<CallCubit>().endCall();
-          await _room?.disconnect();
-          if (context.mounted) Navigator.of(context).pop();
-        },
-        child: Scaffold(
-          backgroundColor: Colors.black, // Dark background for video transition
-          body: SafeArea(
-            child: Column(
-              children: [
-                const Spacer(flex: 3),
-                // Avatar
-                CircleAvatar(
-                  radius: 65.resR,
-                  backgroundColor: const Color(0xFF8E6FB1), // Muted purple
-                  child: Text(
-                    widget.avatarInitials,
-                    style: AppTypography.headline1.copyWith(
-                      color: Colors.white,
-                      fontSize: 50,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 24.resH),
-                // Name
-                Text(
-                  widget.contactName,
-                  style: AppTypography.headline3.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 24,
-                  ),
-                ),
-                SizedBox(height: 8.resH),
-                // Calling Status
-                Text(
-                  'Switching to Video...',
-                  style: AppTypography.body1.copyWith(
-                    color: Colors.white,
-                    fontSize: 18,
-                  ),
-                ),
-                SizedBox(height: 8.resH),
-                Text(
-                  'Connecting camera...',
-                  style: AppTypography.body1.copyWith(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                  ),
-                ),
-                
-                const Spacer(flex: 4),
-                
-                SizedBox(height: 60.resW), // Placeholder for controls height
-                SizedBox(height: 32.resH),
-                
-                // ── End Call Button ──────────────────────────────────────────────
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 40.resW),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56.resH,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        context.read<CallCubit>().endCall();
-                        await _room?.disconnect();
-                        if (context.mounted) context.go('/home');
-                      },
-                      icon: const Icon(Icons.phone_missed, color: Colors.white),
-                      label: const Text(
-                        'End Call',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE53935), // Exact red from design
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28.resR),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 48.resH),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    // (Removed the black screen transition here as per user's request for inline button update)
 
     return PopScope(
       canPop: false,
@@ -299,45 +201,65 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                   ),
                   SizedBox(width: 24.resW),
                   // Video Upgrade
-                  _buildControlButton(
-                    Icons.videocam, 
-                    Colors.white24, 
-                    Colors.white,
-                    onPressed: () async {
-                      if (context.mounted) {
-                        final status = await Permission.camera.request();
-                        if (status.isGranted) {
-                          setState(() => _isUpgrading = true);
-                          try {
-                            // Enable camera early and add a delay for a seamless transition feel
-                            await Future.wait([
-                              _room?.localParticipant?.setCameraEnabled(true) ?? Future.value(),
-                              Future.delayed(const Duration(milliseconds: 1500)),
-                            ]);
-                          } catch (e) {
-                            debugPrint('Failed to enable camera before upgrade: $e');
-                          }
-                          
-                          if (context.mounted) {
-                            context.pushReplacement('/video_call', extra: {
-                              'contactName': widget.contactName,
-                              'livekitUrl': widget.livekitUrl,
-                              'livekitToken': widget.livekitToken,
-                            });
-                          }
-                        } else {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Camera permission is required to switch to video.'),
-                                backgroundColor: Colors.red,
+                  _isUpgrading
+                      ? Container(
+                          width: 60.resW,
+                          height: 60.resW,
+                          decoration: const BoxDecoration(
+                            color: Colors.green, // Primary color when activated
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
                               ),
-                            );
+                            ),
+                          ),
+                        )
+                      : _buildControlButton(
+                          Icons.videocam_off, // Starts as videocam_off
+                          Colors.white24, // Greyish background initially
+                          Colors.white,
+                          onPressed: () async {
+                            if (context.mounted) {
+                              final status = await Permission.camera.request();
+                              if (status.isGranted) {
+                                setState(() => _isUpgrading = true);
+                                try {
+                                  // Enable camera and simulate connection delay
+                                  await Future.wait([
+                                    _room?.localParticipant?.setCameraEnabled(true) ?? Future.value(),
+                                    Future.delayed(const Duration(seconds: 1)),
+                                  ]);
+                                } catch (e) {
+                                  debugPrint('Failed to enable camera before upgrade: $e');
+                                }
+                                
+                                if (context.mounted) {
+                                  // Navigate to VideoCallScreen
+                                  context.pushReplacement('/video_call', extra: {
+                                    'contactName': widget.contactName,
+                                    'livekitUrl': widget.livekitUrl,
+                                    'livekitToken': widget.livekitToken,
+                                  });
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Camera permission is required to switch to video.'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            }
                           }
-                        }
-                      }
-                    }
-                  ),
+                        ),
                 ],
               ),
               SizedBox(height: 32.resH),

@@ -126,40 +126,7 @@ class IncomingCallScreen extends StatelessWidget {
                     ),
 
                     // Swipe up to Accept
-                    GestureDetector(
-                      onVerticalDragEnd: (details) {
-                        // Negative velocity means swiping UP
-                        if (details.primaryVelocity != null && details.primaryVelocity! < -100) {
-                          context.read<CallCubit>().acceptCall();
-                        }
-                      },
-                      onTap: () {
-                        // Allow tapping to accept as a fallback
-                        context.read<CallCubit>().acceptCall();
-                      },
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 72.resW,
-                            height: 72.resW,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF4CAF50), // Green
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isVideo ? Icons.videocam : Icons.phone, 
-                              color: Colors.white, 
-                              size: 36.resW,
-                            ),
-                          ),
-                          SizedBox(height: 12.resH),
-                          const Text(
-                            'Swipe up to accept',
-                            style: TextStyle(color: Colors.white, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _AnimatedAcceptButton(isVideo: isVideo),
 
                     // Reject Button
                     _CallActionButton(
@@ -276,6 +243,86 @@ class _CallActionButton extends StatelessWidget {
           style: const TextStyle(color: Colors.white, fontSize: 13),
         ),
       ],
+    );
+  }
+}
+
+// ── Animated Accept Button ───────────────────────────────────────────────────
+
+class _AnimatedAcceptButton extends StatefulWidget {
+  final bool isVideo;
+  const _AnimatedAcceptButton({required this.isVideo});
+
+  @override
+  State<_AnimatedAcceptButton> createState() => _AnimatedAcceptButtonState();
+}
+
+class _AnimatedAcceptButtonState extends State<_AnimatedAcceptButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    
+    // A subtle bounce up and down
+    _animation = Tween<double>(begin: 0, end: -15).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onVerticalDragEnd: (details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! < -100) {
+          context.read<CallCubit>().acceptCall();
+        }
+      },
+      onTap: () {
+        context.read<CallCubit>().acceptCall();
+      },
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(0, _animation.value),
+                child: child,
+              );
+            },
+            child: Container(
+              width: 72.resW,
+              height: 72.resW,
+              decoration: const BoxDecoration(
+                color: Color(0xFF4CAF50), // Green
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                widget.isVideo ? Icons.videocam : Icons.phone, 
+                color: Colors.white, 
+                size: 36.resW,
+              ),
+            ),
+          ),
+          SizedBox(height: 12.resH),
+          const Text(
+            'Swap up to accept', // Updated to match user's screenshot
+            style: TextStyle(color: Colors.white, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 }
