@@ -101,7 +101,7 @@ class IncomingCallScreen extends StatelessWidget {
                           label: 'رفض',
                           onTap: () {
                             context.read<CallCubit>().rejectCall();
-                            Navigator.of(context).pop();
+                            // Removed manual Navigator.pop() because BlocListener handles it.
                           },
                         ),
 

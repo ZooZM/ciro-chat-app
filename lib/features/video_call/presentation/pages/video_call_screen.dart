@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:livekit_client/livekit_client.dart';
 
 class VideoCallScreen extends StatefulWidget {
@@ -22,6 +22,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isConnecting = true;
   bool _isMicMuted = false;
   bool _isCameraDisabled = false;
+  bool _hasRemoteParticipantJoined = false;
 
   @override
   void initState() {
@@ -65,10 +66,24 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   void _onRoomUpdate() {
     if (mounted) {
-      if (_room != null && _room!.remoteParticipants.isEmpty && !_isConnecting) {
-        _room?.disconnect();
-        Navigator.of(context).pop();
-        return;
+      // Track if they joined at least once
+      if (_room != null && _room!.remoteParticipants.isNotEmpty) {
+        _hasRemoteParticipantJoined = true;
+      }
+
+      final isDisconnected = _room?.connectionState == ConnectionState.disconnected;
+
+      if (_room != null && !_isConnecting) {
+        // Disconnect and pop ONLY if:
+        // 1. The remote participant was here and left (isEmpty + joined flag) OR
+        // 2. The entire room connection itself dropped.
+        if ((_room!.remoteParticipants.isEmpty && _hasRemoteParticipantJoined) || isDisconnected) {
+          _room?.disconnect();
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+          return;
+        }
       }
       setState(() {});
     }
