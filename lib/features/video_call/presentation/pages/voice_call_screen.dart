@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -204,20 +205,32 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     Colors.white,
                     onPressed: () async {
                       if (context.mounted) {
-                        setState(() => _isUpgrading = true);
-                        try {
-                          // Enable camera early for a seamless transition feel
-                          await _room?.localParticipant?.setCameraEnabled(true);
-                        } catch (e) {
-                          debugPrint('Failed to enable camera before upgrade: $e');
-                        }
-                        
-                        if (context.mounted) {
-                          context.pushReplacement('/video_call', extra: {
-                            'contactName': widget.contactName,
-                            'livekitUrl': widget.livekitUrl,
-                            'livekitToken': widget.livekitToken,
-                          });
+                        final status = await Permission.camera.request();
+                        if (status.isGranted) {
+                          setState(() => _isUpgrading = true);
+                          try {
+                            // Enable camera early for a seamless transition feel
+                            await _room?.localParticipant?.setCameraEnabled(true);
+                          } catch (e) {
+                            debugPrint('Failed to enable camera before upgrade: $e');
+                          }
+                          
+                          if (context.mounted) {
+                            context.pushReplacement('/video_call', extra: {
+                              'contactName': widget.contactName,
+                              'livekitUrl': widget.livekitUrl,
+                              'livekitToken': widget.livekitToken,
+                            });
+                          }
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Camera permission is required to switch to video.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         }
                       }
                     }

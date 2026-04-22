@@ -46,6 +46,7 @@ class MainApp extends StatelessWidget {
                 appRouter.pushReplacement('/incoming_call', extra: {
                   'callerName': state.callerName,
                   'callerAvatarUrl': state.callerAvatarUrl,
+                  'callerId': state.callerId,
                   'isVideo': state.isVideo,
                 });
               }

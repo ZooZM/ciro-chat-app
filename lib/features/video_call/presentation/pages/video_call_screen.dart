@@ -53,6 +53,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await _room!.localParticipant?.setCameraEnabled(true);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
 
+      // Video calls should always default to speakerphone
+      try {
+        await Hardware.instance.setSpeakerphoneOn(true);
+      } catch (e) {
+        debugPrint('Failed to set speakerphone: $e');
+      }
+
       if (mounted) {
         setState(() {
           _isConnecting = false;
