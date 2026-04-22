@@ -111,6 +111,106 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
     final isConnected = !_isConnecting && _room != null && _hasRemoteParticipantJoined;
 
+    if (_isUpgrading) {
+      return PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) async {
+          if (didPop) return;
+          context.read<CallCubit>().endCall();
+          await _room?.disconnect();
+          if (context.mounted) Navigator.of(context).pop();
+        },
+        child: Scaffold(
+          backgroundColor: Colors.black, // Dark background for video transition
+          body: SafeArea(
+            child: Column(
+              children: [
+                const Spacer(flex: 3),
+                // Avatar
+                CircleAvatar(
+                  radius: 65.resR,
+                  backgroundColor: const Color(0xFF8E6FB1), // Muted purple
+                  child: Text(
+                    widget.avatarInitials,
+                    style: AppTypography.headline1.copyWith(
+                      color: Colors.white,
+                      fontSize: 50,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 24.resH),
+                // Name
+                Text(
+                  widget.contactName,
+                  style: AppTypography.headline3.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 24,
+                  ),
+                ),
+                SizedBox(height: 8.resH),
+                // Calling Status
+                Text(
+                  'Switching to Video...',
+                  style: AppTypography.body1.copyWith(
+                    color: Colors.white,
+                    fontSize: 18,
+                  ),
+                ),
+                SizedBox(height: 8.resH),
+                Text(
+                  'Connecting camera...',
+                  style: AppTypography.body1.copyWith(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                ),
+                
+                const Spacer(flex: 4),
+                
+                SizedBox(height: 60.resW), // Placeholder for controls height
+                SizedBox(height: 32.resH),
+                
+                // ── End Call Button ──────────────────────────────────────────────
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 40.resW),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 56.resH,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        context.read<CallCubit>().endCall();
+                        await _room?.disconnect();
+                        if (context.mounted) context.go('/home');
+                      },
+                      icon: const Icon(Icons.phone_missed, color: Colors.white),
+                      label: const Text(
+                        'End Call',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE53935), // Exact red from design
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28.resR),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 48.resH),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -209,8 +309,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                         if (status.isGranted) {
                           setState(() => _isUpgrading = true);
                           try {
-                            // Enable camera early for a seamless transition feel
-                            await _room?.localParticipant?.setCameraEnabled(true);
+                            // Enable camera early and add a delay for a seamless transition feel
+                            await Future.wait([
+                              _room?.localParticipant?.setCameraEnabled(true) ?? Future.value(),
+                              Future.delayed(const Duration(milliseconds: 1500)),
+                            ]);
                           } catch (e) {
                             debugPrint('Failed to enable camera before upgrade: $e');
                           }
