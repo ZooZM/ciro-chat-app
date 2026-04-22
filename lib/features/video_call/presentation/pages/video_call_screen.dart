@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:livekit_client/livekit_client.dart';
 import '../bloc/call_cubit.dart';
@@ -199,7 +200,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) Navigator.of(context).pop();
+                      if (context.mounted) context.go('/home');
                     },
                   ),
                   IconButton(

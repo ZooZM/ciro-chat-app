@@ -24,15 +24,17 @@ class CallOutgoing extends CallState {
   final String targetUserId;
   final String targetName;
   final String targetAvatarUrl;
+  final bool isVideo;
 
   const CallOutgoing({
     required this.targetUserId,
     required this.targetName,
     this.targetAvatarUrl = '',
+    this.isVideo = true,
   });
 
   @override
-  List<Object?> get props => [targetUserId];
+  List<Object?> get props => [targetUserId, isVideo];
 }
 
 /// The remote is calling us — show IncomingCallScreen
@@ -40,15 +42,17 @@ class CallIncoming extends CallState {
   final String callerId;
   final String callerName;
   final String callerAvatarUrl;
+  final bool isVideo;
 
   const CallIncoming({
     required this.callerId,
     required this.callerName,
     this.callerAvatarUrl = '',
+    this.isVideo = true,
   });
 
   @override
-  List<Object?> get props => [callerId];
+  List<Object?> get props => [callerId, isVideo];
 }
 
 /// Both sides accepted – join the video room
@@ -56,20 +60,31 @@ class CallActive extends CallState {
   final String livekitToken;
   final String livekitUrl;
   final String contactName;
+  final bool isVideo;
 
-  const CallActive({required this.livekitToken, required this.livekitUrl, required this.contactName});
+  const CallActive({
+    required this.livekitToken, 
+    required this.livekitUrl, 
+    required this.contactName,
+    this.isVideo = true,
+  });
 
   @override
-  List<Object?> get props => [livekitToken, livekitUrl];
+  List<Object?> get props => [livekitToken, livekitUrl, isVideo];
 }
 
 /// Receiver accepts the call and waits for token authorization
 class CallConnecting extends CallState {
   final String contactName;
-  const CallConnecting({required this.contactName});
+  final bool isVideo;
+
+  const CallConnecting({
+    required this.contactName,
+    this.isVideo = true,
+  });
 
   @override
-  List<Object?> get props => [contactName];
+  List<Object?> get props => [contactName, isVideo];
 }
 
 /// Call ended or rejected
@@ -106,6 +121,7 @@ class CallCubit extends Cubit<CallState> {
           callerId: data['callerId'] as String? ?? '',
           callerName: data['callerName'] as String? ?? 'Unknown',
           callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
+          isVideo: data['isVideo'] == true, // Rely on backend, fallback to false if omitted
         ),
       );
 
@@ -119,12 +135,17 @@ class CallCubit extends Cubit<CallState> {
       final currentState = state;
       String contactName = 'Unknown';
       
+      bool isVideo = true;
+      
       if (currentState is CallOutgoing) {
         contactName = currentState.targetName;
+        isVideo = currentState.isVideo;
       } else if (currentState is CallConnecting) {
         contactName = currentState.contactName;
+        isVideo = currentState.isVideo;
       } else if (currentState is CallIncoming) {
         contactName = currentState.callerName;
+        isVideo = currentState.isVideo;
       }
 
       emit(
@@ -132,6 +153,7 @@ class CallCubit extends Cubit<CallState> {
           livekitToken: data['livekitToken'] as String? ?? '',
           livekitUrl: data['livekitUrl'] as String? ?? 'wss://ciro-chat-qc2pe2cz.livekit.cloud',
           contactName: contactName,
+          isVideo: isVideo,
         ),
       );
     };
@@ -150,13 +172,15 @@ class CallCubit extends Cubit<CallState> {
     required String targetUserId,
     required String targetName,
     String targetAvatarUrl = '',
+    bool isVideo = true,
   }) async {
-    _socketService.requestCall(targetUserId: targetUserId, isVideo: true);
+    _socketService.requestCall(targetUserId: targetUserId, isVideo: isVideo);
     emit(
       CallOutgoing(
         targetUserId: targetUserId,
         targetName: targetName,
         targetAvatarUrl: targetAvatarUrl,
+        isVideo: isVideo,
       ),
     );
 
@@ -177,7 +201,7 @@ class CallCubit extends Cubit<CallState> {
     _socketService.acceptCall(callerId: s.callerId);
 
     // Transition to connecting state until server broadcasts callAccepted with tokens
-    emit(CallConnecting(contactName: s.callerName));
+    emit(CallConnecting(contactName: s.callerName, isVideo: s.isVideo));
   }
 
   /// Receiver taps Decline → emits rejectCall

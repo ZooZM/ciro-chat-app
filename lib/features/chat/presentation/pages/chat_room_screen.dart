@@ -233,20 +233,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 size: 24.resW,
               ),
               onPressed: () {
-                final initials = widget.chatData.name.isNotEmpty 
-                    ? (widget.chatData.name.length >= 2 ? widget.chatData.name.substring(0, 2).toUpperCase() : widget.chatData.name[0].toUpperCase()) 
-                    : 'AK';
-                    
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => VoiceCallScreen(
-                      contactName: widget.chatData.name,
-                      avatarInitials: initials,
-                      livekitUrl: '', // TODO: Integrate with CallCubit CallActive state
-                      livekitToken: '', // TODO: Integrate with CallCubit CallActive state
-                    ),
-                  ),
+                context.read<CallCubit>().initiateCall(
+                  targetUserId: widget.chatData.phoneNumber,
+                  targetName: widget.chatData.name,
+                  targetAvatarUrl: widget.chatData.avatarUrl,
+                  isVideo: false,
                 );
               },
             ),

@@ -19,12 +19,24 @@ class OutgoingCallScreen extends StatelessWidget {
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
         if (state is CallActive) {
-          // Replace outgoing ringing screen strictly with actual video call
-          context.pushReplacement('/video_call', extra: {
-            'contactName': state.contactName,
-            'livekitUrl': state.livekitUrl,
-            'livekitToken': state.livekitToken,
-          });
+          final initials = state.contactName.isNotEmpty 
+              ? (state.contactName.length >= 2 ? state.contactName.substring(0, 2).toUpperCase() : state.contactName[0].toUpperCase()) 
+              : 'AK';
+              
+          if (state.isVideo) {
+            context.pushReplacement('/video_call', extra: {
+              'contactName': state.contactName,
+              'livekitUrl': state.livekitUrl,
+              'livekitToken': state.livekitToken,
+            });
+          } else {
+            context.pushReplacement('/voice_call', extra: {
+              'contactName': state.contactName,
+              'avatarInitials': initials,
+              'livekitUrl': state.livekitUrl,
+              'livekitToken': state.livekitToken,
+            });
+          }
         } else if (state is CallEnded || state is CallIdle) {
           if (state is CallEnded && state.reason == 'rejected') {
             ScaffoldMessenger.of(context).showSnackBar(

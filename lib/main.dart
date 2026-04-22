@@ -43,9 +43,10 @@ class MainApp extends StatelessWidget {
             listenWhen: (_, curr) => curr is CallIncoming,
             listener: (context, state) {
               if (state is CallIncoming) {
-                appRouter.push('/incoming_call', extra: {
+                appRouter.pushReplacement('/incoming_call', extra: {
                   'callerName': state.callerName,
                   'callerAvatarUrl': state.callerAvatarUrl,
+                  'isVideo': state.isVideo,
                 });
               }
             },

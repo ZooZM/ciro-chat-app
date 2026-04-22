@@ -10,11 +10,13 @@ import '../bloc/call_cubit.dart';
 class IncomingCallScreen extends StatelessWidget {
   final String callerName;
   final String callerAvatarUrl;
+  final bool isVideo;
 
   const IncomingCallScreen({
     super.key,
     required this.callerName,
     this.callerAvatarUrl = '',
+    this.isVideo = true,
   });
 
   @override
@@ -22,14 +24,30 @@ class IncomingCallScreen extends StatelessWidget {
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
         if (state is CallActive) {
-          context.pushReplacement(
-            '/video_call',
-            extra: {
-              'contactName': state.contactName,
-              'livekitUrl': state.livekitUrl,
-              'livekitToken': state.livekitToken,
-            },
-          );
+          final initials = state.contactName.isNotEmpty 
+              ? (state.contactName.length >= 2 ? state.contactName.substring(0, 2).toUpperCase() : state.contactName[0].toUpperCase()) 
+              : 'AK';
+              
+          if (state.isVideo) {
+            context.pushReplacement(
+              '/video_call',
+              extra: {
+                'contactName': state.contactName,
+                'livekitUrl': state.livekitUrl,
+                'livekitToken': state.livekitToken,
+              },
+            );
+          } else {
+            context.pushReplacement(
+              '/voice_call',
+              extra: {
+                'contactName': state.contactName,
+                'avatarInitials': initials,
+                'livekitUrl': state.livekitUrl,
+                'livekitToken': state.livekitToken,
+              },
+            );
+          }
         } else if (state is CallEnded || state is CallIdle) {
           Navigator.pop(context); // Fallback pop if completely dismissed
         }
@@ -107,7 +125,7 @@ class IncomingCallScreen extends StatelessWidget {
 
                         // Accept
                         _CallActionButton(
-                          icon: Icons.videocam,
+                          icon: isVideo ? Icons.videocam : Icons.phone,
                           color: AppColors.primary,
                           label: 'قبول',
                           onTap: () {
