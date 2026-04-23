@@ -6,10 +6,37 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+int getCountryMaxLength(String countryCode) {
+  switch (countryCode.toUpperCase()) {
+    case 'EG': return 10;
+    case 'US': return 10;
+    case 'SA': return 9;
+    case 'AE': return 9;
+    case 'GB': return 10; // UK
+    case 'FR': return 9;
+    case 'DE': return 10;
+    case 'IN': return 10;
+    case 'PK': return 10;
+    case 'BD': return 10;
+    case 'NG': return 10;
+    case 'PH': return 10;
+    case 'ID': return 10;
+    default: return 10;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PHONE NUMBER FORMATTER  ── formats digits as '### ### ###' while typing
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PhoneNumberFormatter extends TextInputFormatter {
+  final int maxLength;
+
+  _PhoneNumberFormatter(this.maxLength);
+
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
@@ -17,18 +44,53 @@ class _PhoneNumberFormatter extends TextInputFormatter {
   ) {
     // Strip everything except digits
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    
+    // Truncate to max length
+    final truncatedDigits = digits.length > maxLength 
+        ? digits.substring(0, maxLength) 
+        : digits;
 
-    // Apply the '### ### ###' mask (max 10 digits to match maxLength)
+    // Apply the '### ### ###' mask
     final buffer = StringBuffer();
-    for (int i = 0; i < digits.length && i < 10; i++) {
-      if (i == 3 || i == 6) buffer.write(' ');
-      buffer.write(digits[i]);
+    for (int i = 0; i < truncatedDigits.length; i++) {
+      if (i > 0 && i % 3 == 0) buffer.write(' ');
+      buffer.write(truncatedDigits[i]);
     }
 
     final formatted = buffer.toString();
+
+    // Calculate new cursor offset to prevent jumping to the end
+    int cursorIndex = newValue.selection.end;
+    if (cursorIndex > newValue.text.length) cursorIndex = newValue.text.length;
+    if (cursorIndex < 0) cursorIndex = 0;
+
+    int digitsBeforeCursor = 0;
+    for (int i = 0; i < cursorIndex; i++) {
+      if (RegExp(r'\d').hasMatch(newValue.text[i])) {
+        digitsBeforeCursor++;
+      }
+    }
+
+    if (digitsBeforeCursor > maxLength) {
+      digitsBeforeCursor = maxLength;
+    }
+
+    int newCursorIndex = 0;
+    int digitsCount = 0;
+    for (int i = 0; i < formatted.length; i++) {
+      if (digitsCount == digitsBeforeCursor) {
+        newCursorIndex = i;
+        break;
+      }
+      if (RegExp(r'\d').hasMatch(formatted[i])) {
+        digitsCount++;
+      }
+      newCursorIndex = i + 1;
+    }
+
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
+      selection: TextSelection.collapsed(offset: newCursorIndex),
     );
   }
 }
@@ -228,7 +290,7 @@ class _CiroCountrySheetState extends State<_CiroCountrySheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class CiroPhoneField extends StatefulWidget {
-  final void Function(String fullNumber) onChanged;
+  final void Function(String fullNumber, bool isValid) onChanged;
   final String? Function(String?)? validator;
   final Country? initialCountry;
 
@@ -245,6 +307,7 @@ class CiroPhoneField extends StatefulWidget {
 
 class _CiroPhoneFieldState extends State<CiroPhoneField> {
   late Country _country;
+  late int _maxLength;
   final _ctrl = TextEditingController();
 
   static Country get _defaultCountry =>
@@ -254,13 +317,39 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
   void initState() {
     super.initState();
     _country = widget.initialCountry ?? _defaultCountry;
+    _maxLength = getCountryMaxLength(_country.countryCode);
     _ctrl.addListener(_notify);
   }
 
   void _notify() {
-    // Strip spaces before sending to backend — e.g. '123 456 890' → '1234567890'
-    final clean = _ctrl.text.replaceAll(' ', '');
-    widget.onChanged('+${_country.phoneCode}$clean');
+    final digits = _ctrl.text.replaceAll(RegExp(r'\D'), '');
+    final isValid = digits.length == _maxLength;
+    widget.onChanged('+${_country.phoneCode}$digits', isValid);
+  }
+
+  void _onCountrySelected(Country newCountry) {
+    setState(() {
+      _country = newCountry;
+      _maxLength = getCountryMaxLength(newCountry.countryCode);
+      
+      // Truncate existing text if it exceeds the new country's limit
+      final digits = _ctrl.text.replaceAll(RegExp(r'\D'), '');
+      if (digits.length > _maxLength) {
+        final truncatedDigits = digits.substring(0, _maxLength);
+        
+        final buffer = StringBuffer();
+        for (int i = 0; i < truncatedDigits.length; i++) {
+          if (i > 0 && i % 3 == 0) buffer.write(' ');
+          buffer.write(truncatedDigits[i]);
+        }
+        
+        _ctrl.text = buffer.toString();
+        // Move cursor to the end
+        _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+      }
+    });
+    // Let the listener handle validation update
+    _notify();
   }
 
   @override
@@ -271,53 +360,52 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
     super.dispose();
   }
 
-  // Shared between button and field for visual consistency
   static const _radius = BorderRadius.all(Radius.circular(30));
   static const _borderSide = BorderSide(color: AppColors.primary, width: 1.6);
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start, // align to top so counter sits below field
+      crossAxisAlignment: CrossAxisAlignment.start, // align to top so counter sits below field
       children: [
         // ── Country Code Button ─────────────────────────────────────────────
-        GestureDetector(
-          onTap: () => showCiroCountryPicker(
-            context: context,
-            selected: _country,
-            onSelect: (c) => setState(() {
-              _country = c;
-              _notify();
-            }),
-          ),
-          child: Container(
-            height: 52.resH,
-            padding: EdgeInsets.symmetric(horizontal: 12.resW),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: _radius,
-              border: Border.all(color: AppColors.primary, width: 1.6),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => showCiroCountryPicker(
+              context: context,
+              selected: _country,
+              onSelect: _onCountrySelected,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_country.flagEmoji, style: TextStyle(fontSize: 22.resSp)),
-                SizedBox(width: 6.resW),
-                Text(
-                  '+${_country.phoneCode}',
-                  style: AppTypography.body1.copyWith(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
+            borderRadius: _radius,
+            child: Ink(
+              height: 52.resH,
+              padding: EdgeInsets.symmetric(horizontal: 12.resW),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: _radius,
+                border: Border.all(color: AppColors.primary, width: 1.6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_country.flagEmoji, style: TextStyle(fontSize: 22.resSp)),
+                  SizedBox(width: 6.resW),
+                  Text(
+                    '+${_country.phoneCode}',
+                    style: AppTypography.body1.copyWith(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                SizedBox(width: 4.resW),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  color: Colors.black54,
-                  size: 20,
-                ),
-              ],
+                  SizedBox(width: 4.resW),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Colors.black54,
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -328,27 +416,28 @@ class _CiroPhoneFieldState extends State<CiroPhoneField> {
         Expanded(
           child: TextFormField(
             controller: _ctrl,
+            autofocus: true,
             keyboardType: TextInputType.number,
-            inputFormatters: [_PhoneNumberFormatter()],
+            textInputAction: TextInputAction.done,
+            inputFormatters: [_PhoneNumberFormatter(_maxLength)],
             // Custom counter: counts only digits, ignores the inserted spaces
-            buildCounter:
-                (
-                  context, {
-                  required currentLength,
-                  required isFocused,
-                  maxLength,
-                }) {
-                  final digitCount = _ctrl.text.replaceAll(' ', '').length;
-                  return Text(
-                    '$digitCount / 10',
-                    style: AppTypography.caption.copyWith(
-                      color: digitCount == 10
-                          ? AppColors.primary
-                          : AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  );
-                },
+            buildCounter: (
+              context, {
+              required currentLength,
+              required isFocused,
+              maxLength,
+            }) {
+              final digitCount = _ctrl.text.replaceAll(RegExp(r'\D'), '').length;
+              return Text(
+                '$digitCount / $_maxLength',
+                style: AppTypography.caption.copyWith(
+                  color: digitCount == _maxLength
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                  fontSize: 11,
+                ),
+              );
+            },
             style: AppTypography.body1.copyWith(color: Colors.black87),
             cursorColor: AppColors.primary,
             validator: widget.validator,

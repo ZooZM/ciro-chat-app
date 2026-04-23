@@ -21,6 +21,7 @@ class MobileNumberScreen extends StatefulWidget {
 class _MobileNumberScreenState extends State<MobileNumberScreen>
     with PermissionHandlerMixin {
   String _phoneNumber = '';
+  bool _isValid = false;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -33,13 +34,7 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
   }
 
   void _onSendCode() {
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_phoneNumber.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid phone number')),
-        );
-        return;
-      }
+    if (_isValid && _phoneNumber.isNotEmpty) {
       context.read<AuthCubit>().submitPhoneNumber(_phoneNumber);
     }
   }
@@ -64,7 +59,7 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
         final isLoading = state is AuthLoading;
 
         return Scaffold(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surface, // Reverted to static color
           body: SafeArea(
             child: Padding(
               padding: EdgeInsets.all(AppConstants.defaultScreenPadding),
@@ -110,16 +105,13 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
 
                           const SizedBox(height: 8),
 
-                          // Phone Input (CiroPhoneField = full custom UI control)
+                          // Phone Input
                           CiroPhoneField(
-                            onChanged: (fullNumber) {
-                              _phoneNumber = fullNumber;
-                            },
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter a valid phone number';
-                              }
-                              return null;
+                            onChanged: (fullNumber, isValid) {
+                              setState(() {
+                                _phoneNumber = fullNumber;
+                                _isValid = isValid;
+                              });
                             },
                           ),
 
@@ -132,13 +124,12 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
                       child: Container(
                         alignment: Alignment.bottomCenter,
                         padding: EdgeInsets.only(bottom: 16.resH),
-                        child:
-                            // Primary Button
-                            PrimaryButton(
-                              isLoading: isLoading,
-                              onPressed: _onSendCode,
-                              text: 'Send Code',
-                            ),
+                        child: PrimaryButton(
+                          text: 'Send Code',
+                          isLoading: isLoading,
+                          // The button is only enabled when the length is valid
+                          onPressed: _isValid ? () => _onSendCode() : null,
+                        ),
                       ),
                     ),
                   ],
