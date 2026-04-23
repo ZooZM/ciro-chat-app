@@ -30,6 +30,26 @@ class ChatRepositoryImpl implements ChatRepository {
   Stream<Message> get messageStream => remoteDataSource.messageStream;
 
   @override
+  Future<Either<Failure, String>> createPrivateChatRoom(String targetUserId) {
+    return remoteDataSource.createPrivateChatRoom(targetUserId);
+  }
+
+  @override
+  Future<Either<Failure, Map<String, String>>> syncMessageStatuses(List<String> clientMessageIds) {
+    return remoteDataSource.syncMessageStatuses(clientMessageIds);
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> uploadFile(File file) {
+    return remoteDataSource.uploadFile(file);
+  }
+
+  @override
+  Future<Either<Failure, List<ChatSession>>> fetchRooms() {
+    return remoteDataSource.fetchRooms();
+  }
+
+  @override
   Future<Either<Failure, Map<String, dynamic>>> createGroup(String groupName, List<String> participants, String? avatarUrl) {
     return remoteDataSource.createGroup(groupName, participants, avatarUrl);
   }

@@ -3,6 +3,7 @@ import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_scr
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/create_group_page.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/group_chat_screen.dart';
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
@@ -93,7 +94,16 @@ final GoRouter appRouter = GoRouter(
         ),
       ),
     ),
-    GoRoute(path: '/home', builder: (context, state) => const ChatListScreen()),
+    GoRoute(
+      path: '/home',
+      builder: (context, state) => const ChatListScreen(),
+      routes: [
+        GoRoute(
+          path: 'create_group',
+          builder: (context, state) => const CreateGroupPage(),
+        ),
+      ],
+    ),
     GoRoute(
       path: '/chat_room',
       builder: (context, state) {

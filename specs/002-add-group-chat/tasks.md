@@ -45,11 +45,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Create UI `CreateGroupPage` in `lib/features/chat/presentation/pages/create_group_page.dart` for contact selection and name input
-- [ ] T008 [US1] Update `ChatCubit` in `lib/features/chat/presentation/bloc/chat_cubit.dart` to handle group creation logic and state
-- [ ] T009 [US1] Implement `joinRoom` socket emission in `ChatCubit` immediately after successful group creation
-- [ ] T010 [US1] Integrate `CreateGroupPage` routing in `lib/core/routing/app_router.dart`
-- [ ] T011 [US1] Update `ChatListPage` in `lib/features/chat/presentation/pages/chat_list_page.dart` to display group `name` and `avatarUrl`
+- [x] T007 [US1] Create UI `CreateGroupPage` in `lib/features/chat/presentation/pages/create_group_page.dart` for contact selection and name input
+- [x] T008 [US1] Update `ChatCubit` in `lib/features/chat/presentation/bloc/chat_cubit.dart` to handle group creation logic and state
+- [x] T009 [US1] Implement `joinRoom` socket emission in `ChatCubit` immediately after successful group creation
+- [x] T010 [US1] Integrate `CreateGroupPage` routing in `lib/core/routing/app_router.dart`
+- [x] T011 [US1] Update `ChatListPage` in `lib/features/chat/presentation/pages/chat_list_page.dart` to display group `name` and `avatarUrl`
 
 **Checkpoint**: Users can create a group and see it in their chat list.
 

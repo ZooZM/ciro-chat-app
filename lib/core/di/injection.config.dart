@@ -22,7 +22,6 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
-import '../../features/chat/data/datasources/chat_api_service.dart' as _i277;
 import '../../features/chat/data/datasources/chat_local_data_source.dart'
     as _i94;
 import '../../features/chat/data/datasources/chat_remote_data_source.dart'
@@ -58,7 +57,9 @@ extension GetItInjectableX on _i174.GetIt {
     _i526.EnvironmentFilter? environmentFilter,
   }) {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
+    final appModule = _$AppModule();
     final storageModule = _$StorageModule();
+    gh.lazySingleton<_i361.Dio>(() => appModule.dio);
     gh.lazySingleton<_i558.FlutterSecureStorage>(
       () => storageModule.secureStorage,
     );
@@ -66,32 +67,8 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i852.AuthLocalDataSource>(
       () => _i852.AuthLocalDataSourceImpl(gh<_i558.FlutterSecureStorage>()),
     );
-    gh.lazySingleton<_i94.ChatLocalDataSource>(
-      () => _i94.ChatLocalDataSourceImpl(),
-    );
-    gh.lazySingleton<_i980.ChatRemoteDataSource>(
-      () => _i980.ChatRemoteDataSourceImpl(
-        gh<_i558.FlutterSecureStorage>(),
-        gh<_i361.Dio>(),
-      ),
-    );
     gh.lazySingleton<_i667.DioClient>(
-      () => _i667.DioClient(gh<_i852.AuthLocalDataSource>()),
-    );
-    gh.lazySingleton<_i420.ChatRepository>(
-      () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
-    );
-    gh.lazySingleton<_i104.CallCubit>(
-      () => _i104.CallCubit(gh<_i917.SocketService>()),
-    );
-    gh.lazySingleton<_i107.AuthRemoteDataSource>(
-      () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
-    );
-    gh.lazySingleton<_i277.ChatApiService>(
-      () => _i277.ChatApiService(
-        gh<_i667.DioClient>(),
-        gh<_i852.AuthLocalDataSource>(),
-      ),
+      () => _i667.DioClient(gh<_i852.AuthLocalDataSource>(), gh<_i361.Dio>()),
     );
     gh.lazySingleton<_i811.PaymentRemoteDataSource>(
       () => _i811.PaymentRemoteDataSourceImpl(gh<_i667.DioClient>()),
@@ -99,26 +76,29 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i850.ContactsService>(
       () => _i850.ContactsService(gh<_i667.DioClient>()),
     );
-    gh.lazySingleton<_i787.AuthRepository>(
-      () => _i153.AuthRepositoryImpl(
-        gh<_i107.AuthRemoteDataSource>(),
-        gh<_i852.AuthLocalDataSource>(),
-      ),
+    gh.lazySingleton<_i94.ChatLocalDataSource>(
+      () => _i94.ChatLocalDataSourceImpl(),
     );
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
-    gh.factory<_i708.ChatCubit>(
-      () => _i708.ChatCubit(
-        gh<_i94.ChatLocalDataSource>(),
-        gh<_i917.SocketService>(),
-        gh<_i852.AuthLocalDataSource>(),
-        gh<_i277.ChatApiService>(),
-        gh<_i850.ContactsService>(),
+    gh.lazySingleton<_i980.ChatRemoteDataSource>(
+      () => _i980.ChatRemoteDataSourceImpl(
+        gh<_i558.FlutterSecureStorage>(),
+        gh<_i361.Dio>(),
       ),
+    );
+    gh.lazySingleton<_i420.ChatRepository>(
+      () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
+    );
+    gh.lazySingleton<_i104.CallCubit>(
+      () => _i104.CallCubit(gh<_i917.SocketService>()),
     );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
+    );
+    gh.lazySingleton<_i107.AuthRemoteDataSource>(
+      () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
     gh.lazySingleton<_i220.VideoCallRepository>(
       () => _i786.LivekitVideoCallRepositoryImpl(
@@ -128,17 +108,34 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i420.PaymentCubit>(
       () => _i420.PaymentCubit(gh<_i639.PaymentRepository>()),
     );
+    gh.lazySingleton<_i787.AuthRepository>(
+      () => _i153.AuthRepositoryImpl(
+        gh<_i107.AuthRemoteDataSource>(),
+        gh<_i852.AuthLocalDataSource>(),
+      ),
+    );
+    gh.factory<_i708.ChatCubit>(
+      () => _i708.ChatCubit(
+        gh<_i94.ChatLocalDataSource>(),
+        gh<_i917.SocketService>(),
+        gh<_i852.AuthLocalDataSource>(),
+        gh<_i420.ChatRepository>(),
+        gh<_i850.ContactsService>(),
+      ),
+    );
+    gh.factory<_i804.VideoCallCubit>(
+      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
+    );
     gh.lazySingleton<_i52.AuthCubit>(
       () => _i52.AuthCubit(
         gh<_i787.AuthRepository>(),
         gh<_i852.AuthLocalDataSource>(),
       ),
     );
-    gh.factory<_i804.VideoCallCubit>(
-      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
-    );
     return this;
   }
 }
+
+class _$AppModule extends _i667.AppModule {}
 
 class _$StorageModule extends _i667.StorageModule {}

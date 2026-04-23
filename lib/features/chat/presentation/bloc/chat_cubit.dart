@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:fpdart/fpdart.dart'; // Import for Either
+import 'package:ciro_chat_app/core/error/failures.dart'; // Import for Failure
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,7 +16,7 @@ import 'package:ciro_chat_app/features/chat/data/datasources/chat_local_data_sou
 import 'package:ciro_chat_app/core/network/socket_service.dart';
 
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
-import 'package:ciro_chat_app/features/chat/data/datasources/chat_api_service.dart';
+import 'package:ciro_chat_app/features/chat/domain/repositories/chat_repository.dart'; // Use repository
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/contacts/data/contacts_service.dart';
 
@@ -45,7 +47,7 @@ class ChatCubit extends Cubit<ChatState> {
   final ChatLocalDataSource _localDataSource;
   final SocketService _socketService;
   final AuthLocalDataSource _authLocalDataSource;
-  final ChatApiService _chatApiService;
+  final ChatRepository _chatRepository; // Use repository
   final ContactsService _contactsService;
 
   final _imagePicker = ImagePicker();
@@ -61,7 +63,7 @@ class ChatCubit extends Cubit<ChatState> {
     this._localDataSource,
     this._socketService,
     this._authLocalDataSource,
-    this._chatApiService,
+    this._chatRepository, // Use repository
     this._contactsService,
   ) : super(ChatInitial()) {
     _initServices();
@@ -246,30 +248,33 @@ class ChatCubit extends Cubit<ChatState> {
       return false;
     }
 
-    try {
-      final newRoomId = await _chatApiService.createRoom(targetUserId);
-      _activeRoomId = newRoomId;
-      _pendingContact = null;
+    final result = await _chatRepository.createPrivateChatRoom(targetUserId);
+    return result.fold(
+      (failure) {
+        debugPrint('Error creating private room: $failure');
+        emit(ChatError(failure.message));
+        return false;
+      },
+      (roomId) async {
+        _activeRoomId = roomId;
+        _pendingContact = null;
 
-      _socketService.joinRoom(newRoomId);
-      await Future.delayed(const Duration(milliseconds: 300));
+        _socketService.joinRoom(roomId);
+        await Future.delayed(const Duration(milliseconds: 300));
 
-      _localDataSource.resetUnreadCount(newRoomId);
-      _roomStreamSub?.cancel();
-      _roomStreamSub = _localDataSource
-          .watchRoomMessages(newRoomId)
-          .listen(
-            (messages) => emit(ChatRoomActive(newRoomId, messages)),
-            onError: (e) => emit(ChatError(e.toString())),
-          );
+        _localDataSource.resetUnreadCount(roomId);
+        _roomStreamSub?.cancel();
+        _roomStreamSub = _localDataSource
+            .watchRoomMessages(roomId)
+            .listen(
+              (messages) => emit(ChatRoomActive(roomId, messages)),
+              onError: (e) => emit(ChatError(e.toString())),
+            );
 
-      debugPrint('[ChatCubit] JIT room created: $newRoomId');
-      return true;
-    } catch (e) {
-      debugPrint('[ChatCubit] JIT room creation failed: $e');
-      emit(ChatError('Could not create chat room: $e'));
-      return false;
-    }
+        debugPrint('[ChatCubit] JIT room created: $roomId');
+        return true;
+      },
+    );
   }
 
   // ── sendLocalMessage ────────────────────────────────────────────────────────
@@ -357,29 +362,45 @@ class ChatCubit extends Cubit<ChatState> {
 
     try {
       // 2. Upload.
-      final serverMeta = await _chatApiService.uploadFile(File(picked.path));
-      final fileUrl = serverMeta['fileUrl'] as String? ?? '';
-      final meta = {
-        'localPath': picked.path,
-        'mimeType': serverMeta['mimeType'] ?? 'image/jpeg',
-        'fileName': serverMeta['fileName'] ?? picked.name,
-        'fileSize': serverMeta['fileSize'] ?? 0,
-      };
+      final uploadResult = await _chatRepository.uploadFile(File(picked.path));
+      await uploadResult.fold(
+        (failure) async {
+          debugPrint('[ChatCubit] Image upload failed: $failure');
+          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Image upload failed: ${failure.message}'),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
+          throw Exception('Upload failed'); // Propagate to outer catch
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          final meta = {
+            'localPath': picked.path,
+            'mimeType': serverMeta['mimeType'] ?? 'image/jpeg',
+            'fileName': serverMeta['fileName'] ?? picked.name,
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          };
 
-      // 3. Patch the optimistic bubble with the real fileUrl.
-      await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+          // 3. Patch the optimistic bubble with the real fileUrl.
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
-      // 4. Transmit via socket.
-      _socketService.sendMessage(
-        roomId: roomId,
-        messageId: msgId,
-        text: '📷 Photo',
-        type: 'image',
-        fileUrl: fileUrl,
-        metadata: meta,
+          // 4. Transmit via socket.
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '📷 Photo',
+            type: 'image',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+          debugPrint('[ChatCubit] Image sent: $fileUrl');
+        },
       );
-
-      debugPrint('[ChatCubit] Image sent: $fileUrl');
     } catch (e) {
       debugPrint('[ChatCubit] Image upload failed: $e');
       await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
@@ -440,29 +461,45 @@ class ChatCubit extends Cubit<ChatState> {
 
     try {
       // 2. Upload.
-      final serverMeta = await _chatApiService.uploadFile(File(filePath));
-      final fileUrl = serverMeta['fileUrl'] as String? ?? '';
-      final meta = {
-        'localPath': filePath,
-        'fileName': serverMeta['fileName'] ?? pickedFile.name,
-        'fileSize': serverMeta['fileSize'] ?? pickedFile.size,
-        'mimeType': serverMeta['mimeType'] ?? 'application/octet-stream',
-      };
+      final uploadResult = await _chatRepository.uploadFile(File(filePath));
+      await uploadResult.fold(
+        (failure) async {
+          debugPrint('[ChatCubit] File upload failed: $failure');
+          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('File upload failed: ${failure.message}'),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
+          throw Exception('Upload failed'); // Propagate to outer catch
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          final meta = {
+            'localPath': filePath,
+            'fileName': serverMeta['fileName'] ?? pickedFile.name,
+            'fileSize': serverMeta['fileSize'] ?? pickedFile.size,
+            'mimeType': serverMeta['mimeType'] ?? 'application/octet-stream',
+          };
 
-      // 3. Patch bubble.
-      await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+          // 3. Patch bubble.
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
-      // 4. Transmit.
-      _socketService.sendMessage(
-        roomId: roomId,
-        messageId: msgId,
-        text: '📎 File',
-        type: 'file',
-        fileUrl: fileUrl,
-        metadata: meta,
+          // 4. Transmit.
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '📎 File',
+            type: 'file',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+          debugPrint('[ChatCubit] File sent: $fileUrl');
+        },
       );
-
-      debugPrint('[ChatCubit] File sent: $fileUrl');
     } catch (e) {
       debugPrint('[ChatCubit] File upload failed: $e');
       await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
@@ -538,30 +575,46 @@ class ChatCubit extends Cubit<ChatState> {
 
     try {
       // 2. Upload.
-      final serverMeta = await _chatApiService.uploadFile(File(localPath));
-      final fileUrl = serverMeta['fileUrl'] as String? ?? '';
-      final meta = {
-        'localPath': localPath,
-        'duration': durationSeconds,
-        'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
-        'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',
-        'fileSize': serverMeta['fileSize'] ?? 0,
-      };
+      final uploadResult = await _chatRepository.uploadFile(File(localPath));
+      await uploadResult.fold(
+        (failure) async {
+          debugPrint('[ChatCubit] Voice note upload failed: $failure');
+          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Voice note upload failed: ${failure.message}'),
+                backgroundColor: Colors.red.shade700,
+              ),
+            );
+          }
+          throw Exception('Upload failed'); // Propagate to outer catch
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          final meta = {
+            'localPath': localPath,
+            'duration': durationSeconds,
+            'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
+            'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          };
 
-      // 3. Patch bubble.
-      await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+          // 3. Patch bubble.
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
-      // 4. Transmit.
-      _socketService.sendMessage(
-        roomId: roomId,
-        messageId: msgId,
-        text: '🎤 Voice note',
-        type: 'voice_note',
-        fileUrl: fileUrl,
-        metadata: meta,
+          // 4. Transmit.
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '🎤 Voice note',
+            type: 'voice_note',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+          debugPrint('[ChatCubit] Voice note sent: $fileUrl');
+        },
       );
-
-      debugPrint('[ChatCubit] Voice note sent: $fileUrl');
     } catch (e) {
       debugPrint('[ChatCubit] Voice note upload failed: $e');
       await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
@@ -623,32 +676,40 @@ class ChatCubit extends Cubit<ChatState> {
       final ids = stuck.map((m) => m.clientMessageId).toList();
       debugPrint('[ChatCubit] REST sync: checking ${ids.length} stuck message(s)');
 
-      final statuses = await _chatApiService.syncMessageStatuses(ids);
-      if (statuses.isEmpty) return;
+      final result = await _chatRepository.syncMessageStatuses(ids);
+      await result.fold(
+        (failure) {
+          debugPrint('[ChatCubit] REST sync failed: $failure');
+          // Handle failure, maybe emit an error state or log it
+        },
+        (statuses) async {
+          if (statuses.isEmpty) return;
 
-      const rankOf = {
-        'pending': 0,
-        'sent': 1,
-        'delivered': 2,
-        'read': 3,
-      };
+          const rankOf = {
+            'pending': 0,
+            'sent': 1,
+            'delivered': 2,
+            'read': 3,
+          };
 
-      for (final msg in stuck) {
-        final serverStatusStr = statuses[msg.clientMessageId];
-        if (serverStatusStr == null) continue;
+          for (final msg in stuck) {
+            final serverStatusStr = statuses[msg.clientMessageId];
+            if (serverStatusStr == null) continue;
 
-        final serverStatus = MessageStatus.values.firstWhere(
-          (e) => e.name == serverStatusStr,
-          orElse: () => msg.status,
-        );
+            final serverStatus = MessageStatus.values.firstWhere(
+              (e) => e.name == serverStatusStr,
+              orElse: () => msg.status,
+            );
 
-        final currentRank = rankOf[msg.status.name] ?? 0;
-        final newRank = rankOf[serverStatus.name] ?? 0;
-        if (newRank > currentRank) {
-          await _localDataSource.updateMessageStatus(msg.id, serverStatus);
-          debugPrint('[ChatCubit] REST sync: ${msg.id} → ${serverStatus.name}');
-        }
-      }
+            final currentRank = rankOf[msg.status.name] ?? 0;
+            final newRank = rankOf[serverStatus.name] ?? 0;
+            if (newRank > currentRank) {
+              await _localDataSource.updateMessageStatus(msg.id, serverStatus);
+              debugPrint('[ChatCubit] REST sync: ${msg.id} → ${serverStatus.name}');
+            }
+          }
+        },
+      );
     } catch (e) {
       debugPrint('[ChatCubit] REST sync failed: $e');
     }
@@ -690,11 +751,18 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> hydrateRooms() async {
     try {
-      final rooms = await _chatApiService.fetchRooms();
-      for (final room in rooms) {
-        await _localDataSource.saveRoom(room);
-      }
-      debugPrint('[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite');
+      final result = await _chatRepository.fetchRooms();
+      await result.fold(
+        (failure) {
+          debugPrint('[ChatCubit] Hydration silent fail: $failure');
+        },
+        (rooms) async {
+          for (final room in rooms) {
+            await _localDataSource.saveRoom(room);
+          }
+          debugPrint('[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite');
+        },
+      );
     } catch (e) {
       debugPrint('[ChatCubit] Hydration silent fail: $e');
     } finally {
@@ -711,6 +779,35 @@ class ChatCubit extends Cubit<ChatState> {
     currentUserId = '';
     isHydrationComplete = false;
     emit(ChatInitial());
+  }
+
+  Future<void> createGroup(
+    String groupName,
+    List<String> participants, {
+    String? avatarUrl,
+  }) async {
+    emit(ChatLoading()); // Indicate that group creation is in progress
+    final result = await _chatRepository.createGroup(
+      groupName,
+      participants,
+      avatarUrl,
+    );
+    result.fold(
+      (failure) {
+        debugPrint('[ChatCubit] Group creation failed: $failure');
+        emit(ChatError(failure.message));
+      },
+      (chatRoomData) async {
+        // chatRoomData contains the newly created room's details including ID
+        final newRoom = ChatSession.fromJson(
+          chatRoomData,
+          currentUserId, // Assuming currentUserId is phone number
+        );
+        await _localDataSource.saveRoom(newRoom);
+        _socketService.joinRoom(newRoom.id);
+        openRoom(newRoom.id); // Navigate to the new group chat
+      },
+    );
   }
 
   @override

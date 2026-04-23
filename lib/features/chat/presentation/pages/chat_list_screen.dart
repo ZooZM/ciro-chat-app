@@ -317,6 +317,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          context.push('/home/create_group');
+        },
+        child: const Icon(Icons.group_add),
+      ),
     );
   }
 }

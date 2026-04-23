@@ -14,7 +14,7 @@ class DioClient {
   final Dio _dio;
   final AuthLocalDataSource _authLocal;
 
-  DioClient(this._authLocal) : _dio = Dio() {
+  DioClient(this._authLocal, this._dio) {
     _dio.options = BaseOptions(
       baseUrl: const String.fromEnvironment(
         'API_URL',
@@ -93,6 +93,12 @@ class DioClient {
   }
 
   Dio get dio => _dio;
+}
+
+@module
+abstract class AppModule {
+  @lazySingleton
+  Dio get dio => Dio();
 }
 
 @module
