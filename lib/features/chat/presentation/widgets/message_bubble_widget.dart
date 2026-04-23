@@ -47,8 +47,7 @@ class MessageBubbleWidget extends StatelessWidget {
 
   bool get _isMine => message.senderId == currentUserId;
 
-  Color get _bgColor =>
-      _isMine ? AppColors.primaryLight : AppColors.surface;
+  Color get _bgColor => _isMine ? AppColors.primaryLight : AppColors.surface;
 
   BorderRadius _borderRadius() {
     final r = Radius.circular(12.resR);
@@ -63,11 +62,19 @@ class MessageBubbleWidget extends StatelessWidget {
   Widget _buildStatusIcon() {
     switch (message.status) {
       case MessageStatus.pending:
-        return Icon(Icons.access_time, size: 14.resW, color: AppColors.textSecondary);
+        return Icon(
+          Icons.access_time,
+          size: 14.resW,
+          color: AppColors.textSecondary,
+        );
       case MessageStatus.sent:
         return Icon(Icons.check, size: 14.resW, color: AppColors.textSecondary);
       case MessageStatus.delivered:
-        return Icon(Icons.done_all, size: 14.resW, color: AppColors.textSecondary);
+        return Icon(
+          Icons.done_all,
+          size: 14.resW,
+          color: AppColors.textSecondary,
+        );
       case MessageStatus.read:
         return Icon(Icons.done_all, size: 14.resW, color: Colors.blue);
       case MessageStatus.error:
@@ -122,16 +129,36 @@ class MessageBubbleWidget extends StatelessWidget {
   Widget _buildContent(BuildContext context) {
     switch (message.type) {
       case MessageType.image:
-        return _ImageBubble(message: message, isMine: _isMine, footer: _buildFooter());
+        return _ImageBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
       case MessageType.file:
-        return _FileBubble(message: message, isMine: _isMine, footer: _buildFooter());
+        return _FileBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
       case MessageType.voiceNote:
-        return _VoiceBubble(message: message, isMine: _isMine, footer: _buildFooter());
+        return _VoiceBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
       case MessageType.contact:
-        return _ContactBubble(message: message, isMine: _isMine, footer: _buildFooter());
+        return _ContactBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
       case MessageType.text:
       default:
-        return _TextBubble(message: message, isMine: _isMine, footer: _buildFooter());
+        return _TextBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
     }
   }
 }
@@ -156,8 +183,9 @@ class _TextBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(
             message.text,
@@ -191,21 +219,26 @@ class _ImageBubble extends StatelessWidget {
     final meta = message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
     final fileUrl = message.fileUrl;
-    
+
     final hasLocal = localPath != null && File(localPath).existsSync();
     final url = _resolveUrl(fileUrl);
     final isUploading = !hasLocal && url.isEmpty;
 
     return Column(
-      crossAxisAlignment:
-          isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(8.resR),
           child: isUploading
               ? _UploadingPlaceholder()
               : GestureDetector(
-                  onTap: () => _openImageViewer(context, hasLocal ? localPath : url, hasLocal),
+                  onTap: () => _openImageViewer(
+                    context,
+                    hasLocal ? localPath : url,
+                    hasLocal,
+                  ),
                   child: hasLocal
                       ? Image.file(
                           File(localPath),
@@ -223,7 +256,10 @@ class _ImageBubble extends StatelessWidget {
                             width: 220.resW,
                             height: 180.resH,
                             color: Colors.grey.shade200,
-                            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                            child: const Icon(
+                              Icons.broken_image_outlined,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
                 ),
@@ -244,7 +280,8 @@ class _ImageBubble extends StatelessWidget {
   void _openImageViewer(BuildContext context, String pathOrUrl, bool isLocal) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _FullScreenImageViewer(pathOrUrl: pathOrUrl, isLocal: isLocal),
+        builder: (_) =>
+            _FullScreenImageViewer(pathOrUrl: pathOrUrl, isLocal: isLocal),
       ),
     );
   }
@@ -277,7 +314,10 @@ class _UploadingPlaceholder extends StatelessWidget {
 class _FullScreenImageViewer extends StatelessWidget {
   final String pathOrUrl;
   final bool isLocal;
-  const _FullScreenImageViewer({required this.pathOrUrl, required this.isLocal});
+  const _FullScreenImageViewer({
+    required this.pathOrUrl,
+    required this.isLocal,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -329,8 +369,9 @@ class _FileBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 10.resH),
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -431,12 +472,15 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
       }
     });
 
-    VoiceNoteController().currentlyPlayingIdNotifier.addListener(_onCurrentlyPlayingChanged);
+    VoiceNoteController().currentlyPlayingIdNotifier.addListener(
+      _onCurrentlyPlayingChanged,
+    );
     _preparePlayer();
   }
 
   void _onCurrentlyPlayingChanged() {
-    if (VoiceNoteController().currentlyPlayingIdNotifier.value != widget.message.id) {
+    if (VoiceNoteController().currentlyPlayingIdNotifier.value !=
+        widget.message.id) {
       if (_isPlaying) {
         _playerController.pausePlayer();
       }
@@ -450,7 +494,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     final meta = widget.message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
     final fileUrl = widget.message.fileUrl;
-    
+
     String? path;
     if (localPath != null && File(localPath).existsSync()) {
       path = localPath;
@@ -490,9 +534,26 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
   @override
   void dispose() {
-    VoiceNoteController().currentlyPlayingIdNotifier.removeListener(_onCurrentlyPlayingChanged);
-    _playerController.dispose();
+    VoiceNoteController().currentlyPlayingIdNotifier.removeListener(
+      _onCurrentlyPlayingChanged,
+    );
+
+    _safeDisposeAudio();
+
     super.dispose();
+  }
+
+  Future<void> _safeDisposeAudio() async {
+    try {
+      if (!_playerController.playerState.isStopped) {
+        await _playerController.stopPlayer();
+      }
+      _playerController.dispose();
+    } on PlatformException catch (e) {
+      debugPrint('AudioWaveforms safely caught codec exception: $e');
+    } catch (e) {
+      debugPrint('Error disposing audio controller: $e');
+    }
   }
 
   void _togglePlay() async {
@@ -514,7 +575,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   Widget build(BuildContext context) {
     final meta = widget.message.metadata ?? {};
     final duration = meta['duration'] as int? ?? 0;
-    
+
     final localPath = meta['localPath'] as String?;
     final fileUrl = widget.message.fileUrl;
     final hasLocal = localPath != null && File(localPath).existsSync();
@@ -556,7 +617,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                 ),
               ),
               SizedBox(width: 8.resW),
-              
+
               // Waveform
               Expanded(
                 child: Column(
@@ -566,7 +627,10 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                       height: 36.resH,
                       child: _isPrepared
                           ? AudioFileWaveforms(
-                              size: Size(MediaQuery.of(context).size.width * 0.4, 36.resH),
+                              size: Size(
+                                MediaQuery.of(context).size.width * 0.4,
+                                36.resH,
+                              ),
                               playerController: _playerController,
                               enableSeekGesture: true,
                               waveformType: WaveformType.fitWidth,
@@ -594,7 +658,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                 ),
               ),
               SizedBox(width: 8.resW),
-              
+
               // Avatar placeholder (optional)
               CircleAvatar(
                 radius: 18.resR,
@@ -667,8 +731,9 @@ class _ContactBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 10.resH),
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -696,9 +761,8 @@ class _ContactBubble extends StatelessWidget {
                     ),
                     if (phone.isNotEmpty)
                       GestureDetector(
-                        onLongPress: () => Clipboard.setData(
-                          ClipboardData(text: phone),
-                        ),
+                        onLongPress: () =>
+                            Clipboard.setData(ClipboardData(text: phone)),
                         child: Text(
                           phone,
                           style: AppTypography.caption.copyWith(
