@@ -13,6 +13,7 @@ import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../video_call/presentation/pages/outgoing_call_screen.dart';
 import '../../../video_call/presentation/pages/voice_call_screen.dart';
+import '../widgets/chat_input_bar.dart';
 import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -353,80 +354,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               ),
 
               // Bottom Input Bar
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 12.resW,
-                  vertical: 12.resH,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: AppColors.divider, width: 0.5),
-                  ),
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.add,
-                          color: AppColors.textSecondary,
-                          size: 28.resW,
-                        ),
-                        onPressed: () => _showAttachmentSheet(context),
-                      ),
-                      SizedBox(width: 8.resW),
-                      Expanded(
-                        child: Container(
-                          height: 44.resH,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(22.resR),
-                            border: Border.all(
-                              color: AppColors.divider,
-                              width: 1.5.resW,
-                            ),
-                          ),
-                          padding: EdgeInsets.symmetric(horizontal: 16.resW),
-                          alignment: Alignment.centerLeft,
-                          child: TextField(
-                            controller: _msgController,
-                            onSubmitted: (_) => _sendMessage(),
-                            style: AppTypography.body1.copyWith(
-                              color: Colors.black,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Type a message...',
-                              hintStyle: AppTypography.body1.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8.resW),
-                      IconButton(
-                        icon: Icon(
-                          Icons.camera_alt_outlined,
-                          color: AppColors.textSecondary,
-                          size: 26.resW,
-                        ),
-                        onPressed: () {},
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.send,
-                          color: AppColors.primary,
-                          size: 26.resW,
-                        ),
-                        onPressed: _sendMessage, // Call _sendMessage on tap
-                      ),
-                    ],
-                  ),
-                ),
+              ChatInputBar(
+                onAttachmentTap: () => _showAttachmentSheet(context),
+                onSendText: (text) {
+                  context.read<ChatCubit>().sendLocalMessage(
+                        MessageDraft(text: text),
+                      );
+                  _scrollToBottom();
+                },
               ),
             ],
           ), // Column

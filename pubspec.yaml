@@ -42,6 +42,9 @@ dependencies:
   image_picker: ^1.1.2
   file_picker: ^8.1.2
   just_audio: ^0.9.42
+  record: ^6.2.0
+  path_provider: ^2.1.5
+  audio_waveforms: ^2.0.2
 
 dev_dependencies:
   flutter_test:

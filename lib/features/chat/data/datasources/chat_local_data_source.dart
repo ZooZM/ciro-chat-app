@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:injectable/injectable.dart';
+import 'package:flutter/foundation.dart';
 
 abstract class ChatLocalDataSource {
   Future<void> initDB();
@@ -43,6 +46,9 @@ abstract class ChatLocalDataSource {
 
   /// Returns the current [MessageStatus] of a single message by its ID.
   Future<MessageStatus?> getMessageStatus(String messageId);
+
+  /// Deletes a message from the local DB and removes any associated cached file.
+  Future<void> deleteMessage(String messageId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -239,6 +245,48 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     if (records.isNotEmpty) {
       final roomId = records.first['room_id'] as String;
       await _dispatchUpdateForRoom(roomId);
+      await _dispatchRecentChatsUpdate();
+    }
+  }
+
+  // ── deleteMessage ───────────────────────────────────────────────────────────
+
+  @override
+  Future<void> deleteMessage(String messageId) async {
+    final db = _db;
+    if (db == null) throw Exception('Database not initialized');
+    
+    final maps = await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    
+    if (maps.isNotEmpty) {
+      final message = Message.fromMap(maps.first);
+      final meta = message.metadata ?? {};
+      final localPath = meta['localPath'] as String?;
+      
+      if (localPath != null) {
+        final file = File(localPath);
+        if (file.existsSync()) {
+          try {
+            file.deleteSync();
+            debugPrint('[LocalData] Deleted cached media file: $localPath');
+          } catch (e) {
+            debugPrint('[LocalData] Failed to delete media file: $e');
+          }
+        }
+      }
+      
+      await db.delete(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+      
+      await _dispatchUpdateForRoom(message.roomId);
       await _dispatchRecentChatsUpdate();
     }
   }
