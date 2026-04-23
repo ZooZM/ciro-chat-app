@@ -3,6 +3,7 @@ import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_scr
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/group_chat_screen.dart';
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
@@ -100,6 +101,10 @@ final GoRouter appRouter = GoRouter(
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
         return ChatRoomScreen(chatData: chat);
       },
+    ),
+    GoRoute(
+      path: '/group_chat',
+      builder: (context, state) => const GroupChatScreen(),
     ),
     GoRoute(
       path: '/contacts',

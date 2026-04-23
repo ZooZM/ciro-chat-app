@@ -208,7 +208,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
             // Right Button: Send Text OR Mic
             Padding(
-              padding: EdgeInsets.only(bottom: 4.resH),
+              padding: EdgeInsets.only(bottom: 10.resH),
               child: _isRecording
                   ? const SizedBox.shrink()
                   : _isTextEmpty
