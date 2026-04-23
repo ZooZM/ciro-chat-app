@@ -31,6 +31,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
   bool _isTextEmpty = true;
   bool _isRecording = false;
+  bool _isRecordingLocked = false;
   int _recordDuration = 0;
   Timer? _timer;
 
@@ -112,6 +113,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
     }
     setState(() {
       _isRecording = false;
+      _isRecordingLocked = false;
       _recordDuration = 0;
     });
   }
@@ -124,6 +126,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
       final duration = _recordDuration;
       setState(() {
         _isRecording = false;
+        _isRecordingLocked = false;
         _recordDuration = 0;
       });
 
@@ -181,8 +184,20 @@ class _ChatInputBarState extends State<ChatInputBar> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Left Attachment Button
-            if (!_isRecording)
+            // Left Action
+            if (_isRecordingLocked)
+              Padding(
+                padding: EdgeInsets.only(bottom: 4.resH),
+                child: IconButton(
+                  icon: Icon(
+                    Icons.delete,
+                    color: Colors.red,
+                    size: 28.resW,
+                  ),
+                  onPressed: _cancelRecording,
+                ),
+              )
+            else if (!_isRecording)
               Padding(
                 padding: EdgeInsets.only(bottom: 4.resH),
                 child: IconButton(
@@ -214,12 +229,27 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
             SizedBox(width: 8.resW),
 
-            // Right Button: Send Text OR Mic
+            // Right Button
             Padding(
               padding: EdgeInsets.only(bottom: 10.resH),
-              child: _isRecording
-                  ? const SizedBox.shrink()
-                  : _isTextEmpty
+              child: _isRecordingLocked
+                  ? GestureDetector(
+                      onTap: _stopAndSendRecording,
+                      child: Container(
+                        width: 48.resW,
+                        height: 48.resW,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.send,
+                          color: Colors.white,
+                          size: 24.resW,
+                        ),
+                      ),
+                    )
+                  : _isTextEmpty || _isRecording
                       ? _buildMicButton()
                       : _buildSendButton(),
             ),
@@ -293,15 +323,18 @@ class _ChatInputBarState extends State<ChatInputBar> {
           ),
         ),
         // Slide to cancel hint
-        Padding(
-          padding: EdgeInsets.only(right: 16.resW),
-          child: Text(
-            '< Slide to cancel',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textHint,
+        if (!_isRecordingLocked)
+          Padding(
+            padding: EdgeInsets.only(right: 16.resW),
+            child: Text(
+              '< Slide to cancel',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textHint,
+              ),
             ),
-          ),
-        ),
+          )
+        else
+          SizedBox(width: 16.resW),
       ],
     );
   }
@@ -310,27 +343,48 @@ class _ChatInputBarState extends State<ChatInputBar> {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Hold to record, release to send')),
+          const SnackBar(content: Text('Hold to record, release to send. Swipe up to lock.')),
         );
       },
       onLongPressStart: (_) => _startRecording(),
-      onLongPressEnd: (_) => _stopAndSendRecording(),
-      onLongPressMoveUpdate: (details) {
-        if (details.offsetFromOrigin.dx < -100) {
-          _cancelRecording();
+      onLongPressEnd: (_) {
+        if (!_isRecordingLocked) {
+          debugPrint('[ChatInputBar] Finger released, stopping and sending.');
+          _stopAndSendRecording();
+        } else {
+          debugPrint('[ChatInputBar] Finger released, but recording is locked.');
         }
       },
-      child: Container(
-        width: 48.resW,
-        height: 48.resW,
+      onLongPressMoveUpdate: (details) {
+        if (details.offsetFromOrigin.dx < -100) {
+          debugPrint('[ChatInputBar] Swiped left: cancelling recording.');
+          _cancelRecording();
+        } else if (details.offsetFromOrigin.dy < -50 && !_isRecordingLocked) {
+          debugPrint('[ChatInputBar] Swiped up: locking recording.');
+          setState(() {
+            _isRecordingLocked = true;
+          });
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: _isRecording ? 60.resW : 48.resW,
+        height: _isRecording ? 60.resW : 48.resW,
         decoration: BoxDecoration(
-          color: AppColors.primary,
+          color: _isRecording ? Colors.red : AppColors.primary,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.mic,
-          color: Colors.white,
-          size: 24.resW,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_isRecording && !_isRecordingLocked)
+              Icon(Icons.lock_outline, color: Colors.white, size: 14.resW),
+            Icon(
+              Icons.mic,
+              color: Colors.white,
+              size: _isRecording ? 28.resW : 24.resW,
+            ),
+          ],
         ),
       ),
     );
