@@ -83,8 +83,8 @@ class ChatCubit extends Cubit<ChatState> {
 
     // ── Sender-side status promotions ─────────────────────────────────────────
 
-    _socketService.onMessageSent = (clientMessageId) {
-      handleMessageStatusUpdate(clientMessageId, MessageStatus.sent);
+    _socketService.onMessageSent = (clientMessageId, createdAt) {
+      handleMessageStatusUpdate(clientMessageId, MessageStatus.sent, createdAt: createdAt);
     };
 
     _socketService.onMessageDelivered = (clientMessageIds) {
@@ -739,8 +739,9 @@ class ChatCubit extends Cubit<ChatState> {
 
   void handleMessageStatusUpdate(
     String clientMessageId,
-    MessageStatus incomingStatus,
-  ) async {
+    MessageStatus incomingStatus, {
+    DateTime? createdAt,
+  }) async {
     final incomingWeight = getStatusWeight(incomingStatus);
 
     if (state is ChatRoomActive) {
@@ -760,11 +761,15 @@ class ChatCubit extends Cubit<ChatState> {
           await _localDataSource.updateMessageStatus(
             clientMessageId,
             incomingStatus,
+            createdAt: createdAt,
           );
 
           final updatedMessages = List<Message>.from(currentMessages);
           updatedMessages[messageIndex] =
-              currentMessage.copyWith(status: incomingStatus);
+              currentMessage.copyWith(
+                status: incomingStatus,
+                timestamp: createdAt ?? currentMessage.timestamp,
+              );
           emit(ChatRoomActive(currentRoomId, updatedMessages));
         }
         return;
@@ -780,6 +785,7 @@ class ChatCubit extends Cubit<ChatState> {
         await _localDataSource.updateMessageStatus(
           clientMessageId,
           incomingStatus,
+          createdAt: createdAt,
         );
       }
     }

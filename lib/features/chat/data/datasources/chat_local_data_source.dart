@@ -18,7 +18,7 @@ abstract class ChatLocalDataSource {
     String roomAvatarUrl = '',
     String roomPhoneNumber = '',
   });
-  Future<void> updateMessageStatus(String messageId, MessageStatus status);
+  Future<void> updateMessageStatus(String messageId, MessageStatus status, {DateTime? createdAt});
 
   /// Updates the [fileUrl] and [metadata] of an already-saved message.
   /// Called after a successful upload to replace the optimistic placeholder.
@@ -296,8 +296,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   @override
   Future<void> updateMessageStatus(
     String messageId,
-    MessageStatus status,
-  ) async {
+    MessageStatus status, {
+    DateTime? createdAt,
+  }) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
 
@@ -308,18 +309,29 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       whereArgs: [messageId],
     );
 
+    final updateData = <String, dynamic>{'status': status.name};
+    if (createdAt != null) {
+      updateData['timestamp'] = createdAt.millisecondsSinceEpoch;
+    }
+
     await db.update(
       'messages',
-      {'status': status.name},
+      updateData,
       where: 'id = ?',
       whereArgs: [messageId],
     );
 
     if (records.isNotEmpty) {
       final roomId = records.first['room_id'] as String;
+      
+      final roomUpdateData = <String, dynamic>{'lastMessageStatus': status.name};
+      if (createdAt != null) {
+        roomUpdateData['timestamp'] = createdAt.toIso8601String();
+      }
+
       await db.update(
         'rooms',
-        {'lastMessageStatus': status.name},
+        roomUpdateData,
         where: 'id = ?',
         whereArgs: [roomId],
       );

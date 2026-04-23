@@ -13,23 +13,39 @@ class VoiceNoteController {
 
   void play(String messageId, PlayerController controller) async {
     if (_currentlyPlayingId != null && _currentlyPlayingId != messageId) {
-      if (_currentPlayer?.playerState.isPlaying ?? false) {
-        await _currentPlayer?.pausePlayer();
+      try {
+        if (_currentPlayer?.playerState.isPlaying ?? false) {
+          await _currentPlayer?.pausePlayer();
+        }
+      } catch (e) {
+        debugPrint('Error pausing previous player: $e');
       }
     }
     _currentPlayer = controller;
     _currentlyPlayingId = messageId;
     currentlyPlayingIdNotifier.value = messageId;
-    await controller.setFinishMode(finishMode: FinishMode.pause);
-    await controller.startPlayer();
+    
+    try {
+      await controller.setFinishMode(finishMode: FinishMode.pause);
+      await controller.startPlayer();
+    } catch (e) {
+      debugPrint('Error starting player: $e');
+      _currentlyPlayingId = null;
+      currentlyPlayingIdNotifier.value = null;
+    }
   }
 
   void stopCurrent() async {
-    if (_currentPlayer?.playerState.isPlaying ?? false) {
-      await _currentPlayer?.pausePlayer();
+    try {
+      if (_currentPlayer?.playerState.isPlaying ?? false) {
+        await _currentPlayer?.pausePlayer();
+      }
+    } catch (e) {
+      debugPrint('Error stopping current player: $e');
+    } finally {
+      _currentPlayer = null;
+      _currentlyPlayingId = null;
+      currentlyPlayingIdNotifier.value = null;
     }
-    _currentPlayer = null;
-    _currentlyPlayingId = null;
-    currentlyPlayingIdNotifier.value = null;
   }
 }

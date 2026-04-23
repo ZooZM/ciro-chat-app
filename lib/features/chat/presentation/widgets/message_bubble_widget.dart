@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
@@ -456,6 +457,7 @@ class _VoiceBubble extends StatefulWidget {
 
 class _VoiceBubbleState extends State<_VoiceBubble> {
   late final PlayerController _playerController;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
   bool _isPlaying = false;
   bool _isPrepared = false;
   bool _isPreparing = false;
@@ -464,7 +466,9 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   void initState() {
     super.initState();
     _playerController = PlayerController();
-    _playerController.onPlayerStateChanged.listen((state) {
+    _playerStateSubscription = _playerController.onPlayerStateChanged.listen((
+      state,
+    ) {
       if (mounted) {
         setState(() {
           _isPlaying = state == PlayerState.playing;
@@ -482,7 +486,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     if (VoiceNoteController().currentlyPlayingIdNotifier.value !=
         widget.message.id) {
       if (_isPlaying) {
-        _playerController.pausePlayer();
+        _playerController.pausePlayer().catchError((_) {});
       }
     }
   }
@@ -518,8 +522,14 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
         }
       } catch (e) {
         debugPrint('[VoiceBubble] prepare error: $e');
-        _isPreparing = false;
+        if (mounted) {
+          setState(() {
+            _isPreparing = false;
+          });
+        }
       }
+    } else {
+      _isPreparing = false;
     }
   }
 
@@ -537,6 +547,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     VoiceNoteController().currentlyPlayingIdNotifier.removeListener(
       _onCurrentlyPlayingChanged,
     );
+    _playerStateSubscription?.cancel();
 
     _safeDisposeAudio();
 

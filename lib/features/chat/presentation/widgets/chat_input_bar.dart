@@ -53,6 +53,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
   @override
   void dispose() {
     _timer?.cancel();
+    if (_isRecording) {
+      // Best-effort stop before disposing to release native resources
+      _recorderController.stop().catchError((_) {});
+    }
     _recorderController.dispose();
     _msgController.dispose();
     super.dispose();
@@ -64,13 +68,13 @@ class _ChatInputBarState extends State<ChatInputBar> {
     debugPrint('[ChatInputBar] _startRecording initiated...');
     try {
       final hasPermission = await _recorderController.checkPermission();
+      if (!mounted) return;
+
       if (!hasPermission) {
         debugPrint('[ChatInputBar] Microphone permission denied.');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Microphone permission denied')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied')),
+        );
         return;
       }
 
@@ -81,22 +85,28 @@ class _ChatInputBarState extends State<ChatInputBar> {
       debugPrint('[ChatInputBar] Starting audio_waveforms record to $filePath...');
       await _recorderController.record(path: filePath);
       
+      if (!mounted) return;
+
       setState(() {
         _isRecording = true;
         _recordDuration = 0;
       });
 
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        setState(() {
-          _recordDuration++;
-        });
+        if (mounted) {
+          setState(() {
+            _recordDuration++;
+          });
+        }
       });
       debugPrint('[ChatInputBar] Recording started successfully.');
     } catch (e, stack) {
       debugPrint('[ChatInputBar] Start recording failed: $e\n$stack');
-      setState(() {
-        _isRecording = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+        });
+      }
     }
   }
 

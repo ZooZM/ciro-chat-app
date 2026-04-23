@@ -19,7 +19,7 @@ class SocketService {
   // ── Chat callbacks ────────────────────────────────────────────────────────
 
   /// Fired when SERVER confirms it stored our message. pending → sent (1 grey tick)
-  void Function(String clientMessageId)? onMessageSent;
+  void Function(String clientMessageId, DateTime? createdAt)? onMessageSent;
 
   /// Fired when RECIPIENT device received our message. sent → delivered (2 grey ticks)
   void Function(List<String> clientMessageIds)? onMessageDelivered;
@@ -105,8 +105,11 @@ class SocketService {
 
     // SERVER confirmed storage: pending → sent (1 grey tick)
     _socket?.on('messageSent', (data) {
-      final id = (data as Map<String, dynamic>)['clientMessageId'] as String?;
-      if (id != null) onMessageSent?.call(id);
+      final map = data as Map<String, dynamic>;
+      final id = map['clientMessageId'] as String?;
+      final createdAtStr = map['createdAt'] as String?;
+      final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+      if (id != null) onMessageSent?.call(id, createdAt);
     });
 
     // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
