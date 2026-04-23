@@ -110,7 +110,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       avatarUrl           TEXT,
       phoneNumber         TEXT DEFAULT '',
       lastMessageSenderId TEXT DEFAULT '',
-      lastMessageStatus   TEXT DEFAULT 'pending'
+      lastMessageStatus   TEXT DEFAULT 'pending',
+      type                TEXT DEFAULT 'PRIVATE',
+      participants        TEXT DEFAULT '[]',
+      admins              TEXT DEFAULT '[]'
     )
   ''';
 
@@ -134,8 +137,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      // Version 7: adds type, file_url, metadata columns to messages table.
-      version: 7,
+      // Version 8: adds type, participants, admins columns to rooms table.
+      version: 8,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -440,8 +443,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.rawInsert(
       '''
-      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus)
-      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus, type, participants, admins)
+      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?, ?, ?, ?)
     ''',
       [
         room.id,
@@ -454,6 +457,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         room.phoneNumber,
         room.lastMessageSenderId,
         room.lastMessageStatus.name,
+        room.type.name,
+        jsonEncode(room.participants),
+        jsonEncode(room.admins),
       ],
     );
 
@@ -483,7 +489,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         COALESCE(NULLIF(c.avatarUrl, ''), NULLIF(r.avatarUrl, '')) AS avatarUrl,
         r.phoneNumber,
         r.lastMessageSenderId,
-        r.lastMessageStatus
+        r.lastMessageStatus,
+        r.type,
+        r.participants,
+        r.admins
       FROM rooms r
       LEFT JOIN contacts c ON c.phoneNumber = r.phoneNumber
       ORDER BY r.timestamp DESC
@@ -508,6 +517,12 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               (st) => st.name == e['lastMessageStatus'],
               orElse: () => MessageStatus.pending,
             ),
+            type: ChatRoomType.values.firstWhere(
+              (t) => t.name == (e['type'] as String? ?? 'PRIVATE'),
+              orElse: () => ChatRoomType.PRIVATE,
+            ),
+            participants: (jsonDecode(e['participants'] as String) as List<dynamic>).map((p) => p as String).toList(),
+            admins: (jsonDecode(e['admins'] as String) as List<dynamic>).map((a) => a as String).toList(),
           ),
         )
         .toList();

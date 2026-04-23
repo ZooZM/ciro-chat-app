@@ -26,12 +26,12 @@
 
 **Purpose**: Update the core data structures and local database schema to support group chat fields before implementing UI.
 
-- [ ] T001 Update `ChatRoom` entity in `lib/features/chat/domain/entities/chat_room.dart` to include `type`, `name`, `avatarUrl`, and `admins`
-- [ ] T002 [P] Update `ChatRoomModel` in `lib/features/chat/data/models/chat_room_model.dart` for `fromJson`/`toJson` mapping of new fields
-- [ ] T003 Update SQLite schema and migration logic in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T004 [P] Define REST API endpoints in `lib/features/chat/data/datasources/chat_remote_data_source.dart` (Create, Add, Remove, Leave)
-- [ ] T005 [P] Update `ChatRepository` interface in `lib/features/chat/domain/repositories/chat_repository.dart` with new group methods
-- [ ] T006 Implement new methods in `ChatRepositoryImpl` in `lib/features/chat/data/repositories/chat_repository_impl.dart`
+- [x] T001 Update `ChatRoom` entity in `lib/features/chat/domain/entities/chat_room.dart` to include `type`, `name`, `avatarUrl`, and `admins`
+- [x] T002 [P] Update `ChatRoomModel` in `lib/features/chat/data/models/chat_room_model.dart` for `fromJson`/`toJson` mapping of new fields
+- [x] T003 Update SQLite schema and migration logic in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T004 [P] Define REST API endpoints in `lib/features/chat/data/datasources/chat_remote_data_source.dart` (Create, Add, Remove, Leave)
+- [x] T005 [P] Update `ChatRepository` interface in `lib/features/chat/domain/repositories/chat_repository.dart` with new group methods
+- [x] T006 Implement new methods in `ChatRepositoryImpl` in `lib/features/chat/data/repositories/chat_repository_impl.dart`
 
 **Checkpoint**: The app can store and parse group chat rooms locally and remotely.
 

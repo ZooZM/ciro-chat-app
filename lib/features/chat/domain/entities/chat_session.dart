@@ -1,6 +1,13 @@
+import 'dart:convert';
+import 'package:equatable/equatable.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 
-class ChatSession {
+enum ChatRoomType {
+  PRIVATE,
+  GROUP,
+}
+
+class ChatSession extends Equatable {
   final String id;             // Room ID (MongoDB room _id). Empty = JIT pending.
   final String name;           // Other user's display name or group name
   final String lastMessage;
@@ -11,6 +18,9 @@ class ChatSession {
   final String phoneNumber;
   final String lastMessageSenderId;
   final MessageStatus lastMessageStatus;
+  final ChatRoomType type; // New field
+  final List<String> participants; // New field for group chat
+  final List<String> admins; // New field
 
   /// Carries the contact's MongoDB User _id during a JIT flow.
   /// This is set by ContactsScreen before navigating so the Cubit can call
@@ -29,7 +39,28 @@ class ChatSession {
     this.lastMessageSenderId = '',
     this.lastMessageStatus = MessageStatus.pending,
     this.contactUserId = '',     // defaults to empty; only set for JIT contact flows
+    this.type = ChatRoomType.PRIVATE, // Default to private
+    this.participants = const [],
+    this.admins = const [],
   });
+
+  @override
+  List<Object?> get props => [
+        id,
+        name,
+        lastMessage,
+        timestamp,
+        unreadCount,
+        isOnline,
+        avatarUrl,
+        phoneNumber,
+        lastMessageSenderId,
+        lastMessageStatus,
+        type,
+        participants,
+        admins,
+        contactUserId,
+      ];
 
   /// Creates a copy with specific fields overridden.
   /// Used by ContactsScreen to zero-out the room [id] and signal a JIT flow
@@ -46,6 +77,9 @@ class ChatSession {
     String? lastMessageSenderId,
     MessageStatus? lastMessageStatus,
     String? contactUserId,
+    ChatRoomType? type,
+    List<String>? participants,
+    List<String>? admins,
   }) {
     return ChatSession(
       id: id ?? this.id,
@@ -59,6 +93,9 @@ class ChatSession {
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
       lastMessageStatus: lastMessageStatus ?? this.lastMessageStatus,
       contactUserId: contactUserId ?? this.contactUserId,
+      type: type ?? this.type,
+      participants: participants ?? this.participants,
+      admins: admins ?? this.admins,
     );
   }
 
@@ -72,6 +109,25 @@ class ChatSession {
     String currentUserPhone,
   ) {
     final roomId = json['_id'] ?? json['id'] ?? '';
+    final roomType = ChatRoomType.values.firstWhere(
+      (e) => e.name == (json['type'] as String? ?? 'PRIVATE').toUpperCase(),
+      orElse: () => ChatRoomType.PRIVATE,
+    );
+
+    List<String> rawParticipants = [];
+    if (json['participants'] != null) {
+      rawParticipants = (json['participants'] as List<dynamic>)
+          .map((p) => (p as Map<String, dynamic>)['phoneNumber'] as String)
+          .toList();
+    }
+    
+    List<String> rawAdmins = [];
+    if (json['admins'] != null) {
+      rawAdmins = (json['admins'] as List<dynamic>)
+          .map((admin) => admin as String)
+          .toList();
+    }
+
 
     // Resolve display name from the other participant in a PRIVATE room,
     // or use the group name for GROUP rooms.
@@ -80,17 +136,19 @@ class ChatSession {
     String otherAvatar = '';
     bool otherIsOnline = false;
 
-    final participants = json['participants'] as List<dynamic>? ?? [];
-    if (json['type'] == 'PRIVATE' || displayName.isEmpty) {
+    if (roomType == ChatRoomType.PRIVATE || displayName.isEmpty) {
       // Find the participant who is NOT the current user
-      final other = participants.firstWhere(
+      final other = (json['participants'] as List<dynamic>? ?? []).firstWhere(
         (p) => (p['phoneNumber'] ?? '') != currentUserPhone,
-        orElse: () => participants.isNotEmpty ? participants.first : {},
+        orElse: () => {},
       );
       displayName = other['phoneNumber'] ?? 'Unknown';
       otherPhone = other['phoneNumber'] ?? '';
       otherAvatar = other['avatarUrl'] ?? '';
       otherIsOnline = other['isOnline'] == true;
+    } else if (roomType == ChatRoomType.GROUP) {
+      displayName = json['name'] ?? 'Group Chat';
+      otherAvatar = json['avatarUrl'] ?? '';
     }
 
     // Parse the nested lastMessage object
@@ -132,6 +190,9 @@ class ChatSession {
       phoneNumber: otherPhone,
       lastMessageSenderId: lastMsgSender,
       lastMessageStatus: lastMsgStatus,
+      type: roomType,
+      participants: rawParticipants,
+      admins: rawAdmins,
     );
   }
 
@@ -149,10 +210,27 @@ class ChatSession {
       'phoneNumber': phoneNumber,
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageStatus': lastMessageStatus.name,
+      'type': type.name, // Store enum as string
+      'participants': jsonEncode(participants), // Convert list to JSON string
+      'admins': jsonEncode(admins), // Convert list to JSON string
     };
   }
 
   factory ChatSession.fromMap(Map<String, dynamic> map) {
+    List<String> participants = [];
+    if (map['participants'] != null) {
+      participants = (jsonDecode(map['participants'] as String) as List<dynamic>)
+          .map((e) => e as String)
+          .toList();
+    }
+
+    List<String> admins = [];
+    if (map['admins'] != null) {
+      admins = (jsonDecode(map['admins'] as String) as List<dynamic>)
+          .map((e) => e as String)
+          .toList();
+    }
+
     return ChatSession(
       id: map['id'] as String,
       name: map['name'] as String,
@@ -167,6 +245,12 @@ class ChatSession {
         (e) => e.name == map['lastMessageStatus'],
         orElse: () => MessageStatus.pending,
       ),
+      type: ChatRoomType.values.firstWhere(
+        (e) => e.name == (map['type'] as String? ?? 'PRIVATE'),
+        orElse: () => ChatRoomType.PRIVATE,
+      ),
+      participants: participants,
+      admins: admins,
     );
   }
 }
