@@ -113,6 +113,21 @@ class ChatCubit extends Cubit<ChatState> {
       final clientMsgId = data['clientMessageId'] ?? _uuid.v4();
       final mongoId = data['_id'] ?? data['id'] ?? _uuid.v4();
 
+      final rawType = data['type'] as String? ?? data['messageType'] as String?;
+      final incomingFileUrl = data['fileUrl'] as String?;
+      
+      // Smart inference if backend stripped the type string
+      MessageType inferredType = messageTypeFromString(rawType);
+      if (inferredType == MessageType.text && incomingFileUrl != null && incomingFileUrl.isNotEmpty) {
+        if (incomingFileUrl.contains('.m4a') || incomingFileUrl.contains('.mp3')) {
+          inferredType = MessageType.voiceNote;
+        } else if (incomingFileUrl.contains('.jpg') || incomingFileUrl.contains('.png') || incomingFileUrl.contains('.jpeg')) {
+          inferredType = MessageType.image;
+        } else {
+          inferredType = MessageType.file;
+        }
+      }
+
       final incoming = Message(
         id: mongoId,
         clientMessageId: clientMsgId,
@@ -121,8 +136,8 @@ class ChatCubit extends Cubit<ChatState> {
         text: data['content'] ?? '',
         timestamp: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
         status: MessageStatus.delivered,
-        type: messageTypeFromString(data['type'] as String?),
-        fileUrl: data['fileUrl'] as String?,
+        type: inferredType,
+        fileUrl: incomingFileUrl,
         metadata: data['metadata'] is Map
             ? Map<String, dynamic>.from(data['metadata'] as Map)
             : null,

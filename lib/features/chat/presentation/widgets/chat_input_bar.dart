@@ -60,22 +60,26 @@ class _ChatInputBarState extends State<ChatInputBar> {
   // ── Recording Flow ────────────────────────────────────────────────────────
 
   Future<void> _startRecording() async {
-    final status = await Permission.microphone.request();
-    if (status != PermissionStatus.granted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Microphone permission denied')),
-        );
-      }
-      return;
-    }
-
-    final dir = await getApplicationDocumentsDirectory();
-    final filePath =
-        '${dir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
+    debugPrint('[ChatInputBar] _startRecording initiated...');
     try {
+      final hasPermission = await _recorderController.checkPermission();
+      if (!hasPermission) {
+        debugPrint('[ChatInputBar] Microphone permission denied.');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission denied')),
+          );
+        }
+        return;
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final filePath =
+          '${dir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      debugPrint('[ChatInputBar] Starting audio_waveforms record to $filePath...');
       await _recorderController.record(path: filePath);
+      
       setState(() {
         _isRecording = true;
         _recordDuration = 0;
@@ -86,8 +90,12 @@ class _ChatInputBarState extends State<ChatInputBar> {
           _recordDuration++;
         });
       });
-    } catch (e) {
-      debugPrint('[ChatInputBar] Start recording failed: $e');
+      debugPrint('[ChatInputBar] Recording started successfully.');
+    } catch (e, stack) {
+      debugPrint('[ChatInputBar] Start recording failed: $e\n$stack');
+      setState(() {
+        _isRecording = false;
+      });
     }
   }
 
@@ -300,6 +308,11 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
   Widget _buildMicButton() {
     return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hold to record, release to send')),
+        );
+      },
       onLongPressStart: (_) => _startRecording(),
       onLongPressEnd: (_) => _stopAndSendRecording(),
       onLongPressMoveUpdate: (details) {

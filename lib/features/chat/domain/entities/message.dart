@@ -8,12 +8,16 @@ enum MessageType { text, image, file, voiceNote, contact }
 /// Maps a raw string from SQLite / socket payload to a [MessageType].
 /// Falls back to [MessageType.text] for any unknown / null value.
 MessageType messageTypeFromString(String? raw) {
-  switch (raw) {
+  final normalized = raw?.trim().toLowerCase();
+  switch (normalized) {
     case 'image':
       return MessageType.image;
     case 'file':
+    case 'document':
       return MessageType.file;
     case 'voice_note':
+    case 'voicenote':
+    case 'audio':
       return MessageType.voiceNote;
     case 'contact':
       return MessageType.contact;
