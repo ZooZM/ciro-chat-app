@@ -1,5 +1,7 @@
+import 'package:fpdart/fpdart.dart';
 import 'package:injectable/injectable.dart';
 
+import '../../../../core/error/failures.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_data_source.dart';
 import '../datasources/auth_local_data_source.dart';
@@ -12,58 +14,71 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._remoteDataSource, this._localDataSource);
 
   @override
-  Future<void> sendOtp(String phoneNumber) async {
-    await _remoteDataSource.sendOtp(phoneNumber);
+  Future<Either<Failure, void>> sendOtp(String phoneNumber) async {
+    try {
+      await _remoteDataSource.sendOtp(phoneNumber);
+      return const Right(null);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
   }
 
   @override
-  Future<Map<String, dynamic>> verifyOtp(
+  Future<Either<Failure, Map<String, dynamic>>> verifyOtp(
     String phoneNumber,
     String code,
   ) async {
-    final response = await _remoteDataSource.verifyOtp(phoneNumber, code);
+    try {
+      final response = await _remoteDataSource.verifyOtp(phoneNumber, code);
 
-    // Capture the response structure for debugging if it fails
-    final keys = response.keys.toList();
+      // Robust extraction: check both root and nested 'data' field
+      String? accessToken = response['accessToken'] as String?;
+      String? refreshToken = response['refreshToken'] as String?;
 
-    // Robust extraction: check both root and nested 'data' field
-    String? accessToken = response['accessToken'] as String?;
-    String? refreshToken = response['refreshToken'] as String?;
+      if (accessToken == null && response.containsKey('data')) {
+        final data = response['data'] as Map<String, dynamic>?;
+        accessToken = data?['accessToken'] as String?;
+        refreshToken = data?['refreshToken'] as String?;
+      }
 
-    if (accessToken == null && response.containsKey('data')) {
-      final data = response['data'] as Map<String, dynamic>?;
-      accessToken = data?['accessToken'] as String?;
-      refreshToken = data?['refreshToken'] as String?;
+      if (accessToken != null && accessToken.isNotEmpty) {
+        final user = response['user'] as Map<String, dynamic>?;
+        final userId = user?['_id'] ?? user?['id'] ?? '';
+        await _localDataSource.saveUserPhone(phoneNumber);
+        await _localDataSource.saveUserId(userId);
+        await _localDataSource.saveTokens(
+          accessToken: accessToken,
+          refreshToken: refreshToken ?? '',
+        );
+        await _localDataSource.setLoggedInStatus(true);
+        return Right(response);
+      } else {
+        return const Left(AuthFailure('Invalid token payload. Expected "accessToken"'));
+      }
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
     }
-
-    if (accessToken != null && accessToken.isNotEmpty) {
-      final user = response['user'] as Map<String, dynamic>?;
-      final userId = user?['_id'] ?? user?['id'] ?? '';
-      await _localDataSource.saveUserPhone(phoneNumber);
-      await _localDataSource.saveUserId(userId);
-      await _localDataSource.saveTokens(
-        accessToken: accessToken,
-        refreshToken: refreshToken ?? '',
-      );
-      await _localDataSource.setLoggedInStatus(true);
-    } else {
-      // Provide more diagnostic information in the error message
-      throw Exception(
-        'Invalid token payload. Found keys: $keys. Expected "accessToken" or "data.accessToken"',
-      );
-    }
-    return response;
   }
 
   @override
-  Future<void> logout() async {
-    await _localDataSource.deleteTokens();
+  Future<Either<Failure, void>> logout() async {
+    try {
+      await _localDataSource.deleteTokens();
+      return const Right(null);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
   }
 
   @override
-  Future<bool> checkAuthStatus() async {
-    final token = await _localDataSource.getAccessToken();
-    final isLoggedIn = await _localDataSource.getLoggedInStatus();
-    return token != null && token.isNotEmpty && isLoggedIn;
+  Future<Either<Failure, bool>> checkAuthStatus() async {
+    try {
+      final token = await _localDataSource.getAccessToken();
+      final isLoggedIn = await _localDataSource.getLoggedInStatus();
+      final isAuthenticated = token != null && token.isNotEmpty && isLoggedIn;
+      return Right(isAuthenticated);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
   }
 }

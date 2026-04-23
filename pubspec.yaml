@@ -45,6 +45,7 @@ dependencies:
   record: ^6.2.0
   path_provider: ^2.1.5
   audio_waveforms: ^2.0.2
+  fpdart: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +54,7 @@ dev_dependencies:
   injectable_generator: ^2.12.1
   build_runner: ^2.13.1
   mocktail: ^1.0.4
+  bloc_test: ^10.0.0
 
 flutter:
   uses-material-design: true
