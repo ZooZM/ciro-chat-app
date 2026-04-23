@@ -1,0 +1,85 @@
+# Speckit Constitution: Ciro Chat App Architecture Guidelines
+
+This document serves as the absolute source of truth for the architectural, structural, and behavioral patterns within the Ciro Chat App codebase. All AI assistants and human developers MUST adhere strictly to these rules.
+
+## 1. Strict Clean Architecture
+The project strictly enforces a Clean Architecture approach to ensure separation of concerns, testability, and independence from UI or frameworks.
+
+Each feature must be encapsulated within its own directory and strictly divided into three layers:
+
+- **Presentation Layer** (`presentation/`):
+  - Contains all UI elements (`pages/`, `widgets/`) and State Management (`bloc/`).
+  - *Rule*: Widgets must never contain business logic or direct API/DB calls. They only listen to state changes and dispatch events/methods to the Cubit.
+- **Domain Layer** (`domain/`):
+  - Contains the core business logic: `entities/` (pure Dart objects) and abstract `repositories/` (interfaces).
+  - *Rule*: This layer must NOT have any dependencies on Flutter, external packages (except maybe `equatable`), the Presentation layer, or the Data layer.
+- **Data Layer** (`data/`):
+  - Contains `models/` (Data Transfer Objects with `fromJson`/`toJson`), `datasources/` (API clients, local DB interactions), and implementations of the domain repositories (`repositories/`).
+  - *Rule*: Data sources are split into `local` and `remote`. Repositories coordinate between local and remote sources to facilitate the offline-first approach.
+
+### Feature Folder Structure Template
+```text
+lib/
+  core/
+    error/
+    network/
+    theme/
+    utils/
+  features/
+    [feature_name]/
+      data/
+        datasources/
+        models/
+        repositories/ (implementations)
+      domain/
+        entities/
+        repositories/ (interfaces)
+      presentation/
+        bloc/
+        pages/
+        widgets/
+```
+
+## 2. State Management: STRICTLY flutter_bloc (Cubit)
+- **Cubit over Bloc**: Use `Cubit` for state management to reduce boilerplate, unless dealing with highly complex stream transformations (e.g., debounce/throttle on search inputs) where `Bloc` is strictly necessary.
+- **State Classes**: State classes must extend `Equatable` to ensure proper comparison and minimize unnecessary UI rebuilds.
+- **Single Responsibility**: Each Cubit should manage the state of a single feature or logical UI component.
+- **Dependency Injection**: Cubits must receive their dependencies (Repositories or UseCases) via constructor injection (e.g., using `get_it` and `injectable`).
+
+## 3. Data Storage: Offline-First Approach
+The app must function seamlessly without a network connection. 
+
+- **SQLite (sqflite)**: Strictly use SQLite for relational, heavily queried, and structured data (e.g., Chat Messages, Chat Rooms, Contacts). Complex queries, sorting, and pagination must be handled at the database level.
+- **Hive**: Strictly use Hive for fast, simple key-value pairs and secure document storage (e.g., User Preferences, Authentication Tokens, Theme Settings).
+- **Offline Queue**: Any write operations (sending messages, updating profiles) performed while offline must be saved locally with a `pending` status and queued for synchronization once the network is restored.
+
+## 4. Real-Time Communication: Socket.io
+- **Single Connection**: The app must maintain a singleton Socket.io service (`SocketService`) that manages the persistent connection.
+- **Lifecycle Awareness**: The socket must intelligently connect upon successful authentication and strictly disconnect upon logout or token expiration.
+- **Event Delegation**: The `SocketService` must not contain UI or business logic. It should expose Streams or callback functions that Cubits can listen to.
+- **Idempotency**: Because of the offline-first nature, socket events must be idempotent. The frontend must handle duplicate events gracefully (e.g., ignoring a `newMessage` event if the message ID already exists in SQLite).
+
+## 5. Memory Leak Prevention & Logout Teardown
+Memory leaks are a critical failure point in chat applications.
+
+- **Stream Subscriptions**: Any `StreamSubscription` created inside a Cubit or a StatefulWidget MUST be saved to a variable and explicitly `.cancel()`ed in the `close()` or `dispose()` method.
+- **Controllers**: `TextEditingController`, `ScrollController`, `PlayerController` (audio), etc., MUST be disposed of in the `dispose()` method of stateful widgets.
+- **Async Gap Safety**: Before calling `setState()` or using `context` after an asynchronous operation, always check `if (!mounted) return;`.
+- **Global Logout Sequence**: Upon logout, the application MUST execute a strict teardown sequence:
+  1. Sever the WebSocket connection.
+  2. Cancel all active Streams/Timers.
+  3. Purge sensitive local data (clear Hive secure storage and delete/reset SQLite tables).
+  4. Reset singleton Cubits to their initial states.
+
+## 6. Code Formatting & Dart Lints
+- **Strict Linting**: The project must use `flutter_lints` (or a stricter custom `analysis_options.yaml`). All warnings must be treated as errors during CI/CD.
+- **Immutability**: Prefer `const` constructors and `final` variables wherever possible.
+- **Naming Conventions**: 
+  - Classes: `PascalCase`
+  - Variables/Methods: `camelCase`
+  - Files/Folders: `snake_case`
+
+## 7. Error Handling
+- **Structured Errors**: Avoid raw `try-catch` blocks leaking into the UI. The Data layer should catch exceptions (e.g., `DioException`, `DatabaseException`) and map them to domain-specific `Failure` classes.
+- **Return Types**: Repositories should ideally return `Either<Failure, Type>` (using the `fpdart` or `dartz` package) to explicitly enforce error handling in the Cubit layer.
+- **User Feedback**: The Presentation layer must listen for error states in the Cubit and display user-friendly SnackBars or Dialogs.
