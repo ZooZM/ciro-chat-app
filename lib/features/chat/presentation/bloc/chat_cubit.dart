@@ -331,6 +331,7 @@ class ChatCubit extends Cubit<ChatState> {
       timestamp: DateTime.now(),
       status: MessageStatus.pending,
       type: MessageType.image,
+      metadata: {'localPath': picked.path},
     );
     await _localDataSource.saveMessage(
       optimistic,
@@ -344,6 +345,7 @@ class ChatCubit extends Cubit<ChatState> {
       final serverMeta = await _chatApiService.uploadFile(File(picked.path));
       final fileUrl = serverMeta['fileUrl'] as String? ?? '';
       final meta = {
+        'localPath': picked.path,
         'mimeType': serverMeta['mimeType'] ?? 'image/jpeg',
         'fileName': serverMeta['fileName'] ?? picked.name,
         'fileSize': serverMeta['fileSize'] ?? 0,
@@ -409,6 +411,7 @@ class ChatCubit extends Cubit<ChatState> {
       status: MessageStatus.pending,
       type: MessageType.file,
       metadata: {
+        'localPath': filePath,
         'fileName': pickedFile.name,
         'fileSize': pickedFile.size,
       },
@@ -425,6 +428,7 @@ class ChatCubit extends Cubit<ChatState> {
       final serverMeta = await _chatApiService.uploadFile(File(filePath));
       final fileUrl = serverMeta['fileUrl'] as String? ?? '';
       final meta = {
+        'localPath': filePath,
         'fileName': serverMeta['fileName'] ?? pickedFile.name,
         'fileSize': serverMeta['fileSize'] ?? pickedFile.size,
         'mimeType': serverMeta['mimeType'] ?? 'application/octet-stream',
@@ -505,7 +509,10 @@ class ChatCubit extends Cubit<ChatState> {
       timestamp: DateTime.now(),
       status: MessageStatus.pending,
       type: MessageType.voiceNote,
-      metadata: {'duration': durationSeconds},
+      metadata: {
+        'localPath': localPath,
+        'duration': durationSeconds,
+      },
     );
     await _localDataSource.saveMessage(
       optimistic,
@@ -519,6 +526,7 @@ class ChatCubit extends Cubit<ChatState> {
       final serverMeta = await _chatApiService.uploadFile(File(localPath));
       final fileUrl = serverMeta['fileUrl'] as String? ?? '';
       final meta = {
+        'localPath': localPath,
         'duration': durationSeconds,
         'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
         'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',

@@ -1,10 +1,13 @@
+import 'dart:io';
+
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:intl/intl.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import '../bloc/voice_note_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
@@ -45,15 +48,15 @@ class MessageBubbleWidget extends StatelessWidget {
   bool get _isMine => message.senderId == currentUserId;
 
   Color get _bgColor =>
-      _isMine ? AppColors.surface : const Color(0xFFDFFAC4);
+      _isMine ? AppColors.primaryLight : AppColors.surface;
 
   BorderRadius _borderRadius() {
-    final r = Radius.circular(16.resR);
+    final r = Radius.circular(12.resR);
     return BorderRadius.only(
       topLeft: _isMine ? r : Radius.zero,
-      topRight: r,
+      topRight: _isMine ? Radius.zero : r,
       bottomLeft: r,
-      bottomRight: _isMine ? Radius.zero : r,
+      bottomRight: r,
     );
   }
 
@@ -185,32 +188,44 @@ class _ImageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = _resolveUrl(message.fileUrl);
-    final isUploading = url.isEmpty;
+    final meta = message.metadata ?? {};
+    final localPath = meta['localPath'] as String?;
+    final fileUrl = message.fileUrl;
+    
+    final hasLocal = localPath != null && File(localPath).existsSync();
+    final url = _resolveUrl(fileUrl);
+    final isUploading = !hasLocal && url.isEmpty;
 
     return Column(
       crossAxisAlignment:
           isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12.resR),
+          borderRadius: BorderRadius.circular(8.resR),
           child: isUploading
               ? _UploadingPlaceholder()
               : GestureDetector(
-                  onTap: () => _openImageViewer(context, url),
-                  child: CachedNetworkImage(
-                    imageUrl: url,
-                    width: 220.resW,
-                    height: 180.resH,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => _UploadingPlaceholder(),
-                    errorWidget: (_, __, ___) => Container(
-                      width: 220.resW,
-                      height: 180.resH,
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
-                    ),
-                  ),
+                  onTap: () => _openImageViewer(context, hasLocal ? localPath : url, hasLocal),
+                  child: hasLocal
+                      ? Image.file(
+                          File(localPath),
+                          width: 220.resW,
+                          height: 180.resH,
+                          fit: BoxFit.cover,
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: url,
+                          width: 220.resW,
+                          height: 180.resH,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => _UploadingPlaceholder(),
+                          errorWidget: (_, __, ___) => Container(
+                            width: 220.resW,
+                            height: 180.resH,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+                          ),
+                        ),
                 ),
         ),
         Padding(
@@ -226,10 +241,10 @@ class _ImageBubble extends StatelessWidget {
     );
   }
 
-  void _openImageViewer(BuildContext context, String url) {
+  void _openImageViewer(BuildContext context, String pathOrUrl, bool isLocal) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _FullScreenImageViewer(url: url),
+        builder: (_) => _FullScreenImageViewer(pathOrUrl: pathOrUrl, isLocal: isLocal),
       ),
     );
   }
@@ -260,8 +275,9 @@ class _UploadingPlaceholder extends StatelessWidget {
 }
 
 class _FullScreenImageViewer extends StatelessWidget {
-  final String url;
-  const _FullScreenImageViewer({required this.url});
+  final String pathOrUrl;
+  final bool isLocal;
+  const _FullScreenImageViewer({required this.pathOrUrl, required this.isLocal});
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +289,9 @@ class _FullScreenImageViewer extends StatelessWidget {
       ),
       body: Center(
         child: InteractiveViewer(
-          child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+          child: isLocal
+              ? Image.file(File(pathOrUrl), fit: BoxFit.contain)
+              : CachedNetworkImage(imageUrl: pathOrUrl, fit: BoxFit.contain),
         ),
       ),
     );
@@ -396,43 +414,93 @@ class _VoiceBubble extends StatefulWidget {
 }
 
 class _VoiceBubbleState extends State<_VoiceBubble> {
-  late final AudioPlayer _player;
+  late final PlayerController _playerController;
   bool _isPlaying = false;
+  bool _isPrepared = false;
+  bool _isPreparing = false;
 
   @override
   void initState() {
     super.initState();
-    _player = AudioPlayer();
-    _player.playerStateStream.listen((state) {
+    _playerController = PlayerController();
+    _playerController.onPlayerStateChanged.listen((state) {
       if (mounted) {
         setState(() {
-          _isPlaying = state.playing;
+          _isPlaying = state == PlayerState.playing;
         });
       }
     });
+
+    VoiceNoteController().currentlyPlayingIdNotifier.addListener(_onCurrentlyPlayingChanged);
+    _preparePlayer();
+  }
+
+  void _onCurrentlyPlayingChanged() {
+    if (VoiceNoteController().currentlyPlayingIdNotifier.value != widget.message.id) {
+      if (_isPlaying) {
+        _playerController.pausePlayer();
+      }
+    }
+  }
+
+  Future<void> _preparePlayer() async {
+    if (_isPrepared || _isPreparing) return;
+    _isPreparing = true;
+
+    final meta = widget.message.metadata ?? {};
+    final localPath = meta['localPath'] as String?;
+    final fileUrl = widget.message.fileUrl;
+    
+    String? path;
+    if (localPath != null && File(localPath).existsSync()) {
+      path = localPath;
+    } else if (fileUrl != null && fileUrl.isNotEmpty) {
+      path = _resolveUrl(fileUrl);
+    }
+
+    if (path != null) {
+      try {
+        await _playerController.preparePlayer(
+          path: path,
+          shouldExtractWaveform: true,
+          noOfSamples: 50,
+          volume: 1.0,
+        );
+        if (mounted) {
+          setState(() {
+            _isPrepared = true;
+            _isPreparing = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('[VoiceBubble] prepare error: $e');
+        _isPreparing = false;
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _VoiceBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If it was uploading and now has a URL/Path, prepare it
+    if (!_isPrepared && !_isPreparing) {
+      _preparePlayer();
+    }
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    VoiceNoteController().currentlyPlayingIdNotifier.removeListener(_onCurrentlyPlayingChanged);
+    _playerController.dispose();
     super.dispose();
   }
 
-  Future<void> _toggle() async {
-    final url = _resolveUrl(widget.message.fileUrl);
-    if (url.isEmpty) return;
-    try {
-      if (_isPlaying) {
-        await _player.pause();
-      } else {
-        if (_player.processingState == ProcessingState.idle ||
-            _player.processingState == ProcessingState.completed) {
-          await _player.setUrl(url);
-        }
-        await _player.play();
-      }
-    } catch (e) {
-      debugPrint('[VoiceBubble] Playback error: $e');
+  void _togglePlay() async {
+    if (!_isPrepared) return;
+    if (_isPlaying) {
+      await _playerController.pausePlayer();
+    } else {
+      VoiceNoteController().play(widget.message.id, _playerController);
     }
   }
 
@@ -446,11 +514,14 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   Widget build(BuildContext context) {
     final meta = widget.message.metadata ?? {};
     final duration = meta['duration'] as int? ?? 0;
-    final isUploading =
-        widget.message.fileUrl == null || widget.message.fileUrl!.isEmpty;
+    
+    final localPath = meta['localPath'] as String?;
+    final fileUrl = widget.message.fileUrl;
+    final hasLocal = localPath != null && File(localPath).existsSync();
+    final isUploading = !hasLocal && (fileUrl == null || fileUrl.isEmpty);
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 10.resH),
+      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
         crossAxisAlignment: widget.isMine
             ? CrossAxisAlignment.end
@@ -459,19 +530,19 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Play / pause button.
+              // Play / pause button or spinner
               GestureDetector(
-                onTap: isUploading ? null : _toggle,
+                onTap: (isUploading || !_isPrepared) ? null : _togglePlay,
                 child: Container(
-                  width: 40.resW,
-                  height: 40.resW,
+                  width: 44.resW,
+                  height: 44.resW,
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
-                  child: isUploading
+                  child: isUploading || (_isPreparing && !hasLocal)
                       ? const Padding(
-                          padding: EdgeInsets.all(10),
+                          padding: EdgeInsets.all(12),
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
@@ -480,32 +551,36 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                       : Icon(
                           _isPlaying ? Icons.pause : Icons.play_arrow,
                           color: Colors.white,
-                          size: 22.resW,
+                          size: 26.resW,
                         ),
                 ),
               ),
-              SizedBox(width: 10.resW),
-              // Waveform placeholder bar.
-              Flexible(
+              SizedBox(width: 8.resW),
+              
+              // Waveform
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4.resR),
-                      child: StreamBuilder<Duration?>(
-                        stream: _player.positionStream,
-                        builder: (context, snapshot) {
-                          final pos = snapshot.data?.inSeconds ?? 0;
-                          final total = duration > 0 ? duration : 1;
-                          final progress = (pos / total).clamp(0.0, 1.0);
-                          return LinearProgressIndicator(
-                            value: isUploading ? null : progress,
-                            backgroundColor: Colors.grey.shade300,
-                            color: AppColors.primary,
-                            minHeight: 4.resH,
-                          );
-                        },
-                      ),
+                    Container(
+                      height: 36.resH,
+                      child: _isPrepared
+                          ? AudioFileWaveforms(
+                              size: Size(MediaQuery.of(context).size.width * 0.4, 36.resH),
+                              playerController: _playerController,
+                              enableSeekGesture: true,
+                              waveformType: WaveformType.fitWidth,
+                              playerWaveStyle: PlayerWaveStyle(
+                                fixedWaveColor: Colors.grey.shade400,
+                                liveWaveColor: AppColors.primary,
+                                spacing: 5,
+                                waveThickness: 2.resW,
+                              ),
+                            )
+                          : Container(
+                              height: 2.resH,
+                              color: Colors.grey.shade300,
+                            ),
                     ),
                     SizedBox(height: 4.resH),
                     Text(
@@ -517,6 +592,14 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                     ),
                   ],
                 ),
+              ),
+              SizedBox(width: 8.resW),
+              
+              // Avatar placeholder (optional)
+              CircleAvatar(
+                radius: 18.resR,
+                backgroundColor: Colors.grey.shade300,
+                child: Icon(Icons.person, color: Colors.white, size: 20.resW),
               ),
             ],
           ),
