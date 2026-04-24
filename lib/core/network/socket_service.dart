@@ -34,7 +34,7 @@ class SocketService {
   void Function()? onReconnected;
 
   /// Fired when another user in the active room is typing.
-  void Function(String userId, String phoneNumber, bool isTyping)? onUserTyping;
+  void Function(String roomId, String userId, String phoneNumber, bool isTyping)? onUserTyping;
 
   // ── Call signaling callbacks (set by CallCubit) ───────────────────────────
   void Function(Map<String, dynamic> data)? onIncomingCall;
@@ -145,10 +145,11 @@ class SocketService {
     _socket?.on('userTyping', (data) {
       debugPrint('[SocketService] userTyping: $data');
       if (data != null && data is Map<String, dynamic>) {
+        final roomId = data['chatRoomId']?.toString() ?? '';
         final userId = data['userId']?.toString() ?? '';
         final phoneNumber = data['phoneNumber']?.toString() ?? '';
         final isTyping = data['isTyping'] == true;
-        onUserTyping?.call(userId, phoneNumber, isTyping);
+        onUserTyping?.call(roomId, userId, phoneNumber, isTyping);
       }
     });
 
@@ -174,7 +175,7 @@ class SocketService {
   /// Joins a chat room's socket channel. Call this immediately after a JIT
   /// room is created so the backend starts routing messages to this client.
   void joinRoom(String roomId) {
-    _socket?.emit('joinRoom', {'chatRoomId': roomId});
+    _socket?.emit('joinRoom', {'roomId': roomId});
     debugPrint('[SocketService] Joined room: $roomId');
   }
 

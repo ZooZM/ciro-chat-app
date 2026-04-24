@@ -4,6 +4,7 @@ import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/entities/message.dart';
+import 'package:ciro_chat_app/features/chat/presentation/pages/group_info_page.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
@@ -74,9 +75,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void _sendMessage() {
     final text = _msgController.text.trim();
     if (text.isNotEmpty) {
-      context.read<ChatCubit>().sendLocalMessage(
-            MessageDraft(text: text),
-          );
+      context.read<ChatCubit>().sendLocalMessage(MessageDraft(text: text));
       _msgController.clear();
       _scrollToBottom();
     }
@@ -160,12 +159,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
           title: InkWell(
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChatInfoScreen(chatData: widget.chatData),
-                ),
-              );
+              builder:
+              (_) => widget.chatData.type == ChatRoomType.GROUP
+                  ? GroupInfoPage(chatData: widget.chatData)
+                  : ChatInfoScreen(chatData: widget.chatData);
             },
             child: Row(
               children: [
@@ -175,22 +172,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       radius: 18.resR,
                       backgroundColor: AppColors.divider,
                       backgroundImage: widget.chatData.avatarUrl.isNotEmpty
-                          ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
+                          ? CachedNetworkImageProvider(
+                              widget.chatData.avatarUrl,
+                            )
                           : null,
                       child: widget.chatData.avatarUrl.isEmpty
                           ? (widget.chatData.type == ChatRoomType.GROUP
-                              ? Icon(Icons.groups, color: AppColors.primary)
-                              : Text(
-                                  widget.chatData.name.isNotEmpty
-                                      ? widget.chatData.name[0].toUpperCase()
-                                      : '?',
-                                  style: AppTypography.subtitle1.copyWith(
-                                    color: AppColors.primary,
-                                  ),
-                                ))
+                                ? Icon(Icons.groups, color: AppColors.primary)
+                                : Text(
+                                    widget.chatData.name.isNotEmpty
+                                        ? widget.chatData.name[0].toUpperCase()
+                                        : '?',
+                                    style: AppTypography.subtitle1.copyWith(
+                                      color: AppColors.primary,
+                                    ),
+                                  ))
                           : null,
                     ),
-                    if (widget.chatData.isOnline && widget.chatData.type == ChatRoomType.PRIVATE)
+                    if (widget.chatData.isOnline &&
+                        widget.chatData.type == ChatRoomType.PRIVATE)
                       Positioned(
                         right: 0,
                         bottom: 0,
@@ -242,7 +242,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           return Text(
                             widget.chatData.type == ChatRoomType.GROUP
                                 ? '${widget.chatData.participants.length} participants'
-                                : (widget.chatData.isOnline ? 'online' : 'offline'),
+                                : (widget.chatData.isOnline
+                                      ? 'online'
+                                      : 'offline'),
                             style: AppTypography.body2.copyWith(
                               color: AppColors.textSecondary,
                             ),
@@ -388,15 +390,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 onAttachmentTap: () => _showAttachmentSheet(context),
                 onSendText: (text) {
                   context.read<ChatCubit>().sendLocalMessage(
-                        MessageDraft(text: text),
-                      );
+                    MessageDraft(text: text),
+                  );
                   _scrollToBottom();
                 },
               ),
             ],
           ), // Column
         ), // AnimatedOpacity
-      ),
-    ); // Scaffold
-  } // BlocListener
+      ), // Scaffold
+    ); // BlocListener
+  }
 }

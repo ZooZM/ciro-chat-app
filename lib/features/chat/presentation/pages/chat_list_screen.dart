@@ -216,23 +216,33 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       );
                     }
 
-                    return ListView.separated(
-                      itemCount: activeChats.length,
-                      separatorBuilder: (context, index) => Divider(
-                        height: 1,
-                        color: AppColors.divider.withOpacity(0.5),
-                        indent: 80.resW, // Lines up under names
-                      ),
-                      itemBuilder: (context, index) {
-                        final chat = activeChats[index];
-                        return ChatTileWidget(
-                          key: ValueKey(chat.id),
-                          chat: chat,
-                          currentUserId: context
-                              .read<ChatCubit>()
-                              .currentUserId,
-                          onTap: () {
-                            context.push('/chat_room', extra: chat);
+                    return StreamBuilder<Map<String, Set<String>>>(
+                      stream: context.read<ChatCubit>().allTypingUsersStream,
+                      builder: (context, typingSnapshot) {
+                        final typingMap = typingSnapshot.data ?? {};
+                        
+                        return ListView.separated(
+                          itemCount: activeChats.length,
+                          separatorBuilder: (context, index) => Divider(
+                            height: 1,
+                            color: AppColors.divider.withOpacity(0.5),
+                            indent: 80.resW, // Lines up under names
+                          ),
+                          itemBuilder: (context, index) {
+                            final chat = activeChats[index];
+                            final isTyping = (typingMap[chat.id]?.isNotEmpty ?? false);
+                            
+                            return ChatTileWidget(
+                              key: ValueKey(chat.id),
+                              chat: chat,
+                              currentUserId: context
+                                  .read<ChatCubit>()
+                                  .currentUserId,
+                              isTyping: isTyping,
+                              onTap: () {
+                                context.push('/chat_room', extra: chat);
+                              },
+                            );
                           },
                         );
                       },

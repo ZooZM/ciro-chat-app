@@ -79,10 +79,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Create UI `GroupInfoPage` in `lib/features/chat/presentation/pages/group_info_page.dart` to display the participant list
-- [ ] T016 [US3] Update `ChatCubit` to handle adding and removing participants
-- [ ] T017 [US3] Implement conditional "Add Participant" and "Remove" UI elements in `GroupInfoPage` based on admin status
-- [ ] T018 [US3] Add `GroupParticipantTile` widget in `lib/features/chat/presentation/widgets/group_participant_tile.dart`
+- [X] T015 [US3] Create UI `GroupInfoPage` in `lib/features/chat/presentation/pages/group_info_page.dart` to display the participant list
+- [X] T016 [US3] Update `ChatCubit` to handle adding and removing participants
+- [X] T017 [US3] Implement conditional "Add Participant" and "Remove" UI elements in `GroupInfoPage` based on admin status
+- [X] T018 [US3] Add `GroupParticipantTile` widget in `lib/features/chat/presentation/widgets/group_participant_tile.dart`
 
 **Checkpoint**: Admins can manage group membership.
 

@@ -53,6 +53,9 @@ abstract class ChatLocalDataSource {
 
   /// Deletes a message from the local DB and removes any associated cached file.
   Future<void> deleteMessage(String messageId);
+
+  /// Deletes a room and all its associated messages.
+  Future<void> deleteRoom(String roomId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -595,6 +598,20 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       whereArgs: [roomId],
     );
     await _dispatchRecentChatsUpdate();
+  }
+
+  // ── deleteRoom ─────────────────────────────────────────────────────────────
+
+  @override
+  Future<void> deleteRoom(String roomId) async {
+    final db = _db;
+    if (db == null) return;
+
+    await db.delete('rooms', where: 'id = ?', whereArgs: [roomId]);
+    await db.delete('messages', where: 'room_id = ?', whereArgs: [roomId]);
+    
+    await _dispatchRecentChatsUpdate();
+    closeRoomStream(roomId);
   }
 
   // ── closeRoomStream ─────────────────────────────────────────────────────────

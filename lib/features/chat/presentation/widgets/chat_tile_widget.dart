@@ -12,12 +12,14 @@ class ChatTileWidget extends StatelessWidget {
   final ChatSession chat;
   final VoidCallback onTap;
   final String currentUserId;
+  final bool isTyping;
 
   const ChatTileWidget({
     Key? key,
     required this.chat,
     required this.onTap,
     required this.currentUserId,
+    this.isTyping = false,
   }) : super(key: key);
 
   @override
@@ -87,13 +89,16 @@ class ChatTileWidget extends StatelessWidget {
           ],
           Expanded(
             child: Text(
-              chat.lastMessage,
+              isTyping ? 'typing...' : chat.lastMessage,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.body2.copyWith(
-                color: chat.unreadCount > 0
-                    ? Colors.black87
-                    : AppColors.textSecondary,
+                color: isTyping 
+                    ? AppColors.primary 
+                    : (chat.unreadCount > 0
+                        ? Colors.black87
+                        : AppColors.textSecondary),
+                fontStyle: isTyping ? FontStyle.italic : null,
               ),
             ),
           ),

@@ -63,6 +63,13 @@ class ChatCubit extends Cubit<ChatState> {
   Stream<Set<String>> get typingUsersStream => _typingUsersController.stream;
   final Set<String> _currentTypingUsers = {};
 
+  // Per-room typing state to support chat list indicators
+  final Map<String, Set<String>> _typingUsersByRoom = {};
+  final _roomTypingController =
+      StreamController<Map<String, Set<String>>>.broadcast();
+  Stream<Map<String, Set<String>>> get allTypingUsersStream =>
+      _roomTypingController.stream;
+
   ChatCubit(
     this._localDataSource,
     this._socketService,
@@ -90,7 +97,11 @@ class ChatCubit extends Cubit<ChatState> {
     // ── Sender-side status promotions ─────────────────────────────────────────
 
     _socketService.onMessageSent = (clientMessageId, createdAt) {
-      handleMessageStatusUpdate(clientMessageId, MessageStatus.sent, createdAt: createdAt);
+      handleMessageStatusUpdate(
+        clientMessageId,
+        MessageStatus.sent,
+        createdAt: createdAt,
+      );
     };
 
     _socketService.onMessageDelivered = (clientMessageIds) {
@@ -113,17 +124,29 @@ class ChatCubit extends Cubit<ChatState> {
       syncPendingMessages().ignore();
     };
 
-    _socketService.onUserTyping = (userId, phoneNumber, isTyping) {
-      if (_activeRoomId == null) return;
+    _socketService.onUserTyping = (roomId, userId, phoneNumber, isTyping) {
       final identifier = phoneNumber.isNotEmpty ? phoneNumber : userId;
       if (identifier.isEmpty) return;
-      
+
+      // 1. Update per-room map
+      final roomTypers = _typingUsersByRoom[roomId] ?? {};
       if (isTyping) {
-        _currentTypingUsers.add(identifier);
+        roomTypers.add(identifier);
       } else {
-        _currentTypingUsers.remove(identifier);
+        roomTypers.remove(identifier);
       }
-      _typingUsersController.add(Set.from(_currentTypingUsers));
+      _typingUsersByRoom[roomId] = roomTypers;
+      _roomTypingController.add(Map.from(_typingUsersByRoom));
+
+      // 2. Update active room stream if matches
+      if (roomId == _activeRoomId) {
+        if (isTyping) {
+          _currentTypingUsers.add(identifier);
+        } else {
+          _currentTypingUsers.remove(identifier);
+        }
+        _typingUsersController.add(Set.from(_currentTypingUsers));
+      }
     };
 
     // ── Recipient-side: incoming message ──────────────────────────────────────
@@ -134,13 +157,18 @@ class ChatCubit extends Cubit<ChatState> {
 
       final rawType = data['type'] as String? ?? data['messageType'] as String?;
       final incomingFileUrl = data['fileUrl'] as String?;
-      
+
       // Smart inference if backend stripped the type string
       MessageType inferredType = messageTypeFromString(rawType);
-      if (inferredType == MessageType.text && incomingFileUrl != null && incomingFileUrl.isNotEmpty) {
-        if (incomingFileUrl.contains('.m4a') || incomingFileUrl.contains('.mp3')) {
+      if (inferredType == MessageType.text &&
+          incomingFileUrl != null &&
+          incomingFileUrl.isNotEmpty) {
+        if (incomingFileUrl.contains('.m4a') ||
+            incomingFileUrl.contains('.mp3')) {
           inferredType = MessageType.voiceNote;
-        } else if (incomingFileUrl.contains('.jpg') || incomingFileUrl.contains('.png') || incomingFileUrl.contains('.jpeg')) {
+        } else if (incomingFileUrl.contains('.jpg') ||
+            incomingFileUrl.contains('.png') ||
+            incomingFileUrl.contains('.jpeg')) {
           inferredType = MessageType.image;
         } else {
           inferredType = MessageType.file;
@@ -235,10 +263,7 @@ class ChatCubit extends Cubit<ChatState> {
       if (msg.senderId != currentUserId &&
           msg.status == MessageStatus.delivered) {
         idsToMark.add(msg.clientMessageId);
-        await _localDataSource.updateMessageStatus(
-          msg.id,
-          MessageStatus.read,
-        );
+        await _localDataSource.updateMessageStatus(msg.id, MessageStatus.read);
       }
     }
     if (idsToMark.isNotEmpty) {
@@ -273,7 +298,9 @@ class ChatCubit extends Cubit<ChatState> {
   Future<bool> _ensureRoom(ChatSession? pendingContact) async {
     if (_activeRoomId != null) return true;
     if (pendingContact == null) {
-      debugPrint('[ChatCubit] sendMessage: no active room and no pending contact');
+      debugPrint(
+        '[ChatCubit] sendMessage: no active room and no pending contact',
+      );
       return false;
     }
 
@@ -401,7 +428,10 @@ class ChatCubit extends Cubit<ChatState> {
       await uploadResult.fold(
         (failure) async {
           debugPrint('[ChatCubit] Image upload failed: $failure');
-          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          await _localDataSource.updateMessageStatus(
+            msgId,
+            MessageStatus.error,
+          );
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -500,7 +530,10 @@ class ChatCubit extends Cubit<ChatState> {
       await uploadResult.fold(
         (failure) async {
           debugPrint('[ChatCubit] File upload failed: $failure');
-          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          await _localDataSource.updateMessageStatus(
+            msgId,
+            MessageStatus.error,
+          );
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -562,10 +595,7 @@ class ChatCubit extends Cubit<ChatState> {
       MessageDraft(
         text: '👤 $contactName',
         type: MessageType.contact,
-        metadata: {
-          'contactName': contactName,
-          'contactPhone': contactPhone,
-        },
+        metadata: {'contactName': contactName, 'contactPhone': contactPhone},
       ),
     );
   }
@@ -596,10 +626,7 @@ class ChatCubit extends Cubit<ChatState> {
       timestamp: DateTime.now(),
       status: MessageStatus.pending,
       type: MessageType.voiceNote,
-      metadata: {
-        'localPath': localPath,
-        'duration': durationSeconds,
-      },
+      metadata: {'localPath': localPath, 'duration': durationSeconds},
     );
     await _localDataSource.saveMessage(
       optimistic,
@@ -614,7 +641,10 @@ class ChatCubit extends Cubit<ChatState> {
       await uploadResult.fold(
         (failure) async {
           debugPrint('[ChatCubit] Voice note upload failed: $failure');
-          await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+          await _localDataSource.updateMessageStatus(
+            msgId,
+            MessageStatus.error,
+          );
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -709,7 +739,9 @@ class ChatCubit extends Cubit<ChatState> {
       }
 
       final ids = stuck.map((m) => m.clientMessageId).toList();
-      debugPrint('[ChatCubit] REST sync: checking ${ids.length} stuck message(s)');
+      debugPrint(
+        '[ChatCubit] REST sync: checking ${ids.length} stuck message(s)',
+      );
 
       final result = await _chatRepository.syncMessageStatuses(ids);
       await result.fold(
@@ -720,12 +752,7 @@ class ChatCubit extends Cubit<ChatState> {
         (statuses) async {
           if (statuses.isEmpty) return;
 
-          const rankOf = {
-            'pending': 0,
-            'sent': 1,
-            'delivered': 2,
-            'read': 3,
-          };
+          const rankOf = {'pending': 0, 'sent': 1, 'delivered': 2, 'read': 3};
 
           for (final msg in stuck) {
             final serverStatusStr = statuses[msg.clientMessageId];
@@ -740,7 +767,9 @@ class ChatCubit extends Cubit<ChatState> {
             final newRank = rankOf[serverStatus.name] ?? 0;
             if (newRank > currentRank) {
               await _localDataSource.updateMessageStatus(msg.id, serverStatus);
-              debugPrint('[ChatCubit] REST sync: ${msg.id} → ${serverStatus.name}');
+              debugPrint(
+                '[ChatCubit] REST sync: ${msg.id} → ${serverStatus.name}',
+              );
             }
           }
         },
@@ -764,7 +793,8 @@ class ChatCubit extends Cubit<ChatState> {
         break;
       }
       // Skip media messages that are still uploading (fileUrl not yet set).
-      if (msg.type != MessageType.text && (msg.fileUrl == null || msg.fileUrl!.isEmpty)) {
+      if (msg.type != MessageType.text &&
+          (msg.fileUrl == null || msg.fileUrl!.isEmpty)) {
         debugPrint('[ChatCubit] Skipping in-flight upload: ${msg.id}');
         continue;
       }
@@ -795,7 +825,9 @@ class ChatCubit extends Cubit<ChatState> {
           for (final room in rooms) {
             await _localDataSource.saveRoom(room);
           }
-          debugPrint('[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite');
+          debugPrint(
+            '[ChatCubit] Hydrated ${rooms.length} room(s) into SQLite',
+          );
         },
       );
     } catch (e) {
@@ -843,6 +875,33 @@ class ChatCubit extends Cubit<ChatState> {
         openRoom(newRoom.id); // Navigate to the new group chat
       },
     );
+  }
+
+  Future<void> addParticipants(String roomId, List<String> userPhones) async {
+    final result = await _chatRepository.addParticipants(roomId, userPhones);
+    result.fold(
+      (failure) => emit(ChatError(failure.message)),
+      (_) => hydrateRooms(), // Refresh local state to reflect new participants
+    );
+  }
+
+  Future<void> removeParticipant(String roomId, String participantId) async {
+    final result = await _chatRepository.removeParticipant(
+      roomId,
+      participantId,
+    );
+    result.fold(
+      (failure) => emit(ChatError(failure.message)),
+      (_) => hydrateRooms(), // Refresh local state to reflect removal
+    );
+  }
+
+  Future<void> leaveGroup(String roomId) async {
+    final result = await _chatRepository.leaveGroup(roomId);
+    result.fold((failure) => emit(ChatError(failure.message)), (_) async {
+      await _localDataSource.deleteRoom(roomId);
+      hydrateRooms();
+    });
   }
 
   @override
@@ -897,11 +956,10 @@ class ChatCubit extends Cubit<ChatState> {
           );
 
           final updatedMessages = List<Message>.from(currentMessages);
-          updatedMessages[messageIndex] =
-              currentMessage.copyWith(
-                status: incomingStatus,
-                timestamp: createdAt ?? currentMessage.timestamp,
-              );
+          updatedMessages[messageIndex] = currentMessage.copyWith(
+            status: incomingStatus,
+            timestamp: createdAt ?? currentMessage.timestamp,
+          );
           emit(ChatRoomActive(currentRoomId, updatedMessages));
         }
         return;
@@ -909,8 +967,9 @@ class ChatCubit extends Cubit<ChatState> {
     }
 
     // Fallback: not in active room view.
-    final currentStatusDB =
-        await _localDataSource.getMessageStatus(clientMessageId);
+    final currentStatusDB = await _localDataSource.getMessageStatus(
+      clientMessageId,
+    );
     if (currentStatusDB != null) {
       final currentWeightDB = getStatusWeight(currentStatusDB);
       if (incomingWeight > currentWeightDB) {
