@@ -173,7 +173,7 @@ description: "Task list template for feature implementation"
 
 - [x] T045 [US7] Wire `_handleCamera` handler → `ChatCubit.sendCameraMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
 - [x] T046 [US7] Wire `_handleLocation` handler → show `google_maps_flutter` picker → `ChatCubit.sendLocationMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [ ] T046b [US7] Implement graceful handling of location permission denial during the Location attachment flow in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
+- [x] T046b [US7] Implement graceful handling of location permission denial during the Location attachment flow in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
 - [x] T047 [US7] Wire `_handleAudio` handler → `ChatCubit.sendAudioMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
 - [x] T048 [US7] Wire `_handlePoll` handler → show poll creation dialog → `ChatCubit.sendPollMessage()`. Hide/disable Poll option when `ChatSession.type == PRIVATE` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
 - [x] T049 [US7] Wire `_handleEvent` handler → show event creation dialog → `ChatCubit.sendEventMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`

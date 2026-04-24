@@ -72,22 +72,6 @@ final List<AttachmentOptionModel> _attachmentOptions = [
     icon: Icons.calendar_today_outlined,
     iconColor: const Color(0xFFE53935),
   ),
-  // Row 3
-  AttachmentOptionModel(
-    label: 'Invoice',
-    icon: Icons.receipt_long_outlined,
-    iconColor: const Color(0xFF8D6E63),
-  ),
-  AttachmentOptionModel(
-    label: 'Chip in',
-    icon: Icons.monetization_on_outlined,
-    iconColor: const Color(0xFFFFB300),
-  ),
-  AttachmentOptionModel(
-    label: 'Ai images',
-    icon: Icons.auto_awesome_outlined,
-    iconColor: const Color(0xFF2B7FE8),
-  ),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,6 +444,23 @@ class _AttachmentItem extends StatelessWidget {
           ),
           SizedBox(height: 8.resH),
           // ── Label ───────────────────────────────────────────────────────────
+          Text(
+            option.label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+── Label ───────────────────────────────────────────────────────────
           Text(
             option.label,
             textAlign: TextAlign.center,

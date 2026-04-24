@@ -162,13 +162,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         await db.execute(_contactsSchema);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Development-mode strategy: drop & recreate for a clean slate.
-        await db.execute('DROP TABLE IF EXISTS rooms');
-        await db.execute('DROP TABLE IF EXISTS messages');
-        await db.execute('DROP TABLE IF EXISTS contacts');
-        await db.execute(_messagesSchema);
-        await db.execute(_roomsSchema);
-        await db.execute(_contactsSchema);
+        if (oldVersion < 8) {
+          try {
+            await db.execute("ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'PRIVATE'");
+            await db.execute("ALTER TABLE rooms ADD COLUMN participants TEXT DEFAULT '[]'");
+            await db.execute("ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'");
+          } catch (e) {
+            debugPrint('[LocalData] Migration error or columns already exist: $e');
+          }
+        }
       },
     );
   }
@@ -539,13 +541,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               (t) => t.name == (e['type'] as String? ?? 'PRIVATE'),
               orElse: () => ChatRoomType.PRIVATE,
             ),
-            participants:
-                (jsonDecode(e['participants'] as String) as List<dynamic>)
+            participants: e['participants'] != null
+                ? (jsonDecode(e['participants'] as String) as List<dynamic>)
                     .map((p) => p as String)
-                    .toList(),
-            admins: (jsonDecode(e['admins'] as String) as List<dynamic>)
-                .map((a) => a as String)
-                .toList(),
+                    .toList()
+                : [],
+            admins: e['admins'] != null
+                ? (jsonDecode(e['admins'] as String) as List<dynamic>)
+                    .map((a) => a as String)
+                    .toList()
+                : [],
           ),
         )
         .toList();
