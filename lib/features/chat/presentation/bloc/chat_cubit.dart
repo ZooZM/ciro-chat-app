@@ -56,6 +56,7 @@ class ChatCubit extends Cubit<ChatState> {
   String? _activeRoomId;
   ChatSession? _pendingContact;
   String currentUserId = '';
+  String currentUserPhone = '';
   bool isHydrationComplete = false;
   final _uuid = const Uuid();
 
@@ -92,6 +93,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> _initServices() async {
     currentUserId = await _authLocalDataSource.getUserId() ?? '';
+    currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
     await _localDataSource.initDB();
 
     // ── Sender-side status promotions ─────────────────────────────────────────

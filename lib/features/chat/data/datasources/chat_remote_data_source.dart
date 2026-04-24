@@ -144,8 +144,8 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   ) async {
     try {
       final response = await _dio.post(
-        '/chat/group/$roomId/participants',
-        data: {'participants': participants},
+        '/chat/group/$roomId/add',
+        data: {'phoneNumbersToAdd': participants},
       );
       if (response.statusCode == 200) {
         return const Right(null);
@@ -173,7 +173,10 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String participantId,
   ) async {
     try {
-      final response = await _dio.delete('/chat/group/$roomId/participants/$participantId');
+      final response = await _dio.post(
+        '/chat/group/$roomId/remove',
+        data: {'phoneNumberToRemove': participantId},
+      );
       if (response.statusCode == 200) {
         return const Right(null);
       }

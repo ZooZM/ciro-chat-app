@@ -11,27 +11,22 @@ import '../widgets/group_participant_tile.dart';
 class GroupInfoPage extends StatefulWidget {
   final ChatSession chatData;
 
-  const GroupInfoPage({
-    Key? key,
-    required this.chatData,
-  }) : super(key: key);
+  const GroupInfoPage({Key? key, required this.chatData}) : super(key: key);
 
   @override
   State<GroupInfoPage> createState() => _GroupInfoPageState();
 }
 
 class _GroupInfoPageState extends State<GroupInfoPage> {
-  late String _currentUserId;
+  late String _currentUserPhone;
 
   @override
   void initState() {
     super.initState();
-    _currentUserId = context.read<ChatCubit>().currentUserId;
+    _currentUserPhone = context.read<ChatCubit>().currentUserPhone;
   }
 
-  bool get _isAdmin => widget.chatData.admins.contains(_currentUserId);
-
-  void _showAddParticipants() {
+  void _showAddParticipants(ChatSession currentChatData) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -40,19 +35,21 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       ),
       builder: (context) {
         return _AddParticipantsSheet(
-          roomId: widget.chatData.id,
-          existingParticipants: widget.chatData.participants,
+          roomId: currentChatData.id,
+          existingParticipants: currentChatData.participants,
         );
       },
     );
   }
 
-  void _removeParticipant(String phoneNumber) {
+  void _removeParticipant(ChatSession currentChatData, String phoneNumber) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove Participant'),
-        content: Text('Are you sure you want to remove $phoneNumber from the group?'),
+        content: Text(
+          'Are you sure you want to remove $phoneNumber from the group?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -61,7 +58,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              context.read<ChatCubit>().removeParticipant(widget.chatData.id, phoneNumber);
+              context.read<ChatCubit>().removeParticipant(
+                currentChatData.id,
+                phoneNumber,
+              );
             },
             child: const Text('Remove', style: TextStyle(color: Colors.red)),
           ),
@@ -70,7 +70,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     );
   }
 
-  void _leaveGroup() {
+  void _leaveGroup(ChatSession currentChatData) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -84,7 +84,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              context.read<ChatCubit>().leaveGroup(widget.chatData.id);
+              context.read<ChatCubit>().leaveGroup(currentChatData.id);
               context.go('/home');
             },
             child: const Text('Leave', style: TextStyle(color: Colors.red)),
@@ -96,91 +96,120 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Group Info', style: AppTypography.headline3.copyWith(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            SizedBox(height: 20.resH),
-            CircleAvatar(
-              radius: 50.resR,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              backgroundImage: widget.chatData.avatarUrl.isNotEmpty 
-                  ? NetworkImage(widget.chatData.avatarUrl) 
-                  : null,
-              child: widget.chatData.avatarUrl.isEmpty
-                  ? Icon(Icons.group, size: 50.resR, color: AppColors.primary)
-                  : null,
-            ),
-            SizedBox(height: 16.resH),
-            Text(
-              widget.chatData.name,
-              style: AppTypography.headline2.copyWith(color: Colors.black),
-            ),
-            Text(
-              '${widget.chatData.participants.length} participants',
-              style: AppTypography.body1.copyWith(color: AppColors.textSecondary),
-            ),
-            SizedBox(height: 24.resH),
-            
-            // Actions Section
-            if (_isAdmin)
-              ListTile(
-                leading: const Icon(Icons.person_add_outlined, color: AppColors.primary),
-                title: const Text('Add Participants'),
-                onTap: _showAddParticipants,
-              ),
-            
-            ListTile(
-              leading: const Icon(Icons.exit_to_app, color: Colors.red),
-              title: const Text('Leave Group', style: TextStyle(color: Colors.red)),
-              onTap: _leaveGroup,
-            ),
+    return StreamBuilder<List<ChatSession>>(
+      stream: context.read<ChatCubit>().recentChatsStream,
+      builder: (context, snapshot) {
+        // Fallback to widget.chatData if stream hasn't emitted yet
+        final currentChatData = snapshot.data?.firstWhere(
+              (r) => r.id == widget.chatData.id,
+              orElse: () => widget.chatData,
+            ) ??
+            widget.chatData;
 
-            const Divider(),
-            
-            // Participants List
-            Padding(
-              padding: EdgeInsets.all(16.resW),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Participants',
-                  style: AppTypography.subtitle1.copyWith(
-                    fontWeight: FontWeight.bold,
+        final bool isAdmin = currentChatData.admins.contains(_currentUserPhone);
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            title: Text(
+              'Group Info',
+              style: AppTypography.headline3.copyWith(color: Colors.black),
+            ),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () => context.pop(),
+            ),
+          ),
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(height: 20.resH),
+                CircleAvatar(
+                  radius: 50.resR,
+                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  backgroundImage: currentChatData.avatarUrl.isNotEmpty
+                      ? NetworkImage(currentChatData.avatarUrl)
+                      : null,
+                  child: currentChatData.avatarUrl.isEmpty
+                      ? Icon(
+                          Icons.group,
+                          size: 50.resR,
+                          color: AppColors.primary,
+                        )
+                      : null,
+                ),
+                SizedBox(height: 16.resH),
+                Text(
+                  currentChatData.name,
+                  style: AppTypography.headline2.copyWith(color: Colors.black),
+                ),
+                Text(
+                  '${currentChatData.participants.length} participants',
+                  style: AppTypography.body1.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
-              ),
+                SizedBox(height: 24.resH),
+
+                // Actions Section
+                if (isAdmin)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.person_add_outlined,
+                      color: AppColors.primary,
+                    ),
+                    title: const Text('Add Participants'),
+                    onTap: () => _showAddParticipants(currentChatData),
+                  ),
+
+                ListTile(
+                  leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                  title: const Text(
+                    'Leave Group',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () => _leaveGroup(currentChatData),
+                ),
+
+                const Divider(),
+
+                // Participants List
+                Padding(
+                  padding: EdgeInsets.all(16.resW),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Participants',
+                      style: AppTypography.subtitle1.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: currentChatData.participants.length,
+                  itemBuilder: (context, index) {
+                    final phone = currentChatData.participants[index];
+                    return GroupParticipantTile(
+                      phoneNumber: phone,
+                      isAdmin: currentChatData.admins.contains(phone),
+                      isMe: phone == _currentUserPhone,
+                      showRemoveAction: isAdmin,
+                      onRemove: () => _removeParticipant(currentChatData, phone),
+                    );
+                  },
+                ),
+                SizedBox(height: 40.resH),
+              ],
             ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.chatData.participants.length,
-              itemBuilder: (context, index) {
-                final phone = widget.chatData.participants[index];
-                return GroupParticipantTile(
-                  phoneNumber: phone,
-                  isAdmin: widget.chatData.admins.contains(phone),
-                  isMe: phone == _currentUserId,
-                  showRemoveAction: _isAdmin,
-                  onRemove: () => _removeParticipant(phone),
-                );
-              },
-            ),
-            SizedBox(height: 40.resH),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -215,7 +244,10 @@ class _AddParticipantsSheetState extends State<_AddParticipantsSheet> {
   void _submit() async {
     if (_selectedPhones.isEmpty) return;
     setState(() => _isSubmitting = true);
-    await context.read<ChatCubit>().addParticipants(widget.roomId, _selectedPhones.toList());
+    await context.read<ChatCubit>().addParticipants(
+      widget.roomId,
+      _selectedPhones.toList(),
+    );
     if (mounted) {
       Navigator.pop(context);
     }
@@ -225,7 +257,9 @@ class _AddParticipantsSheetState extends State<_AddParticipantsSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Column(
         children: [
           Padding(
@@ -248,12 +282,16 @@ class _AddParticipantsSheetState extends State<_AddParticipantsSheet> {
             child: StreamBuilder<List<ChatSession>>(
               stream: context.read<ChatCubit>().watchLocalContacts,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
+
                 final contacts = snapshot.data!
-                    .where((c) => !widget.existingParticipants.contains(c.phoneNumber))
+                    .where(
+                      (c) =>
+                          !widget.existingParticipants.contains(c.phoneNumber),
+                    )
                     .toList();
-                
+
                 if (contacts.isEmpty) {
                   return const Center(child: Text('No new contacts to add'));
                 }
@@ -262,10 +300,14 @@ class _AddParticipantsSheetState extends State<_AddParticipantsSheet> {
                   itemCount: contacts.length,
                   itemBuilder: (context, index) {
                     final contact = contacts[index];
-                    final isSelected = _selectedPhones.contains(contact.phoneNumber);
+                    final isSelected = _selectedPhones.contains(
+                      contact.phoneNumber,
+                    );
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(contact.name.isNotEmpty ? contact.name[0] : '?'),
+                        child: Text(
+                          contact.name.isNotEmpty ? contact.name[0] : '?',
+                        ),
                       ),
                       title: Text(contact.name),
                       subtitle: Text(contact.phoneNumber),

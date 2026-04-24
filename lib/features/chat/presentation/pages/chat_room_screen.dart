@@ -159,10 +159,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
           title: InkWell(
             onTap: () {
-              builder:
-              (_) => widget.chatData.type == ChatRoomType.GROUP
-                  ? GroupInfoPage(chatData: widget.chatData)
-                  : ChatInfoScreen(chatData: widget.chatData);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => widget.chatData.type == ChatRoomType.GROUP
+                      ? GroupInfoPage(chatData: widget.chatData)
+                      : ChatInfoScreen(chatData: widget.chatData),
+                ),
+              );
             },
             child: Row(
               children: [

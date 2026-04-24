@@ -96,9 +96,9 @@
 
 ### Implementation for User Story 4
 
-- [ ] T019 [US4] Update `ChatCubit` to handle the "leave group" action
-- [ ] T020 [US4] Add a "Leave Group" button in `GroupInfoPage`
-- [ ] T021 [US4] Ensure `ChatCubit` clears the room from the local database and UI upon successful departure
+- [X] T019 [US4] Update `ChatCubit` to handle the "leave group" action
+- [X] T020 [US4] Add a "Leave Group" button in `GroupInfoPage`
+- [X] T021 [US4] Ensure `ChatCubit` clears the room from the local database and UI upon successful departure
 
 **Checkpoint**: Users can leave groups and local state remains consistent.
 
