@@ -1,35 +1,39 @@
-# Implementation Plan: Optimize Chat Lifecycle
+# Implementation Plan: Optimize Chat Lifecycle (Phase 2)
 
-**Branch**: `003-optimize-chat-lifecycle` | **Date**: April 24, 2026 | **Spec**: [specs/003-optimize-chat-lifecycle/spec.md](spec.md)
+**Branch**: `003-optimize-chat-lifecycle` | **Date**: 2026-04-25 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `/specs/003-optimize-chat-lifecycle/spec.md`
+
+**Note**: This plan covers User Stories 4–10 (the Phase 2 expansion). User Stories 1–3 were completed in the prior session.
 
 ## Summary
 
-Optimize the Chat feature by strictly aligning with the `AGENT_CHAT_LIFECYCLE.md`, refactoring `ChatCubit` and `SocketService` to prevent unnecessary UI rebuilds, and implementing a distinct Call State (Voice/Video) that acts as an overlay to avoid interrupting P2P text flow.
+Stabilize and complete the Chat feature by fixing the Group Chat persistence bug (P0), resolving missing system message rendering (P0), integrating Group Info business logic, implementing 8 attachment actions (Camera, Gallery, Document, Location, Contact, Audio, Poll, Event), stabilizing Voice Notes, and performing a full static/mock data cleanup and codebase audit. Backend changes include extending the `MessageType` enum with 4 new values.
 
 ## Technical Context
 
-**Language/Version**: Dart 3 / Flutter  
-**Primary Dependencies**: flutter_bloc, get_it, injectable, sqflite, hive, socket.io-client  
-**Storage**: SQLite for relational data, Hive for fast KV  
-**Testing**: flutter_test, bloc_test  
-**Target Platform**: iOS/Android  
-**Project Type**: mobile-app  
-**Performance Goals**: 60 fps, targeted UI rebuilds during real-time socket updates  
-**Constraints**: Offline-capable, strict clean architecture, replace all hardcoded values with `lib/core/` constants  
-**Scale/Scope**: Refactoring existing ChatCubit and SocketService, adding Call Overlay
+**Language/Version**: Dart 3.9.2 / Flutter (frontend), TypeScript / NestJS (backend)  
+**Primary Dependencies**: flutter_bloc (Cubit), sqflite, socket_io_client, injectable/get_it, image_picker, file_picker, record, just_audio, audio_waveforms, google_maps_flutter (NEW), geolocator (NEW), geocoding (NEW), flutter_dotenv (NEW)  
+**Storage**: SQLite (sqflite) for messages/rooms/contacts, Hive for tokens/preferences, MongoDB (backend)  
+**Testing**: flutter_test, bloc_test, mocktail (frontend); Jest (backend)  
+**Target Platform**: Android & iOS mobile app  
+**Project Type**: Mobile app (Flutter) + Backend (NestJS)  
+**Performance Goals**: 60fps chat scrolling, <200ms message send latency  
+**Constraints**: Offline-capable, <100MB memory, Clean Architecture compliance  
+**Scale/Scope**: ~50 screens, P2P + Group chat, Voice/Video calling
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers?
-- [x] **II. State Management**: Uses `flutter_bloc` (Cubit preferred)? States extend `Equatable`?
-- [x] **III. Offline-First**: Relational data uses `sqflite`? Key-value uses `Hive`?
-- [x] **IV. Socket.io**: Real-time logic uses singleton `SocketService`? Events are idempotent?
-- [x] **V. Teardown**: Proper `dispose`/`cancel` implemented? Logout sequence handled?
-- [x] **Code Quality**: Strict linting followed? Naming conventions (snake_case files) met?
-- [x] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer?
+- [x] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers. All changes respect layer boundaries. ✅
+- [x] **II. State Management**: Uses `flutter_bloc` (Cubit). States extend `Equatable`. New attachment methods go in `ChatCubit`. ✅
+- [x] **III. Offline-First**: Relational data uses `sqflite`. Key-value uses `Hive`. Messages saved locally before socket emit. ✅
+- [x] **IV. Socket.io**: Real-time logic uses singleton `SocketService`. Events are idempotent (clientMessageId guard). ✅
+- [x] **V. Teardown**: Proper `dispose`/`cancel` implemented. Voice note audit will verify no leaks. ✅
+- [x] **Code Quality**: Strict linting. `snake_case` files, `PascalCase` classes, `camelCase` methods. ✅
+- [x] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer via `fpdart` Either. ✅
+
+**Post-Design Re-Check**: ✅ All gates pass. No violations detected.
 
 ## Project Structure
 
@@ -37,40 +41,74 @@ Optimize the Chat feature by strictly aligning with the `AGENT_CHAT_LIFECYCLE.md
 
 ```text
 specs/003-optimize-chat-lifecycle/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── plan.md              # This file
+├── spec.md              # Feature specification (10 user stories)
+├── research.md          # Phase 0 output — root cause analysis & research
+├── data-model.md        # Phase 1 output — entity models & state transitions
+├── quickstart.md        # Phase 1 output — setup & key files
+├── contracts/
+│   └── socket-events.md # Phase 1 output — socket & REST contracts
+└── tasks.md             # Phase 2 output (generated by /speckit.tasks)
 ```
 
 ### Source Code (repository root)
 
+```text
 lib/
 ├── core/
 │   ├── bloc/
 │   ├── di/
 │   ├── helpers/
 │   ├── network/
+│   │   └── socket_service.dart       # Singleton socket manager
 │   ├── routing/
+│   │   └── app_router.dart           # GoRouter with /chat_room route
 │   └── theme/
+│       ├── app_colors.dart           # Centralized color palette
+│       └── app_typography.dart       # Centralized typography
 └── features/
     └── chat/
         ├── data/
         │   ├── datasources/
+        │   │   ├── chat_local_data_source.dart   # SQLite operations [FIX: room UPSERT]
+        │   │   └── chat_remote_data_source.dart   # Dio + socket event handlers
         │   ├── models/
         │   └── repositories/
         ├── domain/
         │   ├── entities/
+        │   │   ├── chat_session.dart              # Room entity with ChatRoomType
+        │   │   └── message.dart                   # Message entity [EXTEND: new MessageTypes]
         │   └── repositories/
         └── presentation/
             ├── bloc/
+            │   ├── chat_cubit.dart                # Main Cubit [ADD: new send methods]
+            │   └── chat_state.dart                # State classes
             ├── pages/
+            │   ├── chat_list_screen.dart           # Inbox screen
+            │   ├── chat_room_screen.dart           # Active chat screen
+            │   ├── group_info_page.dart            # Group details [CONNECT: real data]
+            │   └── create_group_page.dart          # Group creation flow
             └── widgets/
+                ├── message_bubble_widget.dart      # Message renderers [ADD: new bubbles]
+                ├── attachment_sheet_widget.dart     # Attachment grid [WIRE: new handlers]
+                ├── chat_input_bar.dart             # Text input + voice note
+                ├── chat_tile_widget.dart           # Inbox tile
+                ├── typing_indicator.dart           # Typing dots
+                └── call_overlay.dart               # Global call overlay
 
-test/
-└── features/
-    └── chat/
+E:\zeyad\chat-app-backend\src\modules\chat\
+├── schemas/
+│   ├── message.schema.ts              # [EXTEND: LOCATION, AUDIO, POLL, EVENT enums + metadata]
+│   └── chat-room.schema.ts            # (no changes)
+├── chat.service.ts                    # (no changes — saveMessage already generic)
+├── chat.gateway.ts                    # (no changes — sendMessage already generic)
+├── chat.controller.ts                 # (no changes — upload endpoint already generic)
+└── dto/
+    └── send-message.dto.ts            # (no changes — already supports any MessageType)
+```
 
-**Structure Decision**: Utilizing existing `chat` feature directory under `lib/features/chat/`, with calls managed via a global overlay wrapper communicating with `SocketService`.
+**Structure Decision**: The existing Clean Architecture structure is fully adequate. No new directories or features needed. All changes are modifications to existing files within the `chat/` feature boundary.
+
+## Complexity Tracking
+
+> No constitution violations detected. All changes fit within the established architecture.
