@@ -10,10 +10,9 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
 import '../widgets/message_bubble_widget.dart';
 import '../widgets/attachment_sheet_widget.dart';
+import '../widgets/typing_indicator.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
-import '../../../video_call/presentation/pages/outgoing_call_screen.dart';
-import '../../../video_call/presentation/pages/voice_call_screen.dart';
 import '../widgets/chat_input_bar.dart';
 import 'chat_info_screen.dart';
 
@@ -130,24 +129,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<CallCubit, CallState>(
-      listener: (context, state) {
-        if (state is CallOutgoing) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BlocProvider.value(
-                value: context.read<CallCubit>(),
-                child: OutgoingCallScreen(
-                  contactName: widget.chatData.name,
-                  avatarUrl: widget.chatData.avatarUrl,
-                ),
-              ),
-            ),
-          );
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: Colors.white,
@@ -226,36 +208,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      StreamBuilder<Set<String>>(
-                        stream: cubit.typingUsersStream,
-                        builder: (context, snapshot) {
-                          final typers = snapshot.data ?? {};
-                          if (typers.isNotEmpty) {
-                            return Text(
-                              widget.chatData.type == ChatRoomType.GROUP
-                                  ? '${typers.first} is typing...'
-                                  : 'typing...',
-                              style: AppTypography.body2.copyWith(
-                                color: AppColors.primary,
-                                fontStyle: FontStyle.italic,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            );
-                          }
-                          return Text(
-                            widget.chatData.type == ChatRoomType.GROUP
-                                ? '${widget.chatData.participants.length} participants'
-                                : (widget.chatData.isOnline
-                                      ? 'online'
-                                      : 'offline'),
-                            style: AppTypography.body2.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          );
-                        },
+                      TypingIndicatorWidget(
+                        roomId: widget.chatData.id,
+                        roomType: widget.chatData.type,
+                        idleSubtitle: widget.chatData.type == ChatRoomType.GROUP
+                            ? '${widget.chatData.participants.length} participants'
+                            : (widget.chatData.isOnline ? 'online' : 'offline'),
                       ),
                     ],
                   ),
@@ -355,6 +313,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             children: [
               Expanded(
                 child: BlocConsumer<ChatCubit, ChatState>(
+                  // Only rebuild the message list when messages actually change.
+                  // TypingUpdate, TypingUpdate → never triggers a message-list rebuild.
+                  buildWhen: (prev, curr) {
+                    if (curr is TypingUpdate) return false;
+                    if (curr is ChatRoomActive && prev is ChatRoomActive) {
+                      // Only rebuild if the messages list itself changed.
+                      return curr.messages != prev.messages ||
+                          curr.roomId != prev.roomId;
+                    }
+                    return true;
+                  },
+                  listenWhen: (prev, curr) =>
+                      curr is ChatRoomActive || curr is ChatLoading,
                   listener: (context, state) {
                     if (state is ChatRoomActive) {
                       _scrollToBottom();
@@ -402,7 +373,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ],
           ), // Column
         ), // AnimatedOpacity
-      ), // Scaffold
-    ); // BlocListener
+      ); // Scaffold
   }
 }

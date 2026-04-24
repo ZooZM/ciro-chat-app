@@ -71,6 +71,12 @@ class ChatCubit extends Cubit<ChatState> {
   Stream<Map<String, Set<String>>> get allTypingUsersStream =>
       _roomTypingController.stream;
 
+  /// Returns the current typing users for a given room.
+  /// Used by [TypingIndicatorWidget] on first build before any [TypingUpdate]
+  /// state has been emitted.
+  Set<String> typingUsersForRoom(String roomId) =>
+      Set.unmodifiable(_typingUsersByRoom[roomId] ?? {});
+
   ChatCubit(
     this._localDataSource,
     this._socketService,
@@ -148,6 +154,15 @@ class ChatCubit extends Cubit<ChatState> {
           _currentTypingUsers.remove(identifier);
         }
         _typingUsersController.add(Set.from(_currentTypingUsers));
+
+        // 3. Emit TypingUpdate so BlocBuilder widgets can react WITHOUT
+        //    rebuilding the heavy message list (use buildWhen to filter).
+        emit(
+          TypingUpdate(
+            roomId: roomId,
+            typingUsers: Set.from(_currentTypingUsers),
+          ),
+        );
       }
     };
 
@@ -962,7 +977,9 @@ class ChatCubit extends Cubit<ChatState> {
             status: incomingStatus,
             timestamp: createdAt ?? currentMessage.timestamp,
           );
-          emit(ChatRoomActive(currentRoomId, updatedMessages));
+          // Use copyWith for a surgical state update — only the messages list
+          // reference changes, so BlocBuilder rebuilds only the message list.
+          emit(activeState.copyWith(messages: updatedMessages));
         }
         return;
       }

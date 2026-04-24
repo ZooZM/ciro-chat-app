@@ -6,6 +6,7 @@ import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
 import 'core/network/dio_client.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
+import 'features/chat/presentation/widgets/call_overlay.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -35,25 +36,13 @@ class MainApp extends StatelessWidget {
         return MultiBlocProvider(
           providers: [
             BlocProvider<ChatCubit>(create: (_) => getIt<ChatCubit>()),
-            // CallCubit is global so IncomingCall can be triggered from anywhere
+            // CallCubit is global — IncomingCall / OutgoingCall can be
+            // triggered from any screen in the app.
             BlocProvider<CallCubit>(create: (_) => getIt<CallCubit>()),
           ],
-          child: BlocListener<CallCubit, CallState>(
-            // Automatically navigate to IncomingCallScreen when socket fires
-            listenWhen: (_, curr) => curr is CallIncoming,
-            listener: (context, state) {
-              if (state is CallIncoming) {
-                appRouter.pushReplacement(
-                  '/incoming_call',
-                  extra: {
-                    'callerName': state.callerName,
-                    'callerAvatarUrl': state.callerAvatarUrl,
-                    'callerId': state.callerId,
-                    'isVideo': state.isVideo,
-                  },
-                );
-              }
-            },
+          // CallOverlay centralizes all call navigation via GoRouter so the
+          // chat back-stack is preserved across incoming and outgoing calls.
+          child: CallOverlay(
             child: MaterialApp.router(
               title: 'Ciro Chat App',
               theme: ThemeData.dark(useMaterial3: true),

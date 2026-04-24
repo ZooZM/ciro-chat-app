@@ -81,9 +81,9 @@ class MessageBubbleWidget extends StatelessWidget {
           color: AppColors.textSecondary,
         );
       case MessageStatus.read:
-        return Icon(Icons.done_all, size: 14.resW, color: Colors.blue);
+        return Icon(Icons.done_all, size: 14.resW, color: AppColors.secondary);
       case MessageStatus.error:
-        return Icon(Icons.error_outline, size: 14.resW, color: Colors.red);
+        return Icon(Icons.error_outline, size: 14.resW, color: AppColors.error);
       default:
         return const SizedBox.shrink();
     }
@@ -217,7 +217,7 @@ class _TextBubble extends StatelessWidget {
         children: [
           Text(
             message.text,
-            style: AppTypography.body1.copyWith(color: Colors.black),
+            style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
           ),
           SizedBox(height: 4.resH),
           footer,
@@ -283,10 +283,10 @@ class _ImageBubble extends StatelessWidget {
                           errorWidget: (_, __, ___) => Container(
                             width: 220.resW,
                             height: 180.resH,
-                            color: Colors.grey.shade200,
+                            color: AppColors.surfaceVariant,
                             child: const Icon(
                               Icons.broken_image_outlined,
-                              color: Colors.grey,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -321,7 +321,7 @@ class _UploadingPlaceholder extends StatelessWidget {
     return Container(
       width: 220.resW,
       height: 180.resH,
-      color: Colors.grey.shade200,
+      color: AppColors.surfaceVariant,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -330,7 +330,7 @@ class _UploadingPlaceholder extends StatelessWidget {
             SizedBox(height: 8.resH),
             Text(
               'Uploading…',
-              style: AppTypography.caption.copyWith(color: Colors.grey),
+              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -432,7 +432,7 @@ class _FileBubble extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.body2.copyWith(
-                        color: Colors.black87,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -700,8 +700,8 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
               // Avatar placeholder (optional)
               CircleAvatar(
                 radius: 18.resR,
-                backgroundColor: Colors.grey.shade300,
-                child: Icon(Icons.person, color: Colors.white, size: 20.resW),
+                backgroundColor: AppColors.divider,
+                child: Icon(Icons.person, color: AppColors.surface, size: 20.resW),
               ),
             ],
           ),
@@ -743,7 +743,7 @@ class _ContactBubble extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$name saved to contacts'),
-            backgroundColor: Colors.green.shade700,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -753,7 +753,7 @@ class _ContactBubble extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Could not save contact'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -814,7 +814,7 @@ class _ContactBubble extends StatelessWidget {
             ],
           ),
           SizedBox(height: 8.resH),
-          Divider(height: 1, color: Colors.grey.shade200),
+          Divider(height: 1, color: AppColors.divider),
           SizedBox(height: 6.resH),
           OutlinedButton.icon(
             onPressed: () => _saveContact(context),

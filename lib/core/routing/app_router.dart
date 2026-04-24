@@ -14,6 +14,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
+import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
 import '../di/injection.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -140,6 +141,16 @@ final GoRouter appRouter = GoRouter(
           contactName: data['contactName'] as String? ?? 'Calling...',
           livekitUrl: data['livekitUrl'] as String? ?? '',
           livekitToken: data['livekitToken'] as String? ?? '',
+        );
+      },
+    ),
+    GoRoute(
+      path: '/outgoing_call',
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return OutgoingCallScreen(
+          contactName: data['contactName'] as String? ?? 'Calling...',
+          avatarUrl: data['avatarUrl'] as String? ?? '',
         );
       },
     ),

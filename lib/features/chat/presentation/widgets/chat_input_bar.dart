@@ -212,7 +212,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 child: IconButton(
                   icon: Icon(
                     Icons.delete,
-                    color: Colors.red,
+                    color: AppColors.error,
                     size: 28.resW,
                   ),
                   onPressed: _cancelRecording,
@@ -237,10 +237,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 duration: const Duration(milliseconds: 200),
                 margin: EdgeInsets.only(bottom: 4.resH),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(24.resR),
                   border: Border.all(
-                    color: _isRecording ? Colors.red : AppColors.divider,
+                    color: _isRecording ? AppColors.error : AppColors.divider,
                     width: 1.5.resW,
                   ),
                 ),
@@ -260,12 +260,12 @@ class _ChatInputBarState extends State<ChatInputBar> {
                         width: 48.resW,
                         height: 48.resW,
                         decoration: BoxDecoration(
-                          color: Colors.green,
+                          color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.send,
-                          color: Colors.white,
+                          color: AppColors.surface,
                           size: 24.resW,
                         ),
                       ),
@@ -289,7 +289,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
             controller: _msgController,
             maxLines: 5,
             minLines: 1,
-            style: AppTypography.body1.copyWith(color: Colors.black),
+            style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Type a message...',
               hintStyle: AppTypography.body1.copyWith(
@@ -318,12 +318,12 @@ class _ChatInputBarState extends State<ChatInputBar> {
       children: [
         SizedBox(width: 16.resW),
         // Pulsing Red Dot & Timer
-        Icon(Icons.mic, color: Colors.red, size: 20.resW),
+        Icon(Icons.mic, color: AppColors.error, size: 20.resW),
         SizedBox(width: 8.resW),
         Text(
           _formatDuration(_recordDuration),
           style: AppTypography.body1.copyWith(
-            color: Colors.red,
+            color: AppColors.error,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -392,7 +392,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
         width: _isRecording ? 60.resW : 48.resW,
         height: _isRecording ? 60.resW : 48.resW,
         decoration: BoxDecoration(
-          color: _isRecording ? Colors.red : AppColors.primary,
+          color: _isRecording ? AppColors.error : AppColors.primary,
           shape: BoxShape.circle,
         ),
         child: Column(
@@ -423,7 +423,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
         ),
         child: Icon(
           Icons.send,
-          color: Colors.white,
+          color: AppColors.surface,
           size: 22.resW,
         ),
       ),
