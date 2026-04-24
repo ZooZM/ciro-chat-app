@@ -1,1 +1,3 @@
-﻿{ "feature_directory": "specs/002-add-group-chat" }
+{
+  "feature_directory": "specs/003-optimize-chat-lifecycle"
+}
