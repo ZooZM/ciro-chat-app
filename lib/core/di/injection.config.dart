@@ -82,15 +82,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
-    gh.lazySingleton<_i980.ChatRemoteDataSource>(
-      () => _i980.ChatRemoteDataSourceImpl(
-        gh<_i558.FlutterSecureStorage>(),
-        gh<_i361.Dio>(),
-      ),
-    );
-    gh.lazySingleton<_i420.ChatRepository>(
-      () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
-    );
     gh.lazySingleton<_i104.CallCubit>(
       () => _i104.CallCubit(gh<_i917.SocketService>()),
     );
@@ -99,6 +90,13 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
+    gh.lazySingleton<_i980.ChatRemoteDataSource>(
+      () => _i980.ChatRemoteDataSourceImpl(
+        gh<_i667.DioClient>(),
+        gh<_i917.SocketService>(),
+        gh<_i852.AuthLocalDataSource>(),
+      ),
     );
     gh.lazySingleton<_i220.VideoCallRepository>(
       () => _i786.LivekitVideoCallRepositoryImpl(
@@ -114,6 +112,18 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i852.AuthLocalDataSource>(),
       ),
     );
+    gh.factory<_i804.VideoCallCubit>(
+      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
+    );
+    gh.lazySingleton<_i420.ChatRepository>(
+      () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
+    );
+    gh.lazySingleton<_i52.AuthCubit>(
+      () => _i52.AuthCubit(
+        gh<_i787.AuthRepository>(),
+        gh<_i852.AuthLocalDataSource>(),
+      ),
+    );
     gh.factory<_i708.ChatCubit>(
       () => _i708.ChatCubit(
         gh<_i94.ChatLocalDataSource>(),
@@ -121,15 +131,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i852.AuthLocalDataSource>(),
         gh<_i420.ChatRepository>(),
         gh<_i850.ContactsService>(),
-      ),
-    );
-    gh.factory<_i804.VideoCallCubit>(
-      () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
-    );
-    gh.lazySingleton<_i52.AuthCubit>(
-      () => _i52.AuthCubit(
-        gh<_i787.AuthRepository>(),
-        gh<_i852.AuthLocalDataSource>(),
       ),
     );
     return this;

@@ -108,7 +108,7 @@ class ChatSession extends Equatable {
     Map<String, dynamic> json,
     String currentUserPhone,
   ) {
-    final roomId = json['_id'] ?? json['id'] ?? '';
+    final roomId = json['_id'] ?? json['id'] ?? json['roomId'] ?? '';
     final roomType = ChatRoomType.values.firstWhere(
       (e) => e.name == (json['type'] as String? ?? 'PRIVATE').toUpperCase(),
       orElse: () => ChatRoomType.PRIVATE,
@@ -116,9 +116,11 @@ class ChatSession extends Equatable {
 
     List<String> rawParticipants = [];
     if (json['participants'] != null) {
-      rawParticipants = (json['participants'] as List<dynamic>)
-          .map((p) => (p as Map<String, dynamic>)['phoneNumber'] as String)
-          .toList();
+      rawParticipants = (json['participants'] as List<dynamic>).map((p) {
+        if (p is String) return p;
+        if (p is Map<String, dynamic>) return p['phoneNumber'] as String? ?? p['_id']?.toString() ?? '';
+        return '';
+      }).where((p) => p.isNotEmpty).toList();
     }
     
     List<String> rawAdmins = [];
@@ -139,13 +141,18 @@ class ChatSession extends Equatable {
     if (roomType == ChatRoomType.PRIVATE || displayName.isEmpty) {
       // Find the participant who is NOT the current user
       final other = (json['participants'] as List<dynamic>? ?? []).firstWhere(
-        (p) => (p['phoneNumber'] ?? '') != currentUserPhone,
-        orElse: () => {},
+        (p) => p is Map<String, dynamic> ? (p['phoneNumber'] ?? '') != currentUserPhone : false,
+        orElse: () => <String, dynamic>{},
       );
-      displayName = other['phoneNumber'] ?? 'Unknown';
-      otherPhone = other['phoneNumber'] ?? '';
-      otherAvatar = other['avatarUrl'] ?? '';
-      otherIsOnline = other['isOnline'] == true;
+      
+      if (other is Map<String, dynamic> && other.isNotEmpty) {
+        displayName = other['phoneNumber'] ?? 'Unknown';
+        otherPhone = other['phoneNumber'] ?? '';
+        otherAvatar = other['avatarUrl'] ?? '';
+        otherIsOnline = other['isOnline'] == true;
+      } else {
+        displayName = 'Unknown';
+      }
     } else if (roomType == ChatRoomType.GROUP) {
       displayName = json['name'] ?? 'Group Chat';
       otherAvatar = json['avatarUrl'] ?? '';

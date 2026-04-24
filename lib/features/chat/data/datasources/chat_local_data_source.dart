@@ -18,7 +18,11 @@ abstract class ChatLocalDataSource {
     String roomAvatarUrl = '',
     String roomPhoneNumber = '',
   });
-  Future<void> updateMessageStatus(String messageId, MessageStatus status, {DateTime? createdAt});
+  Future<void> updateMessageStatus(
+    String messageId,
+    MessageStatus status, {
+    DateTime? createdAt,
+  });
 
   /// Updates the [fileUrl] and [metadata] of an already-saved message.
   /// Called after a successful upload to replace the optimistic placeholder.
@@ -237,10 +241,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.update(
       'messages',
-      {
-        'file_url': fileUrl,
-        'metadata': jsonEncode(metadata),
-      },
+      {'file_url': fileUrl, 'metadata': jsonEncode(metadata)},
       where: 'id = ?',
       whereArgs: [messageId],
     );
@@ -258,19 +259,19 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<void> deleteMessage(String messageId) async {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
-    
+
     final maps = await db.query(
       'messages',
       where: 'id = ?',
       whereArgs: [messageId],
       limit: 1,
     );
-    
+
     if (maps.isNotEmpty) {
       final message = Message.fromMap(maps.first);
       final meta = message.metadata ?? {};
       final localPath = meta['localPath'] as String?;
-      
+
       if (localPath != null) {
         final file = File(localPath);
         if (file.existsSync()) {
@@ -282,13 +283,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
           }
         }
       }
-      
-      await db.delete(
-        'messages',
-        where: 'id = ?',
-        whereArgs: [messageId],
-      );
-      
+
+      await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+
       await _dispatchUpdateForRoom(message.roomId);
       await _dispatchRecentChatsUpdate();
     }
@@ -326,8 +323,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     if (records.isNotEmpty) {
       final roomId = records.first['room_id'] as String;
-      
-      final roomUpdateData = <String, dynamic>{'lastMessageStatus': status.name};
+
+      final roomUpdateData = <String, dynamic>{
+        'lastMessageStatus': status.name,
+      };
       if (createdAt != null) {
         roomUpdateData['timestamp'] = createdAt.toIso8601String();
       }
@@ -369,9 +368,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       _roomStreamControllers[roomId] =
           StreamController<List<Message>>.broadcast();
     }
-    getRoomMessages(roomId).then(
-      (msgs) => _roomStreamControllers[roomId]!.add(msgs),
-    );
+    getRoomMessages(
+      roomId,
+    ).then((msgs) => _roomStreamControllers[roomId]!.add(msgs));
     return _roomStreamControllers[roomId]!.stream;
   }
 
@@ -521,8 +520,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               (t) => t.name == (e['type'] as String? ?? 'PRIVATE'),
               orElse: () => ChatRoomType.PRIVATE,
             ),
-            participants: (jsonDecode(e['participants'] as String) as List<dynamic>).map((p) => p as String).toList(),
-            admins: (jsonDecode(e['admins'] as String) as List<dynamic>).map((a) => a as String).toList(),
+            participants:
+                (jsonDecode(e['participants'] as String) as List<dynamic>)
+                    .map((p) => p as String)
+                    .toList(),
+            admins: (jsonDecode(e['admins'] as String) as List<dynamic>)
+                .map((a) => a as String)
+                .toList(),
           ),
         )
         .toList();
@@ -542,6 +546,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         'contacts',
         orderBy: 'name COLLATE NOCASE ASC',
       );
+      debugPrint(
+        'contacts: ${maps.map((e) => ChatSession.fromMap(e)).toList()}',
+      );
       yield maps.map((e) => ChatSession.fromMap(e)).toList();
     } else {
       yield <ChatSession>[];
@@ -558,26 +565,19 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     final batch = db.batch();
     for (final contact in contacts) {
-      batch.insert(
-        'contacts',
-        {
-          'id': contact.id,
-          'name': contact.name,
-          'phoneNumber': contact.phoneNumber,
-          'avatarUrl': contact.avatarUrl,
-          'isOnline': contact.isOnline ? 1 : 0,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      batch.insert('contacts', {
+        'id': contact.id,
+        'name': contact.name,
+        'phoneNumber': contact.phoneNumber,
+        'avatarUrl': contact.avatarUrl,
+        'isOnline': contact.isOnline ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
 
-    final maps =
-        await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
+    final maps = await db.query('contacts', orderBy: 'name COLLATE NOCASE ASC');
     if (!_contactsController.isClosed) {
-      _contactsController.add(
-        maps.map((e) => ChatSession.fromMap(e)).toList(),
-      );
+      _contactsController.add(maps.map((e) => ChatSession.fromMap(e)).toList());
     }
   }
 

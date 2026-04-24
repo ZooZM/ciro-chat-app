@@ -33,7 +33,16 @@ class ChatTileWidget extends StatelessWidget {
           CircleAvatar(
             radius: 28.resR,
             backgroundColor: AppColors.divider,
-            backgroundImage: CachedNetworkImageProvider(chat.avatarUrl),
+            backgroundImage: chat.avatarUrl.isNotEmpty 
+                ? CachedNetworkImageProvider(chat.avatarUrl) 
+                : null,
+            child: chat.avatarUrl.isEmpty
+                ? Icon(
+                    chat.type == ChatRoomType.GROUP ? Icons.group : Icons.person,
+                    color: Colors.white,
+                    size: 32.resR,
+                  )
+                : null,
           ),
           if (chat.isOnline)
             Positioned(

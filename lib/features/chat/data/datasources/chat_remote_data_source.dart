@@ -1,14 +1,16 @@
 import 'dart:async';
-import 'package:dio/dio.dart'; // Import Dio
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:injectable/injectable.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
-import 'package:ciro_chat_app/core/error/failures.dart'; // Assuming Failure types are needed for API calls
-import 'package:fpdart/fpdart.dart'; // Assuming Either is used for API call results
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:injectable/injectable.dart';
+import 'package:fpdart/fpdart.dart';
+
+import 'package:ciro_chat_app/core/network/dio_client.dart';
+import 'package:ciro_chat_app/core/network/socket_service.dart';
+import 'package:ciro_chat_app/core/error/failures.dart';
+import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
+import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 
 abstract class ChatRemoteDataSource {
   Future<void> connect();
@@ -23,7 +25,7 @@ abstract class ChatRemoteDataSource {
   Future<Either<Failure, Map<String, dynamic>>> uploadFile(File file);
   Future<Either<Failure, List<ChatSession>>> fetchRooms();
 
-  // New group chat API endpoints
+  // Group chat API endpoints
   Future<Either<Failure, Map<String, dynamic>>> createGroup(
     String groupName,
     List<String> participants,
@@ -42,80 +44,59 @@ abstract class ChatRemoteDataSource {
 
 @LazySingleton(as: ChatRemoteDataSource)
 class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
-  final FlutterSecureStorage _secureStorage;
-  final Dio _dio; // Add Dio dependency
-  IO.Socket? _socket;
+  final DioClient _dioClient;
+  final SocketService _socketService;
+  final AuthLocalDataSource _authLocalDataSource;
   final _messageController = StreamController<Message>.broadcast();
 
-  ChatRemoteDataSourceImpl(this._secureStorage, this._dio); // Initialize Dio
+  ChatRemoteDataSourceImpl(
+    this._dioClient,
+    this._socketService,
+    this._authLocalDataSource,
+  ) {
+    _socketService.onNewMessage = (data) {
+      final message = Message(
+        id: data['id']?.toString() ?? '',
+        clientMessageId:
+            data['clientMessageId']?.toString() ??
+            data['id']?.toString() ??
+            '',
+        roomId: data['chatRoomId']?.toString() ?? data['roomId']?.toString() ?? 'unknown',
+        senderId: data['senderId']?.toString() ?? '',
+        text: data['content']?.toString() ?? '',
+        timestamp: data['createdAt'] != null
+            ? DateTime.tryParse(data['createdAt'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+      );
+      _messageController.add(message);
+    };
+  }
 
   @override
   Future<void> connect() async {
-    if (_socket != null && _socket!.connected) return;
-
-    final token = await _secureStorage.read(key: 'accessToken');
-
-    _socket = IO.io(
-      'http://localhost:3000',
-      IO.OptionBuilder().setTransports(['websocket']).setExtraHeaders({
-        'Authorization': 'Bearer $token',
-      }).build(),
-    );
-
-    _socket!.onConnect((_) {
-      // You can add logic here if needed handling successful connection
-    });
-
-    _socket!.on('receive_message', (data) {
-      if (data is Map<String, dynamic>) {
-        final message = Message(
-          id: data['id']?.toString() ?? '',
-          clientMessageId:
-              data['clientMessageId']?.toString() ??
-              data['id']?.toString() ??
-              '',
-          roomId: data['roomId']?.toString() ?? 'unknown',
-          senderId: data['senderId']?.toString() ?? '',
-          text: data['content']?.toString() ?? '',
-          timestamp: data['createdAt'] != null
-              ? DateTime.tryParse(data['createdAt'].toString()) ??
-                    DateTime.now()
-              : DateTime.now(),
-        );
-        _messageController.add(message);
-      }
-    });
-
-    _socket!.onDisconnect((_) {
-      // Handle socket disconnect
-    });
+    // SocketService manages the connection globally, so we no longer manually connect here.
+    // The AuthCubit calls _socketService.connect(token) directly.
   }
 
   @override
   Future<void> disconnect() async {
-    _socket?.disconnect();
-    _socket?.dispose();
-    _socket = null;
+    // SocketService manages the connection globally.
   }
 
   @override
   void sendMessage(String text) {
-    if (_socket != null && _socket!.connected) {
-      _socket!.emit('send_message', {'text': text});
-    }
+    // Left empty. The Cubit uses _socketService directly to send messages
+    // with correct roomId, messageId, etc.
   }
 
   @override
   Stream<Message> get messageStream => _messageController.stream;
 
-  // ── Group Chat API Endpoints ────────────────────────────────────────────────
+  // ── Helper ──────────────────────────────────────────────────────────────
 
-  String _apiUrl(String path) => 'http://localhost:3000/api/v1/chat$path';
+  Dio get _dio => _dioClient.dio;
 
-  Future<Options> _getAuthOptions() async {
-    final token = await _secureStorage.read(key: 'accessToken');
-    return Options(headers: {'Authorization': 'Bearer $token'});
-  }
+  // ── Group Chat API Endpoints ──────────────────────────────────────────────
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> createGroup(
@@ -124,18 +105,20 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? avatarUrl,
   ) async {
     try {
-      final options = await _getAuthOptions();
       final response = await _dio.post(
-        _apiUrl('/group/create'),
+        '/chat/group/create', // Assuming standard modular monolith path
         data: {
           'name': groupName,
           'participants': participants,
           'avatarUrl': avatarUrl,
         },
-        options: options,
       );
-      if (response.statusCode == 201) {
-        return Right(response.data as Map<String, dynamic>);
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final raw = response.data;
+        final payload = (raw is Map && raw.containsKey('data'))
+            ? raw['data'] as Map<String, dynamic>
+            : raw as Map<String, dynamic>;
+        return Right(payload);
       }
       return Left(
         ServerFailure(response.data['message'] ?? 'Failed to create group'),
@@ -160,11 +143,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     List<String> participants,
   ) async {
     try {
-      final options = await _getAuthOptions();
       final response = await _dio.post(
-        _apiUrl('/group/$roomId/add'),
+        '/chat/group/$roomId/participants',
         data: {'participants': participants},
-        options: options,
       );
       if (response.statusCode == 200) {
         return const Right(null);
@@ -192,12 +173,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String participantId,
   ) async {
     try {
-      final options = await _getAuthOptions();
-      final response = await _dio.delete(
-        _apiUrl('/group/$roomId/remove'),
-        data: {'participantId': participantId},
-        options: options,
-      );
+      final response = await _dio.delete('/chat/group/$roomId/participants/$participantId');
       if (response.statusCode == 200) {
         return const Right(null);
       }
@@ -223,11 +199,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   @override
   Future<Either<Failure, void>> leaveGroup(String roomId) async {
     try {
-      final options = await _getAuthOptions();
-      final response = await _dio.post(
-        _apiUrl('/group/$roomId/leave'),
-        options: options,
-      );
+      final response = await _dio.post('/chat/group/$roomId/leave');
       if (response.statusCode == 200) {
         return const Right(null);
       }
@@ -248,23 +220,21 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     }
   }
 
-  // ── Private Chat API Endpoints (Moved from ChatApiService) ──────────────────
+  // ── Private Chat API Endpoints ──────────────────────────────────────────────
 
   @override
   Future<Either<Failure, String>> createPrivateChatRoom(
     String targetUserId,
   ) async {
     try {
-      final options = await _getAuthOptions();
       final response = await _dio.post(
-        _apiUrl('/private/resolve'),
+        '/chat/private/resolve',
         data: {'userId': targetUserId},
-        options: options,
       );
       final data = response.data['data'] ?? response.data;
       final roomId = data['roomId'] ?? data['_id'] ?? data['id'];
       if (roomId == null) {
-        return Left(ServerFailure('Backend returned no roomId'));
+        return const Left(ServerFailure('Backend returned no roomId'));
       }
       return Right(roomId.toString());
     } on DioException catch (e) {
@@ -290,18 +260,12 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       debugPrint(
         '[ChatRemoteDataSource] syncStatuses → sending ${clientMessageIds.length} ids',
       );
-      final options = await _getAuthOptions();
       final response = await _dio.post(
-        _apiUrl('/messages/sync-statuses'),
+        '/chat/messages/sync-statuses',
         data: {'clientMessageIds': clientMessageIds},
-        options: options,
       );
 
       final rawData = response.data;
-      debugPrint(
-        '[ChatRemoteDataSource] syncStatuses ← type: ${rawData.runtimeType}, body: $rawData',
-      );
-
       List<dynamic> rawList;
       if (rawData is List) {
         rawList = rawData;
@@ -310,21 +274,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         if (inner is List) {
           rawList = inner;
         } else {
-          debugPrint(
-            '[ChatRemoteDataSource] syncStatuses: unexpected map. Keys: ${rawData.keys.toList()}',
-          );
           return const Right({});
         }
       } else {
-        debugPrint(
-          '[ChatRemoteDataSource] syncStatuses: unexpected type ${rawData.runtimeType}',
-        );
         return const Right({});
       }
-
-      debugPrint(
-        '[ChatRemoteDataSource] syncStatuses: parsed ${rawList.length} update(s)',
-      );
 
       return Right({
         for (final item in rawList)
@@ -333,8 +287,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
               item['status'] != null)
             item['clientMessageId'].toString(): item['status'].toString(),
       });
-    } on DioException catch (e, st) {
-      debugPrint('[ChatRemoteDataSource] syncMessageStatuses failed: $e $st');
+    } on DioException catch (e) {
       if (e.response != null) {
         return Left(
           ServerFailure(
@@ -343,8 +296,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         );
       }
       return Left(NetworkFailure(e.message ?? 'Network error'));
-    } catch (e, st) {
-      debugPrint('[ChatRemoteDataSource] syncMessageStatuses failed: $e $st');
+    } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
   }
@@ -355,29 +307,20 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(file.path, filename: fileName),
     });
-    debugPrint('[ChatRemoteDataSource] Uploading file: $fileName');
     try {
-      final options = await _getAuthOptions();
       final response = await _dio.post(
-        _apiUrl('/upload'),
+        '/chat/upload',
         data: formData,
         options: Options(
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': options.headers!['Authorization'],
-          },
+          headers: {'Content-Type': 'multipart/form-data'},
         ),
       );
       final raw = response.data;
       final payload = (raw is Map && raw.containsKey('data'))
           ? raw['data'] as Map<String, dynamic>
           : raw as Map<String, dynamic>;
-      debugPrint(
-        '[ChatRemoteDataSource] Upload success: ${payload['fileUrl']}',
-      );
       return Right(payload);
     } on DioException catch (e) {
-      debugPrint('[ChatRemoteDataSource] Upload failed: $e');
       if (e.response != null) {
         return Left(
           ServerFailure(
@@ -387,7 +330,6 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       }
       return Left(NetworkFailure(e.message ?? 'Network error'));
     } catch (e) {
-      debugPrint('[ChatRemoteDataSource] Upload failed: $e');
       return Left(ServerFailure(e.toString()));
     }
   }
@@ -396,9 +338,8 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   Future<Either<Failure, List<ChatSession>>> fetchRooms() async {
     try {
       final currentUserPhone =
-          await _secureStorage.read(key: 'userPhone') ?? '';
-      final options = await _getAuthOptions();
-      final response = await _dio.get(_apiUrl('/rooms'), options: options);
+          await _authLocalDataSource.getUserPhone() ?? '';
+      final response = await _dio.get('/chat/rooms');
 
       final raw = response.data;
       final List<dynamic> roomsJson = (raw is List)

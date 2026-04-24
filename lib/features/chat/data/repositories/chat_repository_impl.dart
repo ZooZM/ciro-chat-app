@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:injectable/injectable.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 import 'package:ciro_chat_app/features/chat/domain/repositories/chat_repository.dart';
@@ -35,7 +38,9 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, String>>> syncMessageStatuses(List<String> clientMessageIds) {
+  Future<Either<Failure, Map<String, String>>> syncMessageStatuses(
+    List<String> clientMessageIds,
+  ) {
     return remoteDataSource.syncMessageStatuses(clientMessageIds);
   }
 
@@ -50,17 +55,27 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> createGroup(String groupName, List<String> participants, String? avatarUrl) {
+  Future<Either<Failure, Map<String, dynamic>>> createGroup(
+    String groupName,
+    List<String> participants,
+    String? avatarUrl,
+  ) {
     return remoteDataSource.createGroup(groupName, participants, avatarUrl);
   }
 
   @override
-  Future<Either<Failure, void>> addParticipants(String roomId, List<String> participants) {
+  Future<Either<Failure, void>> addParticipants(
+    String roomId,
+    List<String> participants,
+  ) {
     return remoteDataSource.addParticipants(roomId, participants);
   }
 
   @override
-  Future<Either<Failure, void>> removeParticipant(String roomId, String participantId) {
+  Future<Either<Failure, void>> removeParticipant(
+    String roomId,
+    String participantId,
+  ) {
     return remoteDataSource.removeParticipant(roomId, participantId);
   }
 
