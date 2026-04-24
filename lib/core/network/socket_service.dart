@@ -33,6 +33,9 @@ class SocketService {
   /// Fired after a successful socket reconnect — use to trigger REST status sync.
   void Function()? onReconnected;
 
+  /// Fired when another user in the active room is typing.
+  void Function(String userId, String phoneNumber, bool isTyping)? onUserTyping;
+
   // ── Call signaling callbacks (set by CallCubit) ───────────────────────────
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onCallAccepted;
@@ -138,6 +141,17 @@ class SocketService {
       onNewMessage?.call(data as Map<String, dynamic>);
     });
 
+    // Inbound typing indicator
+    _socket?.on('userTyping', (data) {
+      debugPrint('[SocketService] userTyping: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        final userId = data['userId']?.toString() ?? '';
+        final phoneNumber = data['phoneNumber']?.toString() ?? '';
+        final isTyping = data['isTyping'] == true;
+        onUserTyping?.call(userId, phoneNumber, isTyping);
+      }
+    });
+
     // ── Call signaling events ─────────────────────────────────────────────
     _socket?.on('incomingCall', (data) {
       debugPrint('[CALL] incomingCall: $data');
@@ -162,6 +176,13 @@ class SocketService {
   void joinRoom(String roomId) {
     _socket?.emit('joinRoom', {'chatRoomId': roomId});
     debugPrint('[SocketService] Joined room: $roomId');
+  }
+
+  /// Emits a typing indicator event for the specified room.
+  void emitTyping(String roomId, bool isTyping) {
+    if (roomId.isNotEmpty && (_socket?.connected ?? false)) {
+      _socket?.emit('typing', {'roomId': roomId, 'isTyping': isTyping});
+    }
   }
 
   void sendMessage({

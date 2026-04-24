@@ -12,6 +12,8 @@ import '../bloc/voice_note_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../bloc/chat_cubit.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Base URL constant — same default as DioClient to avoid an extra import.
@@ -39,11 +41,13 @@ String _resolveUrl(String? relativeOrAbsolute) {
 class MessageBubbleWidget extends StatelessWidget {
   final Message message;
   final String currentUserId;
+  final bool isGroup;
 
   const MessageBubbleWidget({
     Key? key,
     required this.message,
     required this.currentUserId,
+    this.isGroup = false,
   }) : super(key: key);
 
   bool get _isMine => message.senderId == currentUserId;
@@ -122,7 +126,31 @@ class MessageBubbleWidget extends StatelessWidget {
             ),
           ],
         ),
-        child: _buildContent(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isGroup && !_isMine)
+              Padding(
+                padding: EdgeInsets.only(left: 12.resW, right: 12.resW, top: 8.resH),
+                child: FutureBuilder<String>(
+                  future: context.read<ChatCubit>().getLocalContactName(message.senderId),
+                  builder: (context, snapshot) {
+                    return Text(
+                      snapshot.data ?? message.senderId,
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
+              ),
+            _buildContent(context),
+          ],
+        ),
       ),
     );
   }
@@ -154,7 +182,6 @@ class MessageBubbleWidget extends StatelessWidget {
           footer: _buildFooter(),
         );
       case MessageType.text:
-      default:
         return _TextBubble(
           message: message,
           isMine: _isMine,

@@ -35,6 +35,8 @@ class _ChatInputBarState extends State<ChatInputBar> {
   int _recordDuration = 0;
   Timer? _timer;
 
+  Timer? _typingTimer;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +49,15 @@ class _ChatInputBarState extends State<ChatInputBar> {
           _isTextEmpty = isEmpty;
         });
       }
+      
+      // Debounced typing indicator emission
+      context.read<ChatCubit>().notifyTyping(isTyping: true);
+      _typingTimer?.cancel();
+      _typingTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) {
+          context.read<ChatCubit>().notifyTyping(isTyping: false);
+        }
+      });
     });
   }
 

@@ -63,9 +63,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T012 [P] [US2] Update `ChatBubble` widget in `lib/features/chat/presentation/widgets/chat_bubble.dart` to conditionally show sender's name/number for group chats
-- [ ] T013 [US2] Update `ChatDetailPage` in `lib/features/chat/presentation/pages/chat_detail_page.dart` to handle group routing and header display
-- [ ] T014 [US2] Verify `typing` and `userTyping` socket events in `ChatCubit` handle group `roomId`s correctly
+- [X] T012 [P] [US2] Update `ChatBubble` widget in `lib/features/chat/presentation/widgets/chat_bubble.dart` to conditionally show sender's name/number for group chats
+- [X] T013 [US2] Update `ChatDetailPage` in `lib/features/chat/presentation/pages/chat_detail_page.dart` to handle group routing and header display
+- [X] T014 [US2] Verify `typing` and `userTyping` socket events in `ChatCubit` handle group `roomId`s correctly
 
 **Checkpoint**: Users can chat seamlessly in groups with clear sender identification.
 

@@ -178,17 +178,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
                           : null,
                       child: widget.chatData.avatarUrl.isEmpty
-                          ? Text(
-                              widget.chatData.name.isNotEmpty
-                                  ? widget.chatData.name[0].toUpperCase()
-                                  : '?',
-                              style: AppTypography.subtitle1.copyWith(
-                                color: AppColors.primary,
-                              ),
-                            )
+                          ? (widget.chatData.type == ChatRoomType.GROUP
+                              ? Icon(Icons.groups, color: AppColors.primary)
+                              : Text(
+                                  widget.chatData.name.isNotEmpty
+                                      ? widget.chatData.name[0].toUpperCase()
+                                      : '?',
+                                  style: AppTypography.subtitle1.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ))
                           : null,
                     ),
-                    if (widget.chatData.isOnline)
+                    if (widget.chatData.isOnline && widget.chatData.type == ChatRoomType.PRIVATE)
                       Positioned(
                         right: 0,
                         bottom: 0,
@@ -208,58 +210,85 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   ],
                 ),
                 SizedBox(width: 12.resW),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.chatData.name,
-                      style: AppTypography.subtitle1.copyWith(
-                        color: Colors.black,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.chatData.name,
+                        style: AppTypography.subtitle1.copyWith(
+                          color: Colors.black,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    Text(
-                      widget.chatData.isOnline ? 'online' : 'offline',
-                      style: AppTypography.body2.copyWith(
-                        color: AppColors.textSecondary,
+                      StreamBuilder<Set<String>>(
+                        stream: cubit.typingUsersStream,
+                        builder: (context, snapshot) {
+                          final typers = snapshot.data ?? {};
+                          if (typers.isNotEmpty) {
+                            return Text(
+                              widget.chatData.type == ChatRoomType.GROUP
+                                  ? '${typers.first} is typing...'
+                                  : 'typing...',
+                              style: AppTypography.body2.copyWith(
+                                color: AppColors.primary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          }
+                          return Text(
+                            widget.chatData.type == ChatRoomType.GROUP
+                                ? '${widget.chatData.participants.length} participants'
+                                : (widget.chatData.isOnline ? 'online' : 'offline'),
+                            style: AppTypography.body2.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           actions: [
-            IconButton(
-              icon: Icon(
-                Icons.phone_outlined,
-                color: AppColors.textSecondary,
-                size: 24.resW,
+            if (widget.chatData.type == ChatRoomType.PRIVATE) ...[
+              IconButton(
+                icon: Icon(
+                  Icons.phone_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () {
+                  context.read<CallCubit>().initiateCall(
+                    targetUserId: widget.chatData.phoneNumber,
+                    targetName: widget.chatData.name,
+                    targetAvatarUrl: widget.chatData.avatarUrl,
+                    isVideo: false,
+                  );
+                },
               ),
-              onPressed: () {
-                context.read<CallCubit>().initiateCall(
-                  targetUserId: widget.chatData.phoneNumber,
-                  targetName: widget.chatData.name,
-                  targetAvatarUrl: widget.chatData.avatarUrl,
-                  isVideo: false,
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.videocam_outlined,
-                color: AppColors.textSecondary,
-                size: 24.resW,
+              IconButton(
+                icon: Icon(
+                  Icons.videocam_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () {
+                  context.read<CallCubit>().initiateCall(
+                    targetUserId: widget.chatData.phoneNumber,
+                    targetName: widget.chatData.name,
+                    targetAvatarUrl: widget.chatData.avatarUrl,
+                  );
+                },
               ),
-              onPressed: () {
-                // 1. Emit requestCall via socket exactly using Mongo ID
-                context.read<CallCubit>().initiateCall(
-                  targetUserId: widget.chatData.phoneNumber,
-                  targetName: widget.chatData.name,
-                  targetAvatarUrl: widget.chatData.avatarUrl,
-                );
-                // 2. Navigation is completely delegated to BlocListener safely mapping to OutgoingCallScreen
-              },
-            ),
+            ],
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.more_vert,
@@ -346,6 +375,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         return MessageBubbleWidget(
                           message: displayMessages[index],
                           currentUserId: _currentUserId,
+                          isGroup: widget.chatData.type == ChatRoomType.GROUP,
                         );
                       },
                     );

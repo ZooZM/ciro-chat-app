@@ -59,6 +59,10 @@ class ChatCubit extends Cubit<ChatState> {
   bool isHydrationComplete = false;
   final _uuid = const Uuid();
 
+  final _typingUsersController = StreamController<Set<String>>.broadcast();
+  Stream<Set<String>> get typingUsersStream => _typingUsersController.stream;
+  final Set<String> _currentTypingUsers = {};
+
   ChatCubit(
     this._localDataSource,
     this._socketService,
@@ -107,6 +111,19 @@ class ChatCubit extends Cubit<ChatState> {
       );
       syncStatusesFromRest().ignore();
       syncPendingMessages().ignore();
+    };
+
+    _socketService.onUserTyping = (userId, phoneNumber, isTyping) {
+      if (_activeRoomId == null) return;
+      final identifier = phoneNumber.isNotEmpty ? phoneNumber : userId;
+      if (identifier.isEmpty) return;
+      
+      if (isTyping) {
+        _currentTypingUsers.add(identifier);
+      } else {
+        _currentTypingUsers.remove(identifier);
+      }
+      _typingUsersController.add(Set.from(_currentTypingUsers));
     };
 
     // ── Recipient-side: incoming message ──────────────────────────────────────
@@ -207,6 +224,8 @@ class ChatCubit extends Cubit<ChatState> {
       _activeRoomId = null;
     }
     _pendingContact = null;
+    _currentTypingUsers.clear();
+    _typingUsersController.add({});
   }
 
   Future<void> markRoomMessagesRead(String roomId) async {
@@ -228,6 +247,22 @@ class ChatCubit extends Cubit<ChatState> {
     debugPrint(
       '[ChatCubit] Marked ${idsToMark.length} messages as read in $roomId',
     );
+  }
+
+  void notifyTyping({required bool isTyping}) {
+    if (_activeRoomId != null) {
+      _socketService.emitTyping(_activeRoomId!, isTyping);
+    }
+  }
+
+  Future<String> getLocalContactName(String phoneNumber) async {
+    final contacts = await _localDataSource.watchContacts().first;
+    for (final contact in contacts) {
+      if (contact.phoneNumber == phoneNumber) {
+        return contact.name;
+      }
+    }
+    return phoneNumber;
   }
 
   // ── JIT room guard (shared by all send methods) ─────────────────────────────
