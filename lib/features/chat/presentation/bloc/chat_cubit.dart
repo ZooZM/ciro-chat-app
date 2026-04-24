@@ -402,6 +402,76 @@ class ChatCubit extends Cubit<ChatState> {
     );
   }
 
+  // ── sendCameraMessage ───────────────────────────────────────────────────────
+
+  /// Opens the camera, uploads the captured image, then sends it.
+  Future<void> sendCameraMessage(BuildContext context) async {
+    final XFile? picked = await _imagePicker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    final pendingContact = _pendingContact;
+    final roomCreated = await _ensureRoom(pendingContact);
+    if (!roomCreated) return;
+
+    final roomId = _activeRoomId!;
+    final msgId = _uuid.v4();
+
+    final optimistic = Message(
+      id: msgId,
+      clientMessageId: msgId,
+      roomId: roomId,
+      senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+      text: '📷 Uploading…',
+      timestamp: DateTime.now(),
+      status: MessageStatus.pending,
+      type: MessageType.image,
+      metadata: {'localPath': picked.path},
+    );
+    await _localDataSource.saveMessage(
+      optimistic,
+      roomName: pendingContact?.name ?? '',
+      roomAvatarUrl: pendingContact?.avatarUrl ?? '',
+      roomPhoneNumber: pendingContact?.phoneNumber ?? '',
+    );
+
+    try {
+      final uploadResult = await _chatRepository.uploadFile(File(picked.path));
+      await uploadResult.fold(
+        (failure) async {
+          await _localDataSource.updateMessageStatus(
+            msgId,
+            MessageStatus.error,
+          );
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          final meta = {
+            'localPath': picked.path,
+            'mimeType': serverMeta['mimeType'] ?? 'image/jpeg',
+            'fileName': serverMeta['fileName'] ?? picked.name,
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          };
+
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '📷 Photo',
+            type: 'image',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+        },
+      );
+    } catch (e) {
+      await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+    }
+  }
+
   // ── sendImageMessage ────────────────────────────────────────────────────────
 
   /// Opens the gallery, uploads the picked image, then sends it.
@@ -613,6 +683,125 @@ class ChatCubit extends Cubit<ChatState> {
         text: '👤 $contactName',
         type: MessageType.contact,
         metadata: {'contactName': contactName, 'contactPhone': contactPhone},
+      ),
+    );
+  }
+
+  // ── sendLocationMessage ─────────────────────────────────────────────────────
+
+  Future<void> sendLocationMessage(
+    double lat,
+    double lng,
+    String address,
+  ) async {
+    await sendLocalMessage(
+      MessageDraft(
+        text: '📍 Location',
+        type: MessageType.location,
+        metadata: {'latitude': lat, 'longitude': lng, 'address': address},
+      ),
+    );
+  }
+
+  // ── sendAudioMessage ────────────────────────────────────────────────────────
+
+  Future<void> sendAudioMessage(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+      allowMultiple: false,
+      withData: false,
+    );
+    if (result == null || result.files.single.path == null) return;
+
+    final pickedFile = result.files.single;
+    final filePath = pickedFile.path!;
+
+    final pendingContact = _pendingContact;
+    final roomCreated = await _ensureRoom(pendingContact);
+    if (!roomCreated) return;
+
+    final roomId = _activeRoomId!;
+    final msgId = _uuid.v4();
+
+    final optimistic = Message(
+      id: msgId,
+      clientMessageId: msgId,
+      roomId: roomId,
+      senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+      text: '🎵 Audio',
+      timestamp: DateTime.now(),
+      status: MessageStatus.pending,
+      type: MessageType.audio,
+      metadata: {'localPath': filePath, 'fileName': pickedFile.name},
+    );
+    await _localDataSource.saveMessage(
+      optimistic,
+      roomName: pendingContact?.name ?? '',
+      roomAvatarUrl: pendingContact?.avatarUrl ?? '',
+      roomPhoneNumber: pendingContact?.phoneNumber ?? '',
+    );
+
+    try {
+      final uploadResult = await _chatRepository.uploadFile(File(filePath));
+      await uploadResult.fold(
+        (failure) async {
+          await _localDataSource.updateMessageStatus(
+            msgId,
+            MessageStatus.error,
+          );
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          final meta = {
+            'localPath': filePath,
+            'fileName': serverMeta['fileName'] ?? pickedFile.name,
+          };
+
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '🎵 Audio',
+            type: 'audio',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+        },
+      );
+    } catch (e) {
+      await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+    }
+  }
+
+  // ── sendPollMessage ─────────────────────────────────────────────────────────
+
+  Future<void> sendPollMessage(String question, List<String> options) async {
+    await sendLocalMessage(
+      MessageDraft(
+        text: '📊 Poll',
+        type: MessageType.poll,
+        metadata: {'question': question, 'options': options},
+      ),
+    );
+  }
+
+  // ── sendEventMessage ────────────────────────────────────────────────────────
+
+  Future<void> sendEventMessage(
+    String title,
+    DateTime dateTime,
+    String description,
+  ) async {
+    await sendLocalMessage(
+      MessageDraft(
+        text: '📅 Event',
+        type: MessageType.event,
+        metadata: {
+          'title': title,
+          'dateTime': dateTime.toIso8601String(),
+          'description': description,
+        },
       ),
     );
   }
@@ -998,6 +1187,13 @@ class ChatCubit extends Cubit<ChatState> {
           createdAt: createdAt,
         );
       }
+    }
+    @override
+    Future<void> close() {
+      _roomStreamSub?.cancel();
+      _typingUsersController.close();
+      _roomTypingController.close();
+      return super.close();
     }
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -168,6 +170,171 @@ class AttachmentSheetWidget extends StatelessWidget {
     await context.read<ChatCubit>().sendContactMessage(picked);
   }
 
+  Future<void> _handleCamera(BuildContext context) async {
+    Navigator.pop(context);
+    await context.read<ChatCubit>().sendCameraMessage(context);
+  }
+
+  Future<void> _handleLocation(BuildContext context) async {
+    Navigator.pop(context);
+
+    final status = await Permission.location.request();
+    if (!status.isGranted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission denied')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      final placemarks =
+          await placemarkFromCoordinates(position.latitude, position.longitude);
+      String address = "Unknown Location";
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        address = "${p.street}, ${p.locality}, ${p.country}";
+      }
+
+      if (context.mounted) {
+        await context.read<ChatCubit>().sendLocationMessage(
+              position.latitude,
+              position.longitude,
+              address,
+            );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not get location: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleAudio(BuildContext context) async {
+    Navigator.pop(context);
+    await context.read<ChatCubit>().sendAudioMessage(context);
+  }
+
+  Future<void> _handlePoll(BuildContext context) async {
+    Navigator.pop(context);
+
+    final questionController = TextEditingController();
+    final optionControllers = [TextEditingController(), TextEditingController()];
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (context, setState) {
+        return AlertDialog(
+          title: const Text('Create Poll'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: questionController,
+                  decoration: const InputDecoration(labelText: 'Question'),
+                ),
+                ...optionControllers.asMap().entries.map((entry) {
+                  return TextField(
+                    controller: entry.value,
+                    decoration:
+                        InputDecoration(labelText: 'Option ${entry.key + 1}'),
+                  );
+                }),
+                TextButton(
+                  onPressed: () =>
+                      setState(() => optionControllers.add(TextEditingController())),
+                  child: const Text('Add Option'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final question = questionController.text.trim();
+                final options = optionControllers
+                    .map((c) => c.text.trim())
+                    .where((t) => t.isNotEmpty)
+                    .toList();
+                if (question.isNotEmpty && options.length >= 2) {
+                  Navigator.pop(ctx);
+                  context.read<ChatCubit>().sendPollMessage(question, options);
+                }
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  Future<void> _handleEvent(BuildContext context) async {
+    Navigator.pop(context);
+
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create Event'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Event Title'),
+            ),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Select Date'),
+              subtitle: Text(selectedDate.toString()),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  selectedDate = date;
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final title = titleController.text.trim();
+              if (title.isNotEmpty) {
+                Navigator.pop(ctx);
+                context.read<ChatCubit>().sendEventMessage(
+                    title, selectedDate, descController.text.trim());
+              }
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
@@ -225,11 +392,26 @@ class AttachmentSheetWidget extends StatelessWidget {
       case 'Gallery':
         _handleGallery(context);
         break;
+      case 'Camera':
+        _handleCamera(context);
+        break;
       case 'Document':
         _handleDocument(context);
         break;
       case 'Contact':
         _handleContact(context);
+        break;
+      case 'Location':
+        _handleLocation(context);
+        break;
+      case 'Audio':
+        _handleAudio(context);
+        break;
+      case 'Poll':
+        _handlePoll(context);
+        break;
+      case 'Event':
+        _handleEvent(context);
         break;
       default:
         // Not yet implemented options — close the sheet.

@@ -22,10 +22,10 @@ flutter pub get
 
 ```yaml
 # pubspec.yaml — add these:
-google_maps_flutter: ^2.9.0
-geolocator: ^12.0.0
-geocoding: ^3.0.0
-flutter_dotenv: ^5.2.1
+google_maps_flutter: ^2.17.0
+geolocator: ^14.0.2
+geocoding: ^4.0.0
+flutter_dotenv: ^6.0.1
 ```
 
 ### 3. Environment File

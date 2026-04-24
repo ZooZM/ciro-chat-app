@@ -172,7 +172,7 @@ Scan the codebase and current feature files to identify and complete any pending
 - How does system handle incoming calls when the user is already in a call?
 - How are missed events handled if the socket drops briefly during high message throughput?
 - What happens when SQLite returns a `ChatSession` with a `null` or missing `type` column (schema migration edge case)?
-- How does the system handle a voice note recording if the app is backgrounded mid-recording?
+- How does the system handle a voice note recording if the app is backgrounded mid-recording? (Behavior: The recording should be stopped and sent immediately).
 - What happens if the backend returns a message type not recognized by `messageTypeFromString` (e.g., `system`, `event`)?
 - How does the Location attachment behave when the user denies location permission?
 

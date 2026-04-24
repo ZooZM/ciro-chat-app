@@ -21,6 +21,7 @@ class ChatSession extends Equatable {
   final ChatRoomType type; // New field
   final List<String> participants; // New field for group chat
   final List<String> admins; // New field
+  final String description; // New field for group description
 
   /// Carries the contact's MongoDB User _id during a JIT flow.
   /// This is set by ContactsScreen before navigating so the Cubit can call
@@ -42,6 +43,7 @@ class ChatSession extends Equatable {
     this.type = ChatRoomType.PRIVATE, // Default to private
     this.participants = const [],
     this.admins = const [],
+    this.description = '',
   });
 
   @override
@@ -59,6 +61,7 @@ class ChatSession extends Equatable {
         type,
         participants,
         admins,
+        description,
         contactUserId,
       ];
 
@@ -80,6 +83,7 @@ class ChatSession extends Equatable {
     ChatRoomType? type,
     List<String>? participants,
     List<String>? admins,
+    String? description,
   }) {
     return ChatSession(
       id: id ?? this.id,
@@ -96,6 +100,7 @@ class ChatSession extends Equatable {
       type: type ?? this.type,
       participants: participants ?? this.participants,
       admins: admins ?? this.admins,
+      description: description ?? this.description,
     );
   }
 
@@ -137,6 +142,7 @@ class ChatSession extends Equatable {
     String otherPhone = '';
     String otherAvatar = '';
     bool otherIsOnline = false;
+    final description = json['description'] ?? '';
 
     if (roomType == ChatRoomType.PRIVATE || displayName.isEmpty) {
       // Find the participant who is NOT the current user
@@ -200,6 +206,7 @@ class ChatSession extends Equatable {
       type: roomType,
       participants: rawParticipants,
       admins: rawAdmins,
+      description: description,
     );
   }
 
@@ -220,24 +227,11 @@ class ChatSession extends Equatable {
       'type': type.name, // Store enum as string
       'participants': jsonEncode(participants), // Convert list to JSON string
       'admins': jsonEncode(admins), // Convert list to JSON string
+      'description': description,
     };
   }
 
   factory ChatSession.fromMap(Map<String, dynamic> map) {
-    List<String> participants = [];
-    if (map['participants'] != null) {
-      participants = (jsonDecode(map['participants'] as String) as List<dynamic>)
-          .map((e) => e as String)
-          .toList();
-    }
-
-    List<String> admins = [];
-    if (map['admins'] != null) {
-      admins = (jsonDecode(map['admins'] as String) as List<dynamic>)
-          .map((e) => e as String)
-          .toList();
-    }
-
     return ChatSession(
       id: map['id'] as String,
       name: map['name'] as String,
@@ -256,8 +250,9 @@ class ChatSession extends Equatable {
         (e) => e.name == (map['type'] as String? ?? 'PRIVATE'),
         orElse: () => ChatRoomType.PRIVATE,
       ),
-      participants: participants,
-      admins: admins,
+      participants: (jsonDecode(map['participants'] ?? '[]') as List).cast<String>(),
+      admins: (jsonDecode(map['admins'] ?? '[]') as List).cast<String>(),
+      description: map['description'] ?? '',
     );
   }
 }

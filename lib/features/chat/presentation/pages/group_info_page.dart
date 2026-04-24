@@ -97,6 +97,39 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   @override
+  void _showEditDialog(BuildContext context, ChatSession chat) {
+    final controller = TextEditingController(text: chat.name);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Group Name'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'Group Name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              // Not supported by backend yet, but we'll show UI for it
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Updating group name is not supported by the backend yet.')),
+              );
+              Navigator.pop(context);
+            },
+            child: Text('Save', style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ChatSession>>(
       stream: context.read<ChatCubit>().recentChatsStream,
@@ -110,9 +143,9 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         final bool isAdmin = currentChatData.admins.contains(_currentUserPhone);
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF7F7F7),
+          backgroundColor: AppColors.background,
           appBar: AppBar(
-            backgroundColor: const Color(0xFFF7F7F7),
+            backgroundColor: AppColors.background,
             elevation: 0,
             centerTitle: true,
             title: const Text(
@@ -124,14 +157,11 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               onPressed: () => context.pop(),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.black),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: const Icon(Icons.reply, color: Colors.black),
-                onPressed: () {},
-              ),
+              if (isAdmin)
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.black),
+                  onPressed: () => _showEditDialog(context, currentChatData),
+                ),
             ],
           ),
           body: SingleChildScrollView(
@@ -143,7 +173,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   SizedBox(height: 24.resH),
                   _buildActionButtons(),
                   SizedBox(height: 16.resH),
-                  _buildDescriptionTile(),
+                  _buildDescriptionTile(currentChatData),
                   SizedBox(height: 16.resH),
                   _buildMediaSection(),
                   SizedBox(height: 16.resH),
@@ -171,7 +201,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       children: [
         CircleAvatar(
           radius: 45.resR,
-          backgroundColor: const Color(0xFF103154),
+          backgroundColor: AppColors.primary,
           backgroundImage: chat.avatarUrl.isNotEmpty ? NetworkImage(chat.avatarUrl) : null,
           child: chat.avatarUrl.isEmpty
               ? Text(
@@ -245,24 +275,33 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     );
   }
 
-  Widget _buildDescriptionTile() {
+  Widget _buildDescriptionTile(ChatSession chat) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(vertical: 16.resH, horizontal: 16.resW),
+      padding: EdgeInsets.all(16.resW),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12.resR),
       ),
-      child: Text(
-        'Add description for group',
-        style: TextStyle(color: AppColors.primary, fontSize: 16.resH),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            chat.description.isEmpty ? 'Add group description' : chat.description,
+            style: TextStyle(
+              color: chat.description.isEmpty ? AppColors.primary : Colors.black87,
+              fontSize: 14.resH,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMediaSection() {
     return Container(
-      padding: EdgeInsets.symmetric(vertical: 16.resH, horizontal: 16.resW),
+      width: double.infinity,
+      padding: EdgeInsets.all(16.resW),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12.resR),
@@ -281,25 +320,9 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             ],
           ),
           SizedBox(height: 16.resH),
-          SizedBox(
-            height: 80.resH,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: 4,
-              separatorBuilder: (context, index) => SizedBox(width: 8.resW),
-              itemBuilder: (context, index) {
-                return Container(
-                  width: 80.resH,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(8.resR),
-                  ),
-                  child: Center(
-                    child: Icon(Icons.image, color: Colors.grey[500]),
-                  ),
-                );
-              },
-            ),
+          Text(
+            'No media found',
+            style: TextStyle(color: Colors.grey[400], fontSize: 14.resH),
           ),
         ],
       ),
@@ -429,8 +452,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           _buildDangerTile(Icons.person_off_outlined, 'Block user'),
           _buildDangerTile(Icons.flag_outlined, 'Report'),
           ListTile(
-            leading: const Icon(Icons.delete_outline, color: Colors.red),
-            title: const Text('Leave group', style: TextStyle(color: Colors.red)),
+            leading: Icon(Icons.delete_outline, color: AppColors.error),
+            title: Text('Leave group', style: TextStyle(color: AppColors.error)),
             dense: true,
             visualDensity: VisualDensity.compact,
             onTap: () => _leaveGroup(chat),
@@ -442,8 +465,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
 
   Widget _buildDangerTile(IconData icon, String title) {
     return ListTile(
-      leading: Icon(icon, color: Colors.red),
-      title: Text(title, style: const TextStyle(color: Colors.red)),
+      leading: Icon(icon, color: AppColors.error),
+      title: Text(title, style: TextStyle(color: AppColors.error)),
       dense: true,
       visualDensity: VisualDensity.compact,
     );

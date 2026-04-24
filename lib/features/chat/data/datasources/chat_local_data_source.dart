@@ -69,8 +69,18 @@ String _mediaPreview(MessageType type) {
       return '📎 File';
     case MessageType.voiceNote:
       return '🎤 Voice note';
+    case MessageType.audio:
+      return '🎵 Audio';
     case MessageType.contact:
       return '👤 Contact';
+    case MessageType.system:
+      return 'ℹ️ System';
+    case MessageType.location:
+      return '📍 Location';
+    case MessageType.poll:
+      return '📊 Poll';
+    case MessageType.event:
+      return '📅 Event';
     case MessageType.text:
       return '';
   }
@@ -191,7 +201,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms
-        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus)
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus, type, participants, admins)
       VALUES (
         ?,
         COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
@@ -202,7 +212,10 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         COALESCE((SELECT unreadCount   FROM rooms WHERE id = ?), 0) + ?,
         COALESCE((SELECT isOnline      FROM rooms WHERE id = ?), 0),
         ?,
-        ?
+        ?,
+        COALESCE((SELECT type          FROM rooms WHERE id = ?), 'PRIVATE'),
+        COALESCE((SELECT participants  FROM rooms WHERE id = ?), '[]'),
+        COALESCE((SELECT admins        FROM rooms WHERE id = ?), '[]')
       )
       ''',
       [
@@ -216,6 +229,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         message.roomId, // isOnline
         message.senderId, // lastMessageSenderId
         message.status.name, // lastMessageStatus
+        message.roomId, // type
+        message.roomId, // participants
+        message.roomId, // admins
       ],
     );
 
