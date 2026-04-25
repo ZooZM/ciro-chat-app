@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../domain/entities/chat_session.dart';
 import '../bloc/chat_cubit.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +80,10 @@ final List<AttachmentOptionModel> _attachmentOptions = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AttachmentSheetWidget extends StatelessWidget {
-  const AttachmentSheetWidget({Key? key}) : super(key: key);
+  final ChatRoomType roomType;
+
+  const AttachmentSheetWidget({Key? key, this.roomType = ChatRoomType.PRIVATE})
+    : super(key: key);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -100,9 +104,9 @@ class AttachmentSheetWidget extends StatelessWidget {
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Contacts permission denied')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Contacts permission denied')));
       }
       return;
     }
@@ -116,9 +120,9 @@ class AttachmentSheetWidget extends StatelessWidget {
       contacts = contacts.where((c) => c.phones.isNotEmpty).toList();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load contacts: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not load contacts: $e')));
       }
       return;
     }
@@ -141,7 +145,7 @@ class AttachmentSheetWidget extends StatelessWidget {
               return ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person)),
                 title: Text(c.displayName ?? ''),
-                subtitle: Text(c.phones.first.number ?? ''),
+                subtitle: Text(c.phones.first.number),
                 onTap: () => Navigator.pop(ctx, c),
               );
             },
@@ -174,8 +178,10 @@ class AttachmentSheetWidget extends StatelessWidget {
 
     try {
       final position = await Geolocator.getCurrentPosition();
-      final placemarks =
-          await placemarkFromCoordinates(position.latitude, position.longitude);
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
       String address = "Unknown Location";
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
@@ -184,16 +190,16 @@ class AttachmentSheetWidget extends StatelessWidget {
 
       if (context.mounted) {
         await context.read<ChatCubit>().sendLocationMessage(
-              position.latitude,
-              position.longitude,
-              address,
-            );
+          position.latitude,
+          position.longitude,
+          address,
+        );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not get location: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
       }
     }
   }
@@ -207,56 +213,68 @@ class AttachmentSheetWidget extends StatelessWidget {
     Navigator.pop(context);
 
     final questionController = TextEditingController();
-    final optionControllers = [TextEditingController(), TextEditingController()];
+    final optionControllers = [
+      TextEditingController(),
+      TextEditingController(),
+    ];
 
     await showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(builder: (context, setState) {
-        return AlertDialog(
-          title: const Text('Create Poll'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: questionController,
-                  decoration: const InputDecoration(labelText: 'Question'),
-                ),
-                ...optionControllers.asMap().entries.map((entry) {
-                  return TextField(
-                    controller: entry.value,
-                    decoration:
-                        InputDecoration(labelText: 'Option ${entry.key + 1}'),
-                  );
-                }),
-                TextButton(
-                  onPressed: () =>
-                      setState(() => optionControllers.add(TextEditingController())),
-                  child: const Text('Add Option'),
-                ),
-              ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Create Poll'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: questionController,
+                    decoration: const InputDecoration(labelText: 'Question'),
+                  ),
+                  ...optionControllers.asMap().entries.map((entry) {
+                    return TextField(
+                      controller: entry.value,
+                      decoration: InputDecoration(
+                        labelText: 'Option ${entry.key + 1}',
+                      ),
+                    );
+                  }),
+                  TextButton(
+                    onPressed: () => setState(
+                      () => optionControllers.add(TextEditingController()),
+                    ),
+                    child: const Text('Add Option'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                final question = questionController.text.trim();
-                final options = optionControllers
-                    .map((c) => c.text.trim())
-                    .where((t) => t.isNotEmpty)
-                    .toList();
-                if (question.isNotEmpty && options.length >= 2) {
-                  Navigator.pop(ctx);
-                  context.read<ChatCubit>().sendPollMessage(question, options);
-                }
-              },
-              child: const Text('Send'),
-            ),
-          ],
-        );
-      }),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final question = questionController.text.trim();
+                  final options = optionControllers
+                      .map((c) => c.text.trim())
+                      .where((t) => t.isNotEmpty)
+                      .toList();
+                  if (question.isNotEmpty && options.length >= 2) {
+                    Navigator.pop(ctx);
+                    context.read<ChatCubit>().sendPollMessage(
+                      question,
+                      options,
+                    );
+                  }
+                },
+                child: const Text('Send'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -302,14 +320,19 @@ class AttachmentSheetWidget extends StatelessWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               final title = titleController.text.trim();
               if (title.isNotEmpty) {
                 Navigator.pop(ctx);
                 context.read<ChatCubit>().sendEventMessage(
-                    title, selectedDate, descController.text.trim());
+                  title,
+                  selectedDate,
+                  descController.text.trim(),
+                );
               }
             },
             child: const Text('Send'),
@@ -325,11 +348,7 @@ class AttachmentSheetWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Container(
-        margin: EdgeInsets.only(
-          left: 16.resW,
-          right: 16.resW,
-          bottom: 16.resH,
-        ),
+        margin: EdgeInsets.only(left: 16.resW, right: 16.resW, bottom: 16.resH),
         padding: EdgeInsets.only(
           top: 32.resH,
           left: 12.resW,
@@ -361,10 +380,19 @@ class AttachmentSheetWidget extends StatelessWidget {
           crossAxisSpacing: 0,
           childAspectRatio: 0.8,
           children: _attachmentOptions
-              .map((opt) => _AttachmentItem(
-                    option: opt,
-                    onTap: (context) => _routeTap(opt.label, context),
-                  ))
+              .where((opt) {
+                // FR-008: Poll is only available in Group Chat rooms.
+                if (opt.label == 'Poll' && roomType == ChatRoomType.PRIVATE) {
+                  return false;
+                }
+                return true;
+              })
+              .map(
+                (opt) => _AttachmentItem(
+                  option: opt,
+                  onTap: (context) => _routeTap(opt.label, context),
+                ),
+              )
               .toList(),
         ),
       ),
@@ -429,38 +457,14 @@ class _AttachmentItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.grey[300]!,
-                width: 1.5,
-              ),
+              border: Border.all(color: Colors.grey[300]!, width: 1.5),
             ),
             child: Center(
-              child: Icon(
-                option.icon,
-                color: option.iconColor,
-                size: 26.resW,
-              ),
+              child: Icon(option.icon, color: option.iconColor, size: 26.resW),
             ),
           ),
           SizedBox(height: 8.resH),
           // ── Label ───────────────────────────────────────────────────────────
-          Text(
-            option.label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-── Label ───────────────────────────────────────────────────────────
           Text(
             option.label,
             textAlign: TextAlign.center,

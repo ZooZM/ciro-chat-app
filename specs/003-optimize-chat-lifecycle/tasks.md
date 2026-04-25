@@ -300,5 +300,3 @@ description: "Task list template for feature implementation"
 - Each user story should be independently completable and testable
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-y
-heckpoint to validate story independently

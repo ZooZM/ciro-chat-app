@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
 class GroupChatScreen extends StatelessWidget {
@@ -16,9 +15,7 @@ class GroupChatScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: _buildMessageList(),
-            ),
+            Expanded(child: _buildMessageList()),
             const _GroupChatInputBar(),
           ],
         ),
@@ -176,11 +173,7 @@ class _GroupChatInputBar extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.only(bottom: 8.resH, right: 12.resW),
-            child: Icon(
-              Icons.add,
-              color: Colors.grey[600],
-              size: 28.resW,
-            ),
+            child: Icon(Icons.add, color: Colors.grey[600], size: 28.resW),
           ),
           Expanded(
             child: Container(
@@ -196,10 +189,14 @@ class _GroupChatInputBar extends StatelessWidget {
                     child: TextField(
                       maxLines: 4,
                       minLines: 1,
-                      style: AppTypography.body1.copyWith(color: Colors.black87),
+                      style: AppTypography.body1.copyWith(
+                        color: Colors.black87,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
-                        hintStyle: AppTypography.body1.copyWith(color: Colors.grey[400]),
+                        hintStyle: AppTypography.body1.copyWith(
+                          color: Colors.grey[400],
+                        ),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 16.resW,
@@ -222,11 +219,7 @@ class _GroupChatInputBar extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.only(bottom: 8.resH, left: 12.resW),
-            child: Icon(
-              Icons.mic_none,
-              color: Colors.grey[600],
-              size: 28.resW,
-            ),
+            child: Icon(Icons.mic_none, color: Colors.grey[600], size: 28.resW),
           ),
         ],
       ),
@@ -249,7 +242,10 @@ class _MyMessageBubble extends StatelessWidget {
         children: [
           Container(
             constraints: BoxConstraints(maxWidth: 0.7.sw),
-            padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 10.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: 16.resW,
+              vertical: 10.resH,
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFFE1F7CB), // Light green
               borderRadius: BorderRadius.only(
@@ -330,7 +326,10 @@ class _OtherMessageBubble extends StatelessWidget {
                 ),
               Container(
                 constraints: BoxConstraints(maxWidth: 0.65.sw),
-                padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 10.resH),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.resW,
+                  vertical: 10.resH,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(

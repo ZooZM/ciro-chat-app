@@ -9,7 +9,6 @@ import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class ChatInputBar extends StatefulWidget {
   final VoidCallback onAttachmentTap;
@@ -49,7 +48,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
           _isTextEmpty = isEmpty;
         });
       }
-      
+
       // Debounced typing indicator emission
       context.read<ChatCubit>().notifyTyping(isTyping: true);
       _typingTimer?.cancel();
@@ -93,9 +92,11 @@ class _ChatInputBarState extends State<ChatInputBar> {
       final filePath =
           '${dir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-      debugPrint('[ChatInputBar] Starting audio_waveforms record to $filePath...');
+      debugPrint(
+        '[ChatInputBar] Starting audio_waveforms record to $filePath...',
+      );
       await _recorderController.record(path: filePath);
-      
+
       if (!mounted) return;
 
       setState(() {
@@ -155,10 +156,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
         if (duration > 0) {
           if (mounted) {
             context.read<ChatCubit>().sendVoiceNote(
-                  context,
-                  path,
-                  durationSeconds: duration,
-                );
+              context,
+              path,
+              durationSeconds: duration,
+            );
           }
         } else {
           File(path).deleteSync(); // Too short
@@ -191,15 +192,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: 8.resW,
-        vertical: 8.resH,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 8.resW, vertical: 8.resH),
       decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
       ),
       child: SafeArea(
         child: Row(
@@ -271,8 +267,8 @@ class _ChatInputBarState extends State<ChatInputBar> {
                       ),
                     )
                   : _isTextEmpty || _isRecording
-                      ? _buildMicButton()
-                      : _buildSendButton(),
+                  ? _buildMicButton()
+                  : _buildSendButton(),
             ),
           ],
         ),
@@ -349,9 +345,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
             padding: EdgeInsets.only(right: 16.resW),
             child: Text(
               '< Slide to cancel',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textHint,
-              ),
+              style: AppTypography.caption.copyWith(color: AppColors.textHint),
             ),
           )
         else
@@ -364,7 +358,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
     return GestureDetector(
       onTap: () {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Hold to record, release to send. Swipe up to lock.')),
+          const SnackBar(
+            content: Text('Hold to record, release to send. Swipe up to lock.'),
+          ),
         );
       },
       onLongPressStart: (_) => _startRecording(),
@@ -373,7 +369,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
           debugPrint('[ChatInputBar] Finger released, stopping and sending.');
           _stopAndSendRecording();
         } else {
-          debugPrint('[ChatInputBar] Finger released, but recording is locked.');
+          debugPrint(
+            '[ChatInputBar] Finger released, but recording is locked.',
+          );
         }
       },
       onLongPressMoveUpdate: (details) {
@@ -421,11 +419,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
           color: AppColors.primary,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          Icons.send,
-          color: AppColors.surface,
-          size: 22.resW,
-        ),
+        child: Icon(Icons.send, color: AppColors.surface, size: 22.resW),
       ),
     );
   }

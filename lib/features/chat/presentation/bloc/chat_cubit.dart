@@ -1113,7 +1113,8 @@ class ChatCubit extends Cubit<ChatState> {
   @override
   Future<void> close() {
     _roomStreamSub?.cancel();
-    _socketService.disconnect();
+    _typingUsersController.close();
+    _roomTypingController.close();
     return super.close();
   }
 
@@ -1187,13 +1188,6 @@ class ChatCubit extends Cubit<ChatState> {
           createdAt: createdAt,
         );
       }
-    }
-    @override
-    Future<void> close() {
-      _roomStreamSub?.cancel();
-      _typingUsersController.close();
-      _roomTypingController.close();
-      return super.close();
     }
   }
 }

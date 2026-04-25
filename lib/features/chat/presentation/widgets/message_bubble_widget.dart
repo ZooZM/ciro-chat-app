@@ -84,8 +84,6 @@ class MessageBubbleWidget extends StatelessWidget {
         return Icon(Icons.done_all, size: 14.resW, color: AppColors.secondary);
       case MessageStatus.error:
         return Icon(Icons.error_outline, size: 14.resW, color: AppColors.error);
-      default:
-        return const SizedBox.shrink();
     }
   }
 
@@ -108,7 +106,8 @@ class MessageBubbleWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (message.type == MessageType.system || message.senderId == '000000000000000000000000') {
+    if (message.type == MessageType.system ||
+        message.senderId == '000000000000000000000000') {
       return _buildSystemBubble(context);
     }
 
@@ -136,9 +135,15 @@ class MessageBubbleWidget extends StatelessWidget {
           children: [
             if (isGroup && !_isMine)
               Padding(
-                padding: EdgeInsets.only(left: 12.resW, right: 12.resW, top: 8.resH),
+                padding: EdgeInsets.only(
+                  left: 12.resW,
+                  right: 12.resW,
+                  top: 8.resH,
+                ),
                 child: FutureBuilder<String>(
-                  future: context.read<ChatCubit>().getLocalContactName(message.senderId),
+                  future: context.read<ChatCubit>().getLocalContactName(
+                    message.senderId,
+                  ),
                   builder: (context, snapshot) {
                     return Text(
                       snapshot.data ?? message.senderId,
@@ -381,7 +386,9 @@ class _UploadingPlaceholder extends StatelessWidget {
             SizedBox(height: 8.resH),
             Text(
               'Uploading…',
-              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -752,7 +759,11 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
               CircleAvatar(
                 radius: 18.resR,
                 backgroundColor: AppColors.divider,
-                child: Icon(Icons.person, color: AppColors.surface, size: 20.resW),
+                child: Icon(
+                  Icons.person,
+                  color: AppColors.surface,
+                  size: 20.resW,
+                ),
               ),
             ],
           ),
@@ -916,7 +927,9 @@ class _LocationBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
-        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Container(
             height: 150.resH,
@@ -929,7 +942,11 @@ class _LocationBubble extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.location_on, color: AppColors.primary, size: 32.resW),
+                  Icon(
+                    Icons.location_on,
+                    color: AppColors.primary,
+                    size: 32.resW,
+                  ),
                   SizedBox(height: 8.resH),
                   Text(
                     address,
@@ -973,13 +990,17 @@ class _AudioBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
-        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               CircleAvatar(
-                backgroundColor: isMine ? Colors.white24 : AppColors.primary.withOpacity(0.1),
+                backgroundColor: isMine
+                    ? Colors.white24
+                    : AppColors.primary.withOpacity(0.1),
                 child: Icon(
                   Icons.headphones,
                   color: isMine ? Colors.white : AppColors.primary,
@@ -1030,7 +1051,9 @@ class _PollBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
-        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(
             '📊 $question',
@@ -1040,23 +1063,28 @@ class _PollBubble extends StatelessWidget {
             ),
           ),
           SizedBox(height: 8.resH),
-          ...options.map((opt) => Padding(
-                padding: EdgeInsets.only(bottom: 4.resH),
-                child: Container(
-                  width: 200.resW,
-                  padding: EdgeInsets.symmetric(vertical: 6.resH, horizontal: 12.resW),
-                  decoration: BoxDecoration(
-                    color: isMine ? Colors.white24 : AppColors.divider,
-                    borderRadius: BorderRadius.circular(8.resR),
-                  ),
-                  child: Text(
-                    opt,
-                    style: AppTypography.caption.copyWith(
-                      color: isMine ? Colors.white : AppColors.textPrimary,
-                    ),
+          ...options.map(
+            (opt) => Padding(
+              padding: EdgeInsets.only(bottom: 4.resH),
+              child: Container(
+                width: 200.resW,
+                padding: EdgeInsets.symmetric(
+                  vertical: 6.resH,
+                  horizontal: 12.resW,
+                ),
+                decoration: BoxDecoration(
+                  color: isMine ? Colors.white24 : AppColors.divider,
+                  borderRadius: BorderRadius.circular(8.resR),
+                ),
+                child: Text(
+                  opt,
+                  style: AppTypography.caption.copyWith(
+                    color: isMine ? Colors.white : AppColors.textPrimary,
                   ),
                 ),
-              )),
+              ),
+            ),
+          ),
           SizedBox(height: 4.resH),
           footer,
         ],
@@ -1086,7 +1114,7 @@ class _EventBubble extends StatelessWidget {
     final title = meta['title'] as String? ?? 'Event';
     final dateStr = meta['dateTime'] as String?;
     final desc = meta['description'] as String? ?? '';
-    
+
     DateTime? date;
     if (dateStr != null) {
       date = DateTime.tryParse(dateStr);
@@ -1095,7 +1123,9 @@ class _EventBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
       child: Column(
-        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisSize: MainAxisSize.min,
