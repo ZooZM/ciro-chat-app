@@ -303,7 +303,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
             color: AppColors.textSecondary,
             size: 24.resW,
           ),
-          onPressed: () {},
+          onPressed: () async {
+            await context.read<ChatCubit>().sendCameraMessage(context);
+          },
         ),
       ],
     );

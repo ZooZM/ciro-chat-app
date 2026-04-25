@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:injectable/injectable.dart';
 
-import 'package:fpdart/fpdart.dart';
 import '../../../../core/error/failures.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../data/datasources/auth_local_data_source.dart';
@@ -21,7 +20,8 @@ class AuthCubit extends Cubit<AuthState> {
   final AuthRepository _repository;
   final AuthLocalDataSource _localDataSource;
 
-  AuthCubit(this._repository, this._localDataSource) : super(const AuthInitial());
+  AuthCubit(this._repository, this._localDataSource)
+    : super(const AuthInitial());
 
   Future<void> verifyAuthStatus() async {
     emit(const AuthLoading());
@@ -31,24 +31,23 @@ class AuthCubit extends Cubit<AuthState> {
 
     final result = await _repository.checkAuthStatus();
 
-    await result.fold(
-      (failure) async => emit(AuthError(failure)),
-      (isAuthenticated) async {
-        if (isAuthenticated) {
-          final freshToken = await _localDataSource.getAccessToken() ?? '';
-          if (freshToken.isNotEmpty) {
-            getIt<SocketService>().connect(freshToken);
-            debugPrint('[AuthCubit] Socket connected on app start');
+    await result.fold((failure) async => emit(AuthError(failure)), (
+      isAuthenticated,
+    ) async {
+      if (isAuthenticated) {
+        final freshToken = await _localDataSource.getAccessToken() ?? '';
+        if (freshToken.isNotEmpty) {
+          getIt<SocketService>().connect(freshToken);
+          debugPrint('[AuthCubit] Socket connected on app start');
 
-            getIt<ChatCubit>().silentSyncContacts().ignore();
-          }
-          emit(const Authenticated());
-        } else {
-          getIt<SocketService>().disconnect();
-          emit(const Unauthenticated());
+          getIt<ChatCubit>().silentSyncContacts().ignore();
         }
-      },
-    );
+        emit(const Authenticated());
+      } else {
+        getIt<SocketService>().disconnect();
+        emit(const Unauthenticated());
+      }
+    });
   }
 
   Future<void> submitPhoneNumber(String phone) async {
@@ -65,20 +64,19 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const AuthLoading());
     final result = await _repository.verifyOtp(phone, code);
 
-    await result.fold(
-      (failure) async => emit(AuthError(failure)),
-      (response) async {
-        final freshToken = await _localDataSource.getAccessToken() ?? '';
+    await result.fold((failure) async => emit(AuthError(failure)), (
+      response,
+    ) async {
+      final freshToken = await _localDataSource.getAccessToken() ?? '';
 
-        if (freshToken.isNotEmpty) {
-          getIt<SocketService>().connect(freshToken);
-          debugPrint('[AuthCubit] Socket connected after OTP verification');
-          getIt<ChatCubit>().silentSyncContacts().ignore();
-        }
+      if (freshToken.isNotEmpty) {
+        getIt<SocketService>().connect(freshToken);
+        debugPrint('[AuthCubit] Socket connected after OTP verification');
+        getIt<ChatCubit>().silentSyncContacts().ignore();
+      }
 
-        emit(Authenticated(userData: response));
-      },
-    );
+      emit(Authenticated(userData: response));
+    });
   }
 
   Future<void> logOut() async {

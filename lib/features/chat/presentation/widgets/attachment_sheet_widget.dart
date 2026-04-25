@@ -279,14 +279,15 @@ class AttachmentSheetWidget extends StatelessWidget {
   }
 
   Future<void> _handleEvent(BuildContext context) async {
-    Navigator.pop(context);
+    final c = context;
+    Navigator.pop(c);
 
     final titleController = TextEditingController();
     final descController = TextEditingController();
     DateTime selectedDate = DateTime.now();
 
     await showDialog(
-      context: context,
+      context: c,
       builder: (ctx) => AlertDialog(
         title: const Text('Create Event'),
         content: Column(
@@ -306,11 +307,14 @@ class AttachmentSheetWidget extends StatelessWidget {
               subtitle: Text(selectedDate.toString()),
               onTap: () async {
                 final date = await showDatePicker(
-                  context: context,
+                  context: c,
                   initialDate: selectedDate,
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
+
+                if (!context.mounted) return;
+
                 if (date != null) {
                   selectedDate = date;
                 }
