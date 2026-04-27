@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../bloc/chat_cubit.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/app_constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/entities/chat_session.dart';
+import '../../domain/entities/message.dart';
+import '../bloc/chat_cubit.dart';
+import '../../../video_call/presentation/bloc/call_cubit.dart';
 import 'dart:math' as math;
 
 class ChatInfoScreen extends StatefulWidget {
@@ -20,6 +26,34 @@ class ChatInfoScreen extends StatefulWidget {
 class _ChatInfoScreenState extends State<ChatInfoScreen> {
   bool isMuted = false;
   bool isLocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  void _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        isMuted = prefs.getBool('mute_${widget.chatData.id}') ?? false;
+        isLocked = prefs.getBool('lock_${widget.chatData.id}') ?? false;
+      });
+    }
+  }
+
+  void _toggleMute(bool value) async {
+    setState(() => isMuted = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('mute_${widget.chatData.id}', value);
+  }
+
+  void _toggleLock(bool value) async {
+    setState(() => isLocked = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('lock_${widget.chatData.id}', value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,12 +71,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 24.resW),
+          icon: Icon(
+            Icons.arrow_back,
+            color: AppColors.textPrimary,
+            size: 24.resW,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 22.resW),
+            icon: Icon(
+              Icons.edit_outlined,
+              color: AppColors.textSecondary,
+              size: 22.resW,
+            ),
             onPressed: () {},
           ),
           IconButton(
@@ -50,7 +92,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             icon: Transform(
               alignment: Alignment.center,
               transform: Matrix4.rotationY(math.pi),
-              child: Icon(Icons.reply_outlined, color: AppColors.textSecondary, size: 24.resW),
+              child: Icon(
+                Icons.reply_outlined,
+                color: AppColors.textSecondary,
+                size: 24.resW,
+              ),
             ),
             onPressed: () {},
           ),
@@ -96,8 +142,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildProfileHeader() {
     // Generate initials for fallback
-    final name = widget.chatData.name.isNotEmpty ? widget.chatData.name : 'Unknown';
-    final initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name[0].toUpperCase();
+    final name = widget.chatData.name.isNotEmpty
+        ? widget.chatData.name
+        : 'Unknown';
+    final initials = name.length >= 2
+        ? name.substring(0, 2).toUpperCase()
+        : name[0].toUpperCase();
 
     return Column(
       children: [
@@ -148,7 +198,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         ),
         SizedBox(height: AppConstants.spacingXs.resH),
         Text(
-          widget.chatData.phoneNumber.isNotEmpty ? widget.chatData.phoneNumber : '',
+          widget.chatData.phoneNumber.isNotEmpty
+              ? widget.chatData.phoneNumber
+              : '',
           style: AppTypography.body2.copyWith(
             color: AppColors.textSecondary,
             fontSize: 15,
@@ -163,44 +215,68 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
       child: Row(
         children: [
-          _buildQuickActionCard(Icons.search, 'Search'),
+          _buildQuickActionCard(Icons.search, 'Search', () {
+            Navigator.pop(context, 'search');
+          }),
           SizedBox(width: AppConstants.spacingMd.resW * 0.75),
-          _buildQuickActionCard(Icons.videocam_outlined, 'Video call'),
+          _buildQuickActionCard(Icons.videocam_outlined, 'Video call', () {
+            context.read<CallCubit>().initiateCall(
+              targetUserId: widget.chatData.phoneNumber,
+              targetName: widget.chatData.name,
+              targetAvatarUrl: widget.chatData.avatarUrl,
+              isVideo: true,
+            );
+          }),
           SizedBox(width: AppConstants.spacingMd.resW * 0.75),
-          _buildQuickActionCard(Icons.call_outlined, 'Voice call'),
+          _buildQuickActionCard(Icons.call_outlined, 'Voice call', () {
+            context.read<CallCubit>().initiateCall(
+              targetUserId: widget.chatData.phoneNumber,
+              targetName: widget.chatData.name,
+              targetAvatarUrl: widget.chatData.avatarUrl,
+              isVideo: false,
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard(IconData icon, String label) {
+  Widget _buildQuickActionCard(
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return Expanded(
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 14.resH),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppConstants.radiusMd.resR),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.textPrimary.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 26.resW),
-            SizedBox(height: AppConstants.spacingSm.resH),
-            Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMd.resR),
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 14.resH),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppConstants.radiusMd.resR),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: AppColors.primary, size: 26.resW),
+              SizedBox(height: AppConstants.spacingSm.resH),
+              Text(
+                label,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -208,12 +284,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildMediaSection() {
     return _buildContainerSection(
-      padding: EdgeInsets.only(left: AppConstants.spacingMd.resW, top: AppConstants.spacingMd.resH, bottom: AppConstants.spacingMd.resH),
+      padding: EdgeInsets.only(
+        left: AppConstants.spacingMd.resW,
+        top: AppConstants.spacingMd.resH,
+        bottom: AppConstants.spacingMd.resH,
+      ),
       child: Column(
         children: [
           // Header
           Padding(
-            padding: EdgeInsets.only(right: AppConstants.spacingMd.resW, bottom: AppConstants.spacingMd.resH * 0.75),
+            padding: EdgeInsets.only(
+              right: AppConstants.spacingMd.resW,
+              bottom: AppConstants.spacingMd.resH * 0.75,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -225,27 +308,96 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                     fontSize: 13,
                   ),
                 ),
-                Icon(Icons.chevron_right, color: AppColors.textHint, size: 22.resW),
+                Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textHint,
+                  size: 22.resW,
+                ),
               ],
             ),
           ),
           // Horizontal Images
           SizedBox(
             height: 90.resW,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: 5,
-              separatorBuilder: (_, __) => SizedBox(width: AppConstants.spacingSm.resW),
-              itemBuilder: (context, index) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(AppConstants.radiusSm.resR + 2),
-                  child: CachedNetworkImage(
-                    imageUrl: 'https://i.pravatar.cc/200?u=${index + 5}', 
-                    width: 90.resW,
-                    height: 90.resW,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: AppColors.surfaceVariant),
-                  ),
+            child: FutureBuilder<List<Message>>(
+              future: context.read<ChatCubit>().getSharedMedia(
+                widget.chatData.id,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CupertinoActivityIndicator());
+                }
+
+                final mediaMsgs = snapshot.data ?? [];
+
+                if (mediaMsgs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No media shared',
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: mediaMsgs.length,
+                  separatorBuilder: (_, __) =>
+                      SizedBox(width: AppConstants.spacingSm.resW),
+                  itemBuilder: (context, index) {
+                    final msg = mediaMsgs[index];
+                    final isVideo = msg.type == MessageType.video;
+                    final url = msg.fileUrl ?? '';
+
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusSm.resR + 2,
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (url.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: url,
+                              width: 90.resW,
+                              height: 90.resW,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) =>
+                                  Container(color: AppColors.surfaceVariant),
+                              errorWidget: (context, url, error) => Container(
+                                color: AppColors.surfaceVariant,
+                                child: const Icon(
+                                  Icons.broken_image,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              width: 90.resW,
+                              height: 90.resW,
+                              color: AppColors.surfaceVariant,
+                            ),
+
+                          if (isVideo)
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -260,19 +412,44 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
       child: Column(
         children: [
-          _buildOptionTile('Starred Messages', Icons.star_border, AppColors.textSecondary, trailing: _arrowIcon()),
-          _buildOptionTile('mute notifications', Icons.notifications_none, AppColors.textSecondary, trailing: CupertinoSwitch(
-            value: isMuted,
-            activeColor: AppColors.primary,
-            onChanged: (v) => setState(() => isMuted = v),
-          )),
-          _buildOptionTile('Chat feature', Icons.palette_outlined, AppColors.textSecondary, trailing: _arrowIcon()),
-          _buildOptionTile('Save in pictures', Icons.download_outlined, AppColors.textSecondary, trailing: _arrowIcon()),
-          _buildOptionTile('Chat lock', Icons.lock_outline, AppColors.textSecondary, trailing: CupertinoSwitch(
-             value: isLocked,
-             activeColor: AppColors.primary,
-             onChanged: (v) => setState(() => isLocked = v),
-          )),
+          _buildOptionTile(
+            'Starred Messages',
+            Icons.star_border,
+            AppColors.textSecondary,
+            trailing: _arrowIcon(),
+          ),
+          _buildOptionTile(
+            'mute notifications',
+            Icons.notifications_none,
+            AppColors.textSecondary,
+            trailing: CupertinoSwitch(
+              value: isMuted,
+              activeColor: AppColors.primary,
+              onChanged: _toggleMute,
+            ),
+          ),
+          _buildOptionTile(
+            'Chat feature',
+            Icons.palette_outlined,
+            AppColors.textSecondary,
+            trailing: _arrowIcon(),
+          ),
+          _buildOptionTile(
+            'Save in pictures',
+            Icons.download_outlined,
+            AppColors.textSecondary,
+            trailing: _arrowIcon(),
+          ),
+          _buildOptionTile(
+            'Chat lock',
+            Icons.lock_outline,
+            AppColors.textSecondary,
+            trailing: CupertinoSwitch(
+              value: isLocked,
+              activeColor: AppColors.primary,
+              onChanged: _toggleLock,
+            ),
+          ),
         ],
       ),
     );
@@ -285,7 +462,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppConstants.spacingMd.resW,
+            ),
             child: Text(
               '2 shared groups',
               style: AppTypography.body2.copyWith(
@@ -298,31 +477,63 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           SizedBox(height: AppConstants.spacingMd.resH * 0.75),
           // Group 1
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingSm.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppConstants.spacingMd.resW,
+              vertical: AppConstants.spacingSm.resH,
+            ),
             child: Row(
               children: [
                 CircleAvatar(
                   backgroundColor: AppColors.secondaryDark,
                   radius: 20.resR,
-                  child: Text('TT', style: TextStyle(color: AppColors.surface, fontWeight: FontWeight.w600, fontSize: 13.resW)),
+                  child: Text(
+                    'TT',
+                    style: TextStyle(
+                      color: AppColors.surface,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.resW,
+                    ),
+                  ),
                 ),
                 SizedBox(width: AppConstants.spacingMd.resW),
-                Text('Tech Team', style: AppTypography.subtitle2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                Text(
+                  'Tech Team',
+                  style: AppTypography.subtitle2.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
           // Group 2
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingSm.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppConstants.spacingMd.resW,
+              vertical: AppConstants.spacingSm.resH,
+            ),
             child: Row(
               children: [
                 CircleAvatar(
                   backgroundColor: AppColors.error,
                   radius: 20.resR,
-                  child: Text('PM', style: TextStyle(color: AppColors.surface, fontWeight: FontWeight.w600, fontSize: 13.resW)),
+                  child: Text(
+                    'PM',
+                    style: TextStyle(
+                      color: AppColors.surface,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.resW,
+                    ),
+                  ),
                 ),
                 SizedBox(width: AppConstants.spacingMd.resW),
-                Text('Project Managers', style: AppTypography.subtitle2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                Text(
+                  'Project Managers',
+                  style: AppTypography.subtitle2.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -332,24 +543,89 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _buildDangerZone() {
+    final cubit = context.watch<ChatCubit>();
+    final isBlocked = cubit.isUserBlocked(widget.chatData.targetUserId);
+
     return _buildContainerSection(
       padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
       child: Column(
         children: [
-          _buildOptionTile('Delete chat content', Icons.info_outline, AppColors.error, isDanger: true),
-          _buildOptionTile('Block user', Icons.person_off_outlined, AppColors.error, isDanger: true),
-          _buildOptionTile('Report', Icons.flag_outlined, AppColors.error, isDanger: true),
-          _buildOptionTile('Delete chat', Icons.delete_outline, AppColors.error, isDanger: true),
+          _buildOptionTile(
+            'Delete chat content',
+            Icons.info_outline,
+            AppColors.error,
+            isDanger: true,
+          ),
+          _buildOptionTile(
+            isBlocked ? 'Unblock user' : 'Block user',
+            Icons.person_off_outlined,
+            AppColors.error,
+            isDanger: true,
+            onTap: () => _handleBlockToggle(isBlocked),
+          ),
+          _buildOptionTile(
+            'Report',
+            Icons.flag_outlined,
+            AppColors.error,
+            isDanger: true,
+          ),
+          _buildOptionTile(
+            'Delete chat',
+            Icons.delete_outline,
+            AppColors.error,
+            isDanger: true,
+          ),
         ],
       ),
     );
+  }
+
+  void _handleBlockToggle(bool isCurrentlyBlocked) async {
+    final cubit = context.read<ChatCubit>();
+    final targetId = widget.chatData.targetUserId;
+
+    if (isCurrentlyBlocked) {
+      await cubit.unblockUser(targetId);
+      if (mounted) setState(() {});
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Block ${widget.chatData.name}?'),
+          content: const Text(
+            'Blocked contacts will no longer be able to call you or send you messages.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text(
+                'Block',
+                style: TextStyle(color: AppColors.error),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true && mounted) {
+        await cubit.blockUser(targetId);
+        if (mounted) setState(() {});
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // HELPERS
   // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildContainerSection({required Widget child, EdgeInsetsGeometry? padding}) {
+  Widget _buildContainerSection({
+    required Widget child,
+    EdgeInsetsGeometry? padding,
+  }) {
     return Container(
       margin: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
       padding: padding ?? EdgeInsets.all(AppConstants.spacingMd.resW),
@@ -368,11 +644,21 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _buildOptionTile(String title, IconData icon, Color color, {Widget? trailing, bool isDanger = false}) {
+  Widget _buildOptionTile(
+    String title,
+    IconData icon,
+    Color color, {
+    Widget? trailing,
+    bool isDanger = false,
+    VoidCallback? onTap,
+  }) {
     return InkWell(
-      onTap: () {},
+      onTap: onTap ?? () {},
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingMd.resH * 0.75),
+        padding: EdgeInsets.symmetric(
+          horizontal: AppConstants.spacingMd.resW,
+          vertical: AppConstants.spacingMd.resH * 0.75,
+        ),
         child: Row(
           children: [
             Icon(icon, color: color, size: 24.resW),

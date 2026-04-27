@@ -163,9 +163,9 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 11
 
-- [ ] T071 [US11] Add `getWaveformCache(String messageId)` and `saveWaveformCache(String messageId, List<double> samples)` methods to `lib/features/chat/data/datasources/chat_local_data_source.dart`. Store waveform samples as JSON in the message `metadata` column under key `waveformSamples`.
-- [ ] T072 [US11] Update `_VoiceBubble._preparePlayer()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`: before calling `preparePlayer(shouldExtractWaveform: true)`, check if `metadata['waveformSamples']` exists. If yes, pass cached data to the `PlayerController` and skip native extraction.
-- [ ] T073 [US11] After successful first-time waveform extraction in `_VoiceBubble`, call `saveWaveformCache()` to persist the extracted `List<double>` samples to SQLite metadata in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
+- [x] T071 [US11] Add `getWaveformCache(String messageId)` and `saveWaveformCache(String messageId, List<double> samples)` methods to `lib/features/chat/data/datasources/chat_local_data_source.dart`. Store waveform samples as JSON in the message `metadata` column under key `waveformSamples`.
+- [x] T072 [US11] Update `_VoiceBubble._preparePlayer()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`: before calling `preparePlayer(shouldExtractWaveform: true)`, check if `metadata['waveformSamples']` exists. If yes, pass cached data to the `PlayerController` and skip native extraction.
+- [x] T073 [US11] After successful first-time waveform extraction in `_VoiceBubble`, call `saveWaveformCache()` to persist the extracted `List<double>` samples to SQLite metadata in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
 
 **Checkpoint**: Waveform renders from cache on second visit — no re-extraction.
 
@@ -179,15 +179,15 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 12
 
-- [ ] T074 [US12] [P] Add `VIDEO = 'video'` to backend `MessageType` enum in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\message.schema.ts`. Add `thumbnailUrl` to `MessageMetadata`.
-- [ ] T075 [US12] [P] Add `video` to Flutter `MessageType` enum and update `messageTypeFromString()` / `messageTypeToString()` in `lib/features/chat/domain/entities/message.dart`. Update `_mediaPreview()` to return `'🎬 Video'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`.
-- [ ] T076 [US12] Add `video_player` and `video_thumbnail` to `pubspec.yaml` and run `flutter pub get`.
-- [ ] T077 [US12] Implement `sendVideoMessage(BuildContext context)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — use `ImagePicker().pickVideo()`, generate thumbnail via `video_thumbnail`, upload both via `POST /chat/upload`, emit socket message with `MessageType.video` and metadata `{ duration, mimeType, thumbnailUrl }`.
-- [ ] T078 [US12] Add video option to attachment sheet: wire `_handleVideo` handler → `ChatCubit.sendVideoMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`. Add a "Video" entry to `_attachmentOptions` list.
-- [ ] T079 [US12] Implement `_VideoBubble` widget in `lib/features/chat/presentation/widgets/message_bubble_widget.dart` — renders `CachedNetworkImage` thumbnail with centered play-icon overlay. Tap opens full-screen `VideoPlayer`.
-- [ ] T080 [US12] Add `video` case routing in `MessageBubbleWidget.build()` to render `_VideoBubble` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
-- [ ] T081 [US12] Create `MediaGalleryViewer` widget in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart` — full-screen `PageView` with all media messages (images + videos) from the conversation. Images use `CachedNetworkImage`, videos use `VideoPlayer`. Supports horizontal swipe.
-- [ ] T082 [US12] Wire tap on any image/video bubble to open `MediaGalleryViewer` at the tapped item's index in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
+- [x] T074 [US12] [P] Add `VIDEO = 'video'` to backend `MessageType` enum in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\message.schema.ts`. Add `thumbnailUrl` to `MessageMetadata`.
+- [x] T075 [US12] [P] Add `video` to Flutter `MessageType` enum and update `messageTypeFromString()` / `messageTypeToString()` in `lib/features/chat/domain/entities/message.dart`. Update `_mediaPreview()` to return `'🎬 Video'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`.
+- [x] T076 [US12] Add `video_player` and `video_thumbnail` to `pubspec.yaml` and run `flutter pub get`.
+- [x] T077 [US12] Implement `sendVideoMessage(BuildContext context)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — use `ImagePicker().pickVideo()`, generate thumbnail via `video_thumbnail`, upload both via `POST /chat/upload`, emit socket message with `MessageType.video` and metadata `{ duration, mimeType, thumbnailUrl }`.
+- [x] T078 [US12] Add video option to attachment sheet: wire `_handleVideo` handler → `ChatCubit.sendVideoMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`. Add a "Video" entry to `_attachmentOptions` list.
+- [x] T079 [US12] Implement `_VideoBubble` widget in `lib/features/chat/presentation/widgets/message_bubble_widget.dart` — renders `CachedNetworkImage` thumbnail with centered play-icon overlay. Tap opens full-screen `VideoPlayer`.
+- [x] T080 [US12] Add `video` case routing in `MessageBubbleWidget.build()` to render `_VideoBubble` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
+- [x] T081 [US12] Create `MediaGalleryViewer` widget in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart` — full-screen `PageView` with all media messages (images + videos) from the conversation. Images use `CachedNetworkImage`, videos use `VideoPlayer`. Supports horizontal swipe.
+- [x] T082 [US12] Wire tap on any image/video bubble to open `MediaGalleryViewer` at the tapped item's index in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
 
 **Checkpoint**: Video messages send and render with thumbnail + play icon. Media gallery supports swipe.
 
@@ -201,9 +201,9 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 13
 
-- [ ] T083 [US13] Implement `resendMessage(String clientMessageId)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — look up the failed message from local state, update status to `pending`, re-emit via socket with the original `clientMessageId`. On failure, revert to `error` status.
-- [ ] T084 [US13] In `MessageBubbleWidget`, detect `message.status == MessageStatus.error` and render a resend icon button (circular arrow `Icons.refresh`) positioned to the left of outgoing bubbles in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`. Tap calls `ChatCubit.resendMessage(message.clientMessageId)`.
-- [ ] T085 [US13] Update SQLite status to `pending` on resend and to `error` on re-failure in `lib/features/chat/data/datasources/chat_local_data_source.dart` via existing `updateMessageStatus()` method.
+- [x] T083 [US13] Implement `resendMessage(String clientMessageId)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — look up the failed message from local state, update status to `pending`, re-emit via socket with the original `clientMessageId`. On failure, revert to `error` status.
+- [x] T084 [US13] In `MessageBubbleWidget`, detect `message.status == MessageStatus.error` and render a resend icon button (circular arrow `Icons.refresh`) positioned to the left of outgoing bubbles in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`. Tap calls `ChatCubit.resendMessage(message.clientMessageId)`.
+- [x] T085 [US13] Update SQLite status to `pending` on resend and to `error` on re-failure in `lib/features/chat/data/datasources/chat_local_data_source.dart` via existing `updateMessageStatus()` method.
 
 **Checkpoint**: 100% of error-status messages show resend icon. Tapping retries successfully.
 
@@ -217,16 +217,16 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Backend Implementation
 
-- [ ] T086 [US14] [P] Add `blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }]` field to the User schema in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\` (either in existing user schema or via a new field on the auth user model).
-- [ ] T087 [US14] [P] Implement `blockUser(userId, targetId)`, `unblockUser(userId, targetId)`, `getBlockList(userId)`, and `isBlocked(senderId, recipientId)` methods in `E:\zeyad\chat-app-backend\src\modules\chat\chat.service.ts`.
-- [ ] T088 [US14] Add REST endpoints: `POST /chat/block/:userId`, `DELETE /chat/block/:userId`, `GET /chat/block-list` in `E:\zeyad\chat-app-backend\src\modules\chat\chat.controller.ts`. All require JWT auth guard.
-- [ ] T089 [US14] Add block guard in the `send_message` socket handler in `E:\zeyad\chat-app-backend\src\modules\chat\chat.gateway.ts`: before delivering a message, call `isBlocked(senderId, recipientId)`. If blocked, silently drop the message.
+- [x] T086 [US14] [P] Add `blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }]` field to the User schema in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\` (either in existing user schema or via a new field on the auth user model).
+- [x] T087 [US14] [P] Implement `blockUser(userId, targetId)`, `unblockUser(userId, targetId)`, `getBlockList(userId)`, and `isBlocked(senderId, recipientId)` methods in `E:\zeyad\chat-app-backend\src\modules\chat\chat.service.ts`.
+- [x] T088 [US14] Add REST endpoints: `POST /chat/block/:userId`, `DELETE /chat/block/:userId`, `GET /chat/block-list` in `E:\zeyad\chat-app-backend\src\modules\chat\chat.controller.ts`. All require JWT auth guard.
+- [x] T089 [US14] Add block guard in the `send_message` socket handler in `E:\zeyad\chat-app-backend\src\modules\chat\chat.gateway.ts`: before delivering a message, call `isBlocked(senderId, recipientId)`. If blocked, silently drop the message.
 
 ### Frontend Implementation
 
-- [ ] T090 [US14] Add `blockUser(String targetUserId)`, `unblockUser(String targetUserId)`, and `isUserBlocked(String targetUserId)` methods to `lib/features/chat/presentation/bloc/chat_cubit.dart`. Call REST endpoints via `ChatRemoteDataSource`.
-- [ ] T091 [US14] Add `blockUser()`, `unblockUser()`, `getBlockList()` methods to `lib/features/chat/data/datasources/chat_remote_data_source.dart` using DioClient.
-- [ ] T092 [US14] Wire "Block user" tile in `lib/features/chat/presentation/pages/chat_info_screen.dart`: show confirmation dialog, call `ChatCubit.blockUser()`, toggle tile text to "Unblock user" on success.
+- [x] T090 [US14] Add `blockUser(String targetUserId)`, `unblockUser(String targetUserId)`, and `isUserBlocked(String targetUserId)` methods to `lib/features/chat/presentation/bloc/chat_cubit.dart`. Call REST endpoints via `ChatRemoteDataSource`.
+- [x] T091 [US14] Add `blockUser()`, `unblockUser()`, `getBlockList()` methods to `lib/features/chat/data/datasources/chat_remote_data_source.dart` using DioClient.
+- [x] T092 [US14] Wire "Block user" tile in `lib/features/chat/presentation/pages/chat_info_screen.dart`: show confirmation dialog, call `ChatCubit.blockUser()`, toggle tile text to "Unblock user" on success.
 
 **Checkpoint**: Blocking prevents message exchange. Unblocking restores it.
 
@@ -240,11 +240,11 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 15
 
-- [ ] T093 [US15] Add `searchMessages(String roomId, String query)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — SQL `SELECT * FROM messages WHERE roomId = ? AND text LIKE '%' || ? || '%' ORDER BY createdAt DESC LIMIT 50`.
-- [ ] T094 [US15] Add `searchMessages(String query)` method to `lib/features/chat/presentation/bloc/chat_cubit.dart` — calls local data source, emits search results via a `ValueNotifier<List<Message>>` or a dedicated state field.
-- [ ] T095 [US15] Create `ChatSearchBar` widget in `lib/features/chat/presentation/widgets/chat_search_bar.dart` — animated overlay at top of chat room with a `TextField`, shows results as a scrollable `ListView` of message previews.
-- [ ] T096 [US15] Wire search trigger: add search icon to `ChatRoomScreen` AppBar actions. Tapping toggles `ChatSearchBar` visibility in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
-- [ ] T097 [US15] Implement scroll-to-message: when user taps a search result, calculate the message index in the full message list, call `ScrollController.jumpTo()` or `Scrollable.ensureVisible()`, and briefly highlight the target message with a fade animation in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
+- [x] T093 [US15] Add `searchMessages(String roomId, String query)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — SQL `SELECT * FROM messages WHERE roomId = ? AND text LIKE '%' || ? || '%' ORDER BY createdAt DESC LIMIT 50`.
+- [x] T094 [US15] Add `searchMessages(String query)` method to `lib/features/chat/presentation/bloc/chat_cubit.dart` — calls local data source, emits search results via a `ValueNotifier<List<Message>>` or a dedicated state field.
+- [x] T095 [US15] Create `ChatSearchBar` widget in `lib/features/chat/presentation/widgets/chat_search_bar.dart` — animated overlay at top of chat room with a `TextField`, shows results as a scrollable `ListView` of message previews.
+- [x] T096 [US15] Wire search trigger: add search icon to `ChatRoomScreen` AppBar actions. Tapping toggles `ChatSearchBar` visibility in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
+- [x] T097 [US15] Implement scroll-to-message: when user taps a search result, calculate the message index in the full message list, call `ScrollController.jumpTo()` or `Scrollable.ensureVisible()`, and briefly highlight the target message with a fade animation in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
 
 **Checkpoint**: Search returns results <1s. Tapping scrolls to message with highlight.
 
@@ -260,12 +260,12 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 16
 
-- [ ] T098 [US16] Wire "Voice call" quick action to `CallCubit.initiateCall(type: voice)` and "Video call" to `CallCubit.initiateCall(type: video)` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [ ] T099 [US16] Wire "Search" quick action to navigate back to `ChatRoomScreen` and open `ChatSearchBar` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [ ] T100 [US16] Add `getSharedMedia(String roomId)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — query messages with `type IN ('image', 'video', 'file')` ordered by `createdAt DESC`.
-- [ ] T101 [US16] Replace static media grid in `_buildMediaSection()` with real shared media from `getSharedMedia()` in `lib/features/chat/presentation/pages/chat_info_screen.dart`. Show empty state if no media.
-- [ ] T102 [US16] Wire "Block user" tile to `ChatCubit.blockUser()` from Phase 17 with confirmation dialog in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [ ] T103 [US16] Wire "Mute notifications" and "Chat lock" toggle state to Hive-persisted preferences using keys `mute_<roomId>` and `lock_<roomId>` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
+- [x] T098 [US16] Wire "Voice call" quick action to `CallCubit.initiateCall(type: voice)` and "Video call" to `CallCubit.initiateCall(type: video)` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
+- [x] T099 [US16] Wire "Search" quick action to navigate back to `ChatRoomScreen` and open `ChatSearchBar` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
+- [x] T100 [US16] Add `getSharedMedia(String roomId)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — query messages with `type IN ('image', 'video', 'file')` ordered by `createdAt DESC`.
+- [x] T101 [US16] Replace static media grid in `_buildMediaSection()` with real shared media from `getSharedMedia()` in `lib/features/chat/presentation/pages/chat_info_screen.dart`. Show empty state if no media.
+- [x] T102 [US16] Wire "Block user" tile to `ChatCubit.blockUser()` from Phase 17 with confirmation dialog in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
+- [x] T103 [US16] Wire "Mute notifications" and "Chat lock" toggle state to SharedPreferences-persisted preferences using keys `mute_<roomId>` and `lock_<roomId>` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
 
 **Checkpoint**: ChatInfoScreen fully functional — all actions wired, real data displayed.
 
@@ -279,9 +279,9 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Implementation for User Story 17
 
-- [ ] T104 [US17] In `SplashScreen`, after `AuthCubit.verifyAuthStatus()` resolves as authenticated, call `ChatCubit.loadRecentChats()` using `context.read<ChatCubit>()` in `lib/features/splash/presentation/pages/splash_screen.dart`.
-- [ ] T105 [US17] Use `Future.wait([authFuture, chatLoadFuture])` to parallelize auth verification and chat preload. Navigate to home only after both complete in `lib/features/splash/presentation/pages/splash_screen.dart`.
-- [ ] T106 [US17] Remove or gate the loading spinner in the home screen's chat list `BlocBuilder` — if state already has chats, render immediately in `lib/features/chat/presentation/pages/chat_list_screen.dart`.
+- [x] T104 [US17] In `SplashScreen`, after `AuthCubit.verifyAuthStatus()` resolves as authenticated, call `ChatCubit.hydrateRooms()` using `context.read<ChatCubit>()` in `lib/features/splash/presentation/pages/splash_screen.dart`.
+- [x] T105 [US17] Use `Future.wait([authFuture, chatLoadFuture])` to parallelize auth verification and chat preload. Navigate to home only after both complete in `lib/features/splash/presentation/pages/splash_screen.dart`.
+- [x] T106 [US17] Remove or gate the loading spinner in the home screen's chat list `BlocBuilder` — if state already has chats, render immediately in `lib/features/chat/presentation/pages/chat_list_screen.dart`.
 
 **Checkpoint**: Chat list visible within 500ms of home screen navigation — no spinner.
 
@@ -291,10 +291,10 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 **Purpose**: Final validation across all new user stories
 
-- [ ] T107 [P] Update `_mediaPreview()` to handle `video` type (`'🎬 Video'`) in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T108 Run full `flutter analyze` — zero errors across all modified files
-- [ ] T109 Verify backend `flutter analyze` equivalent (`npm run lint`) passes in `E:\zeyad\chat-app-backend`
-- [ ] T110 Final smoke test — send video, resend failed message, block/unblock user, search messages, verify splash preload
+- [x] T107 [P] Update `_mediaPreview()` to handle `video` type (`'🎬 Video'`) in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T108 Run full `flutter analyze` — zero errors across all modified files
+- [x] T109 Verify backend `flutter analyze` equivalent (`npm run lint`) passes in `E:\zeyad\chat-app-backend`
+- [x] T110 Final smoke test — send video, resend failed message, block/unblock user, search messages, verify splash preload
 
 ---
 

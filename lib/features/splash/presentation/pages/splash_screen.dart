@@ -1,7 +1,9 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_logo.dart';
+import '../../../../features/chat/presentation/bloc/chat_cubit.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -29,8 +31,18 @@ class _SplashScreenState extends State<SplashScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthCubit>().verifyAuthStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authFuture = context.read<AuthCubit>().verifyAuthStatus();
+      
+      // Fire off both futures
+      final isAuth = await authFuture;
+      
+      if (isAuth) {
+        await context.read<ChatCubit>().hydrateRooms();
+        if (mounted) context.go('/home');
+      } else {
+        if (mounted) context.go('/auth');
+      }
     });
   }
 

@@ -33,4 +33,9 @@ abstract class ChatRepository {
     String participantId,
   );
   Future<Either<Failure, void>> leaveGroup(String roomId);
+
+  // Block User API endpoints
+  Future<Either<Failure, void>> blockUser(String targetUserId);
+  Future<Either<Failure, void>> unblockUser(String targetUserId);
+  Future<Either<Failure, List<String>>> getBlockList();
 }

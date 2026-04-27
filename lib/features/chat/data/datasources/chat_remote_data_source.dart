@@ -40,6 +40,11 @@ abstract class ChatRemoteDataSource {
     String participantId,
   );
   Future<Either<Failure, void>> leaveGroup(String roomId);
+
+  // Block User API endpoints
+  Future<Either<Failure, void>> blockUser(String targetUserId);
+  Future<Either<Failure, void>> unblockUser(String targetUserId);
+  Future<Either<Failure, List<String>>> getBlockList();
 }
 
 @LazySingleton(as: ChatRemoteDataSource)
@@ -216,6 +221,72 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
             e.response?.data['message'] ?? e.message ?? 'Server error',
           ),
         );
+      }
+      return Left(NetworkFailure(e.message ?? 'Network error'));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  // ── Block User API Endpoints ──────────────────────────────────────────────
+
+  @override
+  Future<Either<Failure, void>> blockUser(String targetUserId) async {
+    try {
+      final response = await _dio.post('/chat/block/$targetUserId');
+      if (response.statusCode == 200) {
+        return const Right(null);
+      }
+      return Left(ServerFailure(response.data['message'] ?? 'Failed to block user'));
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
+      }
+      return Left(NetworkFailure(e.message ?? 'Network error'));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> unblockUser(String targetUserId) async {
+    try {
+      final response = await _dio.delete('/chat/block/$targetUserId');
+      if (response.statusCode == 200) {
+        return const Right(null);
+      }
+      return Left(ServerFailure(response.data['message'] ?? 'Failed to unblock user'));
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
+      }
+      return Left(NetworkFailure(e.message ?? 'Network error'));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<String>>> getBlockList() async {
+    try {
+      final response = await _dio.get('/chat/block-list');
+      if (response.statusCode == 200) {
+        final data = response.data;
+        // Assume data is an array of IDs or contains an array
+        List<dynamic> list;
+        if (data is List) {
+          list = data;
+        } else if (data['data'] is List) {
+          list = data['data'];
+        } else {
+          list = [];
+        }
+        return Right(list.map((e) => e.toString()).toList());
+      }
+      return Left(ServerFailure(response.data['message'] ?? 'Failed to get block list'));
+    } on DioException catch (e) {
+      if (e.response != null) {
+        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
       }
       return Left(NetworkFailure(e.message ?? 'Network error'));
     } catch (e) {

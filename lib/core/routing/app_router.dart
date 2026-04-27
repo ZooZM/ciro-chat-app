@@ -48,13 +48,13 @@ final GoRouter appRouter = GoRouter(
     // ── RULE 2: Authenticated ─────────────────────────────────────────────────
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
-      if (isSplash || isAuthRoute) return '/home';
+      if (isAuthRoute) return '/home';
       return null;
     }
 
     // ── RULE 3: Unauthenticated or AuthError ──────────────────────────────────
     // Redirect to /auth only if not already there.
-    if (!isAuthRoute) return '/auth';
+    if (!isAuthRoute && !isSplash) return '/auth';
     return null;
   },
   routes: [

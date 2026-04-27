@@ -11,7 +11,7 @@ Expand the chat lifecycle optimization with 7 new user stories: audio waveform c
 
 **Language/Version**: Dart 3.x / Flutter 3.x (frontend), TypeScript / NestJS (backend)
 **Primary Dependencies**: flutter_bloc, audio_waveforms, geolocator, geocoding, google_maps_flutter, cached_network_image, video_player, sqflite, socket_io_client, get_it
-**Storage**: SQLite (sqflite) for messages/rooms, Hive for tokens/preferences, MongoDB (backend)
+**Storage**: SQLite (sqflite) for messages/rooms, SharedPreferences for simple boolean flags/preferences, Hive for secure tokens/complex documents, MongoDB (backend)
 **Testing**: flutter_test, manual device testing
 **Target Platform**: Android (primary), iOS (secondary)
 **Project Type**: mobile-app (Flutter) + web-service (NestJS backend)
@@ -160,7 +160,7 @@ E:\zeyad\chat-app-backend\src\modules\chat/
 3. Add `getSharedMedia(String roomId)` to `ChatLocalDataSource` — queries messages with `type IN ('image', 'video', 'file')`
 4. Replace static media grid with real shared media from the database
 5. Wire "Block user" to Phase D logic
-6. Wire mute/lock toggles to Hive-persisted preferences
+6. Wire mute/lock toggles to SharedPreferences-persisted preferences
 
 ### Phase G: Splash Preload (US17)
 

@@ -11,6 +11,8 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:injectable/injectable.dart';
 import 'package:uuid/uuid.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 import 'package:ciro_chat_app/features/chat/data/datasources/chat_local_data_source.dart';
 import 'package:ciro_chat_app/core/network/socket_service.dart';
@@ -59,6 +61,7 @@ class ChatCubit extends Cubit<ChatState> {
   String currentUserPhone = '';
   bool isHydrationComplete = false;
   final _uuid = const Uuid();
+  List<String> _blockedUserIds = [];
 
   final _typingUsersController = StreamController<Set<String>>.broadcast();
   Stream<Set<String>> get typingUsersStream => _typingUsersController.stream;
@@ -70,6 +73,8 @@ class ChatCubit extends Cubit<ChatState> {
       StreamController<Map<String, Set<String>>>.broadcast();
   Stream<Map<String, Set<String>>> get allTypingUsersStream =>
       _roomTypingController.stream;
+
+  final ValueNotifier<List<Message>> searchResults = ValueNotifier([]);
 
   /// Returns the current typing users for a given room.
   /// Used by [TypingIndicatorWidget] on first build before any [TypingUpdate]
@@ -101,6 +106,13 @@ class ChatCubit extends Cubit<ChatState> {
     currentUserId = await _authLocalDataSource.getUserId() ?? '';
     currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
     await _localDataSource.initDB();
+
+    // Fetch block list
+    final blockListResult = await _chatRepository.getBlockList();
+    blockListResult.fold(
+      (f) => debugPrint('[ChatCubit] Failed to fetch block list: ${f.message}'),
+      (list) => _blockedUserIds = list,
+    );
 
     // ── Sender-side status promotions ─────────────────────────────────────────
 
@@ -567,6 +579,114 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  // ── sendVideoMessage ────────────────────────────────────────────────────────
+
+  Future<void> sendVideoMessage(BuildContext context) async {
+    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (pickedFile == null) return;
+
+    final filePath = pickedFile.path;
+
+    final pendingContact = _pendingContact;
+    final roomCreated = await _ensureRoom(pendingContact);
+    if (!roomCreated) return;
+
+    final roomId = _activeRoomId!;
+    final msgId = _uuid.v4();
+
+    // Generate thumbnail locally
+    String? thumbPath;
+    try {
+      final tempDir = await getTemporaryDirectory();
+      thumbPath = await VideoThumbnail.thumbnailFile(
+        video: filePath,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxHeight: 400,
+        quality: 75,
+      );
+    } catch (e) {
+      debugPrint('[ChatCubit] Thumbnail generation failed: $e');
+    }
+
+    final optimistic = Message(
+      id: msgId,
+      clientMessageId: msgId,
+      roomId: roomId,
+      senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+      text: '🎬 Video',
+      timestamp: DateTime.now(),
+      status: MessageStatus.pending,
+      type: MessageType.video,
+      metadata: {
+        'localPath': filePath,
+        if (thumbPath != null) 'localThumbPath': thumbPath,
+      },
+    );
+
+    await _localDataSource.saveMessage(
+      optimistic,
+      roomName: pendingContact?.name ?? '',
+      roomAvatarUrl: pendingContact?.avatarUrl ?? '',
+      roomPhoneNumber: pendingContact?.phoneNumber ?? '',
+    );
+
+    try {
+      // 1. Upload Video
+      final uploadResult = await _chatRepository.uploadFile(File(filePath));
+      await uploadResult.fold(
+        (failure) async {
+          throw Exception('Video upload failed: ${failure.message}');
+        },
+        (serverMeta) async {
+          final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+          
+          // 2. Upload Thumbnail
+          String thumbUrl = '';
+          if (thumbPath != null && File(thumbPath).existsSync()) {
+            final thumbUpload = await _chatRepository.uploadFile(File(thumbPath));
+            thumbUpload.fold(
+              (l) => debugPrint('[ChatCubit] Thumbnail upload failed: $l'),
+              (r) => thumbUrl = r['fileUrl'] as String? ?? '',
+            );
+          }
+
+          final meta = {
+            'localPath': filePath,
+            if (thumbPath != null) 'localThumbPath': thumbPath,
+            if (thumbUrl.isNotEmpty) 'thumbnailUrl': thumbUrl,
+            'mimeType': serverMeta['mimeType'] ?? 'video/mp4',
+            'fileName': serverMeta['fileName'] ?? pickedFile.name,
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          };
+
+          await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
+
+          _socketService.sendMessage(
+            roomId: roomId,
+            messageId: msgId,
+            text: '🎬 Video',
+            type: 'video',
+            fileUrl: fileUrl,
+            metadata: meta,
+          );
+          debugPrint('[ChatCubit] Video sent: $fileUrl');
+        },
+      );
+    } catch (e) {
+      debugPrint('[ChatCubit] Video upload failed: $e');
+      await _localDataSource.updateMessageStatus(msgId, MessageStatus.error);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Video upload failed: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+
   // ── sendFileMessage ─────────────────────────────────────────────────────────
 
   /// Opens the OS file picker, uploads the file, then sends it.
@@ -1018,6 +1138,87 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  // ── resendMessage ───────────────────────────────────────────────────────────
+
+  /// Retries sending a failed message.
+  Future<void> resendMessage(String clientMessageId) async {
+    final msg = await _localDataSource.getMessageById(clientMessageId);
+    if (msg == null || msg.status != MessageStatus.error) return;
+
+    // Update status to pending
+    await _localDataSource.updateMessageStatus(
+      msg.id,
+      MessageStatus.pending,
+    );
+
+    // Update the local state if the room is active
+    if (state is ChatRoomActive) {
+      final activeState = state as ChatRoomActive;
+      if (activeState.roomId == msg.roomId) {
+        final messages = List<Message>.from(activeState.messages);
+        final index = messages.indexWhere((m) => m.clientMessageId == clientMessageId);
+        if (index != -1) {
+          messages[index] = messages[index].copyWith(status: MessageStatus.pending);
+          emit(activeState.copyWith(messages: messages));
+        }
+      }
+    }
+
+    try {
+      // Re-emit via socket
+      if (msg.type == MessageType.text || (msg.fileUrl != null && msg.fileUrl!.isNotEmpty)) {
+        _socketService.sendMessage(
+          roomId: msg.roomId,
+          messageId: msg.clientMessageId,
+          text: msg.text,
+          type: messageTypeToString(msg.type),
+          fileUrl: msg.fileUrl,
+          metadata: msg.metadata,
+        );
+        debugPrint('[ChatCubit] Re-sent message: ${msg.id}');
+      } else {
+        // If media message and it failed before/during upload, we would need to re-upload.
+        // For simplicity in this US, we retry via socket or mark as error if it lacks fileUrl.
+        // If re-upload is needed, we should fetch localPath from metadata and upload.
+        final localPath = msg.metadata?['localPath'] as String?;
+        if (localPath != null && File(localPath).existsSync()) {
+            final uploadResult = await _chatRepository.uploadFile(File(localPath));
+            await uploadResult.fold(
+              (failure) async {
+                await _localDataSource.updateMessageStatus(msg.id, MessageStatus.error);
+                handleMessageStatusUpdate(msg.clientMessageId, MessageStatus.error);
+              },
+              (serverMeta) async {
+                final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+                final meta = Map<String, dynamic>.from(msg.metadata ?? {});
+                meta['mimeType'] = serverMeta['mimeType'] ?? meta['mimeType'];
+                meta['fileName'] = serverMeta['fileName'] ?? meta['fileName'];
+                meta['fileSize'] = serverMeta['fileSize'] ?? meta['fileSize'];
+
+                await _localDataSource.updateMessageMedia(msg.id, fileUrl, meta);
+                _socketService.sendMessage(
+                  roomId: msg.roomId,
+                  messageId: msg.clientMessageId,
+                  text: msg.text,
+                  type: messageTypeToString(msg.type),
+                  fileUrl: fileUrl,
+                  metadata: meta,
+                );
+              }
+            );
+        } else {
+          debugPrint('[ChatCubit] Cannot resend media message: no fileUrl and no localPath');
+          await _localDataSource.updateMessageStatus(msg.id, MessageStatus.error);
+          handleMessageStatusUpdate(msg.clientMessageId, MessageStatus.error);
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatCubit] resendMessage failed: $e');
+      await _localDataSource.updateMessageStatus(msg.id, MessageStatus.error);
+      handleMessageStatusUpdate(msg.clientMessageId, MessageStatus.error);
+    }
+  }
+
   // ── hydrateRooms ─────────────────────────────────────────────────────────────
 
   Future<void> hydrateRooms() async {
@@ -1189,5 +1390,70 @@ class ChatCubit extends Cubit<ChatState> {
         );
       }
     }
+  }
+
+  // ── Waveform Cache ──────────────────────────────────────────────────────────
+
+  Future<List<double>?> getWaveformCache(String messageId) {
+    return _localDataSource.getWaveformCache(messageId);
+  }
+
+  Future<void> saveWaveformCache(String messageId, List<double> samples) {
+    return _localDataSource.saveWaveformCache(messageId, samples);
+  }
+
+  // ── Block Management ────────────────────────────────────────────────────────
+  
+  bool isUserBlocked(String targetUserId) {
+    return _blockedUserIds.contains(targetUserId);
+  }
+
+  Future<bool> blockUser(String targetUserId) async {
+    final result = await _chatRepository.blockUser(targetUserId);
+    return result.fold(
+      (failure) {
+        debugPrint('[ChatCubit] Failed to block user: ${failure.message}');
+        return false;
+      },
+      (_) {
+        if (!_blockedUserIds.contains(targetUserId)) {
+          _blockedUserIds.add(targetUserId);
+        }
+        return true;
+      },
+    );
+  }
+
+  Future<bool> unblockUser(String targetUserId) async {
+    final result = await _chatRepository.unblockUser(targetUserId);
+    return result.fold(
+      (failure) {
+        debugPrint('[ChatCubit] Failed to unblock user: ${failure.message}');
+        return false;
+      },
+      (_) {
+        _blockedUserIds.remove(targetUserId);
+        return true;
+      },
+    );
+  }
+
+  // ── Search & Media ────────────────────────────────────────────────────────
+
+  Future<void> searchMessages(String query) async {
+    if (_activeRoomId == null || query.isEmpty) {
+      searchResults.value = [];
+      return;
+    }
+    final results = await _localDataSource.searchMessages(_activeRoomId!, query);
+    searchResults.value = results;
+  }
+
+  void clearSearch() {
+    searchResults.value = [];
+  }
+
+  Future<List<Message>> getSharedMedia(String roomId) async {
+    return _localDataSource.getSharedMedia(roomId);
   }
 }

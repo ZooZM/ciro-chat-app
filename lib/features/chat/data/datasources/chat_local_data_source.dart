@@ -56,6 +56,18 @@ abstract class ChatLocalDataSource {
 
   /// Deletes a room and all its associated messages.
   Future<void> deleteRoom(String roomId);
+
+  /// Retrieves a specific message by its ID.
+  Future<Message?> getMessageById(String messageId);
+
+  /// Retrieves cached waveform samples for a message.
+  Future<List<double>?> getWaveformCache(String messageId);
+
+  /// Saves waveform samples to a message's metadata.
+  Future<void> saveWaveformCache(String messageId, List<double> samples);
+
+  Future<List<Message>> searchMessages(String roomId, String query);
+  Future<List<Message>> getSharedMedia(String roomId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +93,8 @@ String _mediaPreview(MessageType type) {
       return '📊 Poll';
     case MessageType.event:
       return '📅 Event';
+    case MessageType.video:
+      return '🎬 Video';
     case MessageType.text:
       return '';
   }
@@ -274,6 +288,42 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     }
   }
 
+  // ── Waveform Cache ──────────────────────────────────────────────────────────
+
+  @override
+  Future<List<double>?> getWaveformCache(String messageId) async {
+    final msg = await getMessageById(messageId);
+    if (msg == null) return null;
+    
+    final meta = msg.metadata;
+    if (meta != null && meta.containsKey('waveformSamples')) {
+      final rawList = meta['waveformSamples'];
+      if (rawList is List) {
+        return rawList.map((e) => (e as num).toDouble()).toList();
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<void> saveWaveformCache(String messageId, List<double> samples) async {
+    final db = _db;
+    if (db == null) return;
+
+    final msg = await getMessageById(messageId);
+    if (msg == null) return;
+
+    final updatedMeta = Map<String, dynamic>.from(msg.metadata ?? {});
+    updatedMeta['waveformSamples'] = samples;
+
+    await db.update(
+      'messages',
+      {'metadata': jsonEncode(updatedMeta)},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
   // ── deleteMessage ───────────────────────────────────────────────────────────
 
   @override
@@ -452,6 +502,24 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       (e) => e.name == raw,
       orElse: () => MessageStatus.pending,
     );
+  }
+
+  // ── getMessageById ──────────────────────────────────────────────────────────
+
+  @override
+  Future<Message?> getMessageById(String messageId) async {
+    final db = _db;
+    if (db == null) return null;
+    final maps = await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return Message.fromMap(maps.first);
+    }
+    return null;
   }
 
   // ── saveRoom ────────────────────────────────────────────────────────────────
@@ -666,5 +734,36 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     if (!_recentChatsController.isClosed) _recentChatsController.add([]);
     if (!_contactsController.isClosed) _contactsController.add([]);
+  }
+
+  // ── Search & Media ────────────────────────────────────────────────────────
+
+  @override
+  Future<List<Message>> searchMessages(String roomId, String query) async {
+    final db = _db;
+    if (db == null) return [];
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'room_id = ? AND text LIKE ?',
+      whereArgs: [roomId, '%$query%'],
+      orderBy: 'timestamp DESC',
+      limit: 50,
+    );
+    return maps.map((map) => _mapToMessage(map)).toList();
+  }
+
+  @override
+  Future<List<Message>> getSharedMedia(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'room_id = ? AND type IN (?, ?, ?)',
+      whereArgs: [roomId, MessageType.image.name, MessageType.video.name, MessageType.file.name],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((map) => _mapToMessage(map)).toList();
   }
 }

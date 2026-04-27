@@ -83,4 +83,19 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<Either<Failure, void>> leaveGroup(String roomId) {
     return remoteDataSource.leaveGroup(roomId);
   }
+
+  @override
+  Future<Either<Failure, void>> blockUser(String targetUserId) {
+    return remoteDataSource.blockUser(targetUserId);
+  }
+
+  @override
+  Future<Either<Failure, void>> unblockUser(String targetUserId) {
+    return remoteDataSource.unblockUser(targetUserId);
+  }
+
+  @override
+  Future<Either<Failure, List<String>>> getBlockList() {
+    return remoteDataSource.getBlockList();
+  }
 }

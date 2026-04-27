@@ -72,6 +72,11 @@ final List<AttachmentOptionModel> _attachmentOptions = [
     icon: Icons.calendar_today_outlined,
     iconColor: const Color(0xFFE53935),
   ),
+  AttachmentOptionModel(
+    label: 'Video',
+    icon: Icons.videocam_outlined,
+    iconColor: const Color(0xFFD32F2F),
+  ),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +94,11 @@ class AttachmentSheetWidget extends StatelessWidget {
   Future<void> _handleGallery(BuildContext context) async {
     Navigator.pop(context);
     await context.read<ChatCubit>().sendImageMessage(context);
+  }
+
+  Future<void> _handleVideo(BuildContext context) async {
+    Navigator.pop(context);
+    await context.read<ChatCubit>().sendVideoMessage(context);
   }
 
   Future<void> _handleDocument(BuildContext context) async {
@@ -387,6 +397,9 @@ class AttachmentSheetWidget extends StatelessWidget {
         break;
       case 'Camera':
         _handleCamera(context);
+        break;
+      case 'Video':
+        _handleVideo(context);
         break;
       case 'Document':
         _handleDocument(context);

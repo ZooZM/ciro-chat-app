@@ -14,6 +14,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
+import 'media_gallery_viewer.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Base URL constant — same default as DioClient to avoid an extra import.
@@ -111,56 +112,73 @@ class MessageBubbleWidget extends StatelessWidget {
       return _buildSystemBubble(context);
     }
 
+    final bubble = Container(
+      margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * 0.75,
+      ),
+      decoration: BoxDecoration(
+        color: _bgColor,
+        borderRadius: _borderRadius(),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 2.resR,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isGroup && !_isMine)
+            Padding(
+              padding: EdgeInsets.only(
+                left: 12.resW,
+                right: 12.resW,
+                top: 8.resH,
+              ),
+              child: FutureBuilder<String>(
+                future: context.read<ChatCubit>().getLocalContactName(
+                  message.senderId,
+                ),
+                builder: (context, snapshot) {
+                  return Text(
+                    snapshot.data ?? message.senderId,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
+              ),
+            ),
+          _buildContent(context),
+        ],
+      ),
+    );
+
     return Align(
       alignment: _isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        decoration: BoxDecoration(
-          color: _bgColor,
-          borderRadius: _borderRadius(),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 2.resR,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isGroup && !_isMine)
-              Padding(
-                padding: EdgeInsets.only(
-                  left: 12.resW,
-                  right: 12.resW,
-                  top: 8.resH,
-                ),
-                child: FutureBuilder<String>(
-                  future: context.read<ChatCubit>().getLocalContactName(
-                    message.senderId,
-                  ),
-                  builder: (context, snapshot) {
-                    return Text(
-                      snapshot.data ?? message.senderId,
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
+      child: _isMine && message.status == MessageStatus.error
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  color: AppColors.error,
+                  onPressed: () {
+                    context.read<ChatCubit>().resendMessage(message.clientMessageId);
                   },
                 ),
-              ),
-            _buildContent(context),
-          ],
-        ),
-      ),
+                bubble,
+              ],
+            )
+          : bubble,
     );
   }
 
@@ -232,6 +250,12 @@ class MessageBubbleWidget extends StatelessWidget {
         );
       case MessageType.event:
         return _EventBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
+      case MessageType.video:
+        return _VideoBubble(
           message: message,
           isMine: _isMine,
           footer: _buildFooter(),
@@ -318,11 +342,7 @@ class _ImageBubble extends StatelessWidget {
           child: isUploading
               ? _UploadingPlaceholder()
               : GestureDetector(
-                  onTap: () => _openImageViewer(
-                    context,
-                    hasLocal ? localPath : url,
-                    hasLocal,
-                  ),
+                  onTap: () => _openMediaGallery(context, message),
                   child: hasLocal
                       ? Image.file(
                           File(localPath),
@@ -361,13 +381,27 @@ class _ImageBubble extends StatelessWidget {
     );
   }
 
-  void _openImageViewer(BuildContext context, String pathOrUrl, bool isLocal) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            _FullScreenImageViewer(pathOrUrl: pathOrUrl, isLocal: isLocal),
-      ),
-    );
+  void _openMediaGallery(BuildContext context, Message tappedMsg) {
+    final state = context.read<ChatCubit>().state;
+    if (state is ChatRoomActive) {
+      final mediaMessages = state.messages
+          .where((m) =>
+              m.type == MessageType.image || m.type == MessageType.video)
+          .toList()
+          .reversed
+          .toList(); // Reverse to chronological order if they are newest-first
+      
+      final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
+      
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MediaGalleryViewer(
+            mediaMessages: mediaMessages,
+            initialIndex: index == -1 ? 0 : index,
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -397,30 +431,123 @@ class _UploadingPlaceholder extends StatelessWidget {
   }
 }
 
-class _FullScreenImageViewer extends StatelessWidget {
-  final String pathOrUrl;
-  final bool isLocal;
-  const _FullScreenImageViewer({
-    required this.pathOrUrl,
-    required this.isLocal,
+// We don't need _FullScreenImageViewer anymore since we have MediaGalleryViewer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Video bubble
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VideoBubble extends StatelessWidget {
+  final Message message;
+  final bool isMine;
+  final Widget footer;
+
+  const _VideoBubble({
+    required this.message,
+    required this.isMine,
+    required this.footer,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          child: isLocal
-              ? Image.file(File(pathOrUrl), fit: BoxFit.contain)
-              : CachedNetworkImage(imageUrl: pathOrUrl, fit: BoxFit.contain),
+    final meta = message.metadata ?? {};
+    final localThumb = meta['localThumbPath'] as String?;
+    final thumbUrl = meta['thumbnailUrl'] as String?;
+
+    final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
+    final url = _resolveUrl(thumbUrl);
+    final isUploading = !hasLocalThumb && url.isEmpty;
+
+    return Column(
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8.resR),
+          child: isUploading
+              ? _UploadingPlaceholder()
+              : GestureDetector(
+                  onTap: () => _openMediaGallery(context, message),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (hasLocalThumb)
+                        Image.file(
+                          File(localThumb),
+                          width: 220.resW,
+                          height: 180.resH,
+                          fit: BoxFit.cover,
+                        )
+                      else
+                        CachedNetworkImage(
+                          imageUrl: url,
+                          width: 220.resW,
+                          height: 180.resH,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => _UploadingPlaceholder(),
+                          errorWidget: (_, __, ___) => Container(
+                            width: 220.resW,
+                            height: 180.resH,
+                            color: AppColors.surfaceVariant,
+                            child: const Icon(
+                              Icons.broken_image_outlined,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      Container(
+                        width: 48.resW,
+                        height: 48.resW,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 32.resW,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
-      ),
+        Padding(
+          padding: EdgeInsets.only(
+            left: 8.resW,
+            right: 8.resW,
+            bottom: 6.resH,
+            top: 4.resH,
+          ),
+          child: footer,
+        ),
+      ],
     );
+  }
+
+  void _openMediaGallery(BuildContext context, Message tappedMsg) {
+    final state = context.read<ChatCubit>().state;
+    if (state is ChatRoomActive) {
+      final mediaMessages = state.messages
+          .where((m) =>
+              m.type == MessageType.image || m.type == MessageType.video)
+          .toList()
+          .reversed
+          .toList();
+      
+      final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
+      
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MediaGalleryViewer(
+            mediaMessages: mediaMessages,
+            initialIndex: index == -1 ? 0 : index,
+          ),
+        ),
+      );
+    }
   }
 }
 
@@ -546,6 +673,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   bool _isPlaying = false;
   bool _isPrepared = false;
   bool _isPreparing = false;
+  List<double>? _cachedWaveformData;
 
   @override
   void initState() {
@@ -593,12 +721,25 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
     if (path != null) {
       try {
+        final cached = await context.read<ChatCubit>().getWaveformCache(widget.message.clientMessageId);
+        
         await _playerController.preparePlayer(
           path: path,
-          shouldExtractWaveform: true,
+          shouldExtractWaveform: cached == null,
           noOfSamples: 50,
           volume: 1.0,
         );
+
+        if (cached == null) {
+          final extracted = await _playerController.waveformExtraction.extractWaveformData(path: path, noOfSamples: 50);
+          if (extracted.isNotEmpty) {
+            await context.read<ChatCubit>().saveWaveformCache(widget.message.clientMessageId, extracted);
+            _cachedWaveformData = extracted;
+          }
+        } else {
+          _cachedWaveformData = cached;
+        }
+
         if (mounted) {
           setState(() {
             _isPrepared = true;
@@ -726,6 +867,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                                 36.resH,
                               ),
                               playerController: _playerController,
+                              waveformData: _cachedWaveformData ?? const [],
                               enableSeekGesture: true,
                               waveformType: WaveformType.fitWidth,
                               playerWaveStyle: PlayerWaveStyle(

@@ -28,7 +28,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     // Authenticated and the socket is already connected with a fresh token.
     // We only need to trigger a background room hydration from the API.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !context.read<ChatCubit>().isHydrationComplete) {
         context.read<ChatCubit>().hydrateRooms();
       }
     });

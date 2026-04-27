@@ -368,4 +368,4 @@ The chat list data should be preloaded during the splash screen to reduce percei
 - The block user feature will store blocked user IDs on the User schema in MongoDB. The backend will implement REST endpoints for block/unblock and a socket-level guard to prevent message delivery.
 - Video upload uses the same `POST /chat/upload` endpoint as images and files. Maximum video file size follows the same limits as other uploads.
 - Waveform cache data will be stored as JSON in the message's `metadata` column in SQLite, alongside existing metadata fields.
-- The splash screen preload will leverage the existing `ChatCubit.loadRecentChats()` method, called after authentication is verified but before navigation to the home screen.
+- The splash screen preload will leverage the existing `ChatCubit.hydrateRooms()` method, called after authentication is verified but before navigation to the home screen.

@@ -56,7 +56,8 @@ lib/
 ### III. Data Storage: Offline-First Approach
 The app must function seamlessly without a network connection.
 - **SQLite (sqflite)**: Strictly for relational, heavily queried data (Messages, Rooms, Contacts).
-- **Hive**: Strictly for fast key-value pairs and secure document storage (Preferences, Tokens).
+- **SharedPreferences**: Permitted for simple boolean flags and lightweight user preferences (e.g., mute/lock toggles per room).
+- **Hive**: Reserved for complex document/object storage, secure credential caching, and structured data that exceeds simple key-value pairs (Tokens, cached API responses).
 - **Offline Queue**: Write operations performed while offline MUST be saved locally with `pending` status and queued for synchronization.
 
 ### IV. Real-Time Communication: Socket.io

@@ -3,7 +3,7 @@ import 'package:equatable/equatable.dart';
 
 enum MessageStatus { pending, sent, delivered, read, error }
 
-enum MessageType { text, image, file, voiceNote, contact, system, location, audio, poll, event }
+enum MessageType { text, image, file, voiceNote, contact, system, location, audio, poll, event, video }
 
 /// Maps a raw string from SQLite / socket payload to a [MessageType].
 /// Falls back to [MessageType.text] for any unknown / null value.
@@ -30,6 +30,8 @@ MessageType messageTypeFromString(String? raw) {
       return MessageType.poll;
     case 'event':
       return MessageType.event;
+    case 'video':
+      return MessageType.video;
     default:
       return MessageType.text;
   }
@@ -56,6 +58,8 @@ String messageTypeToString(MessageType type) {
       return 'poll';
     case MessageType.event:
       return 'event';
+    case MessageType.video:
+      return 'video';
     case MessageType.text:
       return 'text';
   }

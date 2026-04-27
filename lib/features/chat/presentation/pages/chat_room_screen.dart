@@ -15,6 +15,7 @@ import '../bloc/chat_cubit.dart';
 import '../bloc/voice_note_controller.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../widgets/chat_input_bar.dart';
+import '../widgets/chat_search_bar.dart';
 import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -31,6 +32,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final ScrollController _scrollController = ScrollController();
   late String _currentUserId;
   bool _isMenuOpen = false; // tracks popup visibility for background dim
+  bool _isSearching = false;
+  String? _highlightMessageId;
   late ChatCubit cubit;
   @override
   void initState() {
@@ -84,6 +87,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         );
       });
     }
+  }
+
+  void _scrollToMessage(Message targetMessage, List<Message> allMessages) {
+    // Hide search bar
+    setState(() {
+      _isSearching = false;
+      _highlightMessageId = targetMessage.id;
+    });
+    
+    // Reverse index since ListView is reversed
+    final index = allMessages.reversed.toList().indexWhere((m) => m.id == targetMessage.id);
+    if (index != -1 && _scrollController.hasClients) {
+      // Very rough approximation: 80 pixels per message
+      final targetOffset = index * 80.resH;
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+
+    // Clear highlight after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _highlightMessageId = null;
+        });
+      }
+    });
   }
 
   PopupMenuItem<String> _buildMenuItem(
@@ -152,8 +184,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           },
         ),
         title: InkWell(
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => widget.chatData.type == ChatRoomType.GROUP
@@ -161,6 +193,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     : ChatInfoScreen(chatData: widget.chatData),
               ),
             );
+            if (result == 'search' && mounted) {
+              setState(() => _isSearching = true);
+            }
           },
           child: Row(
             children: [
@@ -279,7 +314,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             onCanceled: () => setState(() => _isMenuOpen = false),
             onSelected: (value) {
               setState(() => _isMenuOpen = false);
-              // Handle menu actions here
+              if (value == 'search') {
+                setState(() => _isSearching = true);
+              }
+              // Handle other menu actions here
             },
             itemBuilder: (context) => [
               _buildMenuItem(
@@ -316,12 +354,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
         ],
       ),
-      body: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
-        opacity: _isMenuOpen ? 0.3 : 1.0,
-        child: Column(
-          children: [
-            Expanded(
+      body: Stack(
+        children: [
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: _isMenuOpen ? 0.3 : 1.0,
+            child: Column(
+              children: [
+                Expanded(
               child: BlocConsumer<ChatCubit, ChatState>(
                 // Only rebuild the message list when messages actually change.
                 // TypingUpdate, TypingUpdate → never triggers a message-list rebuild.
@@ -359,10 +399,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     padding: EdgeInsets.symmetric(vertical: 16.resH),
                     itemCount: displayMessages.length,
                     itemBuilder: (context, index) {
-                      return MessageBubbleWidget(
-                        message: displayMessages[index],
-                        currentUserId: _currentUserId,
-                        isGroup: widget.chatData.type == ChatRoomType.GROUP,
+                      final msg = displayMessages[index];
+                      return Container(
+                        color: _highlightMessageId == msg.id 
+                            ? AppColors.primary.withOpacity(0.2) 
+                            : Colors.transparent,
+                        child: MessageBubbleWidget(
+                          message: msg,
+                          currentUserId: _currentUserId,
+                          isGroup: widget.chatData.type == ChatRoomType.GROUP,
+                        ),
                       );
                     },
                   );
@@ -381,8 +427,30 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               },
             ),
           ],
-        ), // Column
-      ), // AnimatedOpacity
+            ),
+          ), // AnimatedOpacity
+
+          if (_isSearching)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BlocBuilder<ChatCubit, ChatState>(
+                builder: (context, state) {
+                  List<Message> allMessages = [];
+                  if (state is ChatRoomActive) {
+                    allMessages = state.messages;
+                  }
+                  return ChatSearchBar(
+                    onClose: () => setState(() => _isSearching = false),
+                    onResultTap: (msg) => _scrollToMessage(msg, allMessages),
+                  );
+                },
+              ),
+            ),
+        ],
+      ), // Stack
     ), // Scaffold
     ); // PopScope
   }

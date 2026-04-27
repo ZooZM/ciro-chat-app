@@ -23,7 +23,7 @@ class AuthCubit extends Cubit<AuthState> {
   AuthCubit(this._repository, this._localDataSource)
     : super(const AuthInitial());
 
-  Future<void> verifyAuthStatus() async {
+  Future<bool> verifyAuthStatus() async {
     emit(const AuthLoading());
 
     // Splash screen minimum display duration removed to fix "jarring delay" bug.
@@ -43,11 +43,17 @@ class AuthCubit extends Cubit<AuthState> {
           getIt<ChatCubit>().silentSyncContacts().ignore();
         }
         emit(const Authenticated());
+        return true;
       } else {
         getIt<SocketService>().disconnect();
         emit(const Unauthenticated());
+        return false;
       }
     });
+
+    // In case of failure
+    if (state is AuthError) return false;
+    return state is Authenticated;
   }
 
   Future<void> submitPhoneNumber(String phone) async {
