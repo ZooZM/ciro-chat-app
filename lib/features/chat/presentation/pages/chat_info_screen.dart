@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/theme/app_constants.dart';
 import '../../domain/entities/chat_session.dart';
 import 'dart:math' as math;
 
@@ -23,25 +24,25 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50], // Very light background
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: AppColors.background,
         elevation: 0,
         centerTitle: true,
         title: Text(
           'Chat information',
           style: AppTypography.subtitle1.copyWith(
-            color: Colors.black,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 24.resW),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit_outlined, color: Colors.grey[700], size: 22.resW),
+            icon: Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 22.resW),
             onPressed: () {},
           ),
           IconButton(
@@ -49,38 +50,38 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             icon: Transform(
               alignment: Alignment.center,
               transform: Matrix4.rotationY(math.pi),
-              child: Icon(Icons.reply_outlined, color: Colors.grey[700], size: 24.resW),
+              child: Icon(Icons.reply_outlined, color: AppColors.textSecondary, size: 24.resW),
             ),
             onPressed: () {},
           ),
-          SizedBox(width: 8.resW),
+          SizedBox(width: AppConstants.spacingSm.resW),
         ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.only(bottom: 40.resH),
         child: Column(
           children: [
-            SizedBox(height: 16.resH),
+            SizedBox(height: AppConstants.spacingMd.resH),
             // ── 2. Profile Header ──────────────────────────────────────────
             _buildProfileHeader(),
 
-            SizedBox(height: 24.resH),
+            SizedBox(height: AppConstants.spacingLg.resH),
             // ── 3. Quick Actions Row ───────────────────────────────────────
             _buildQuickActions(),
 
-            SizedBox(height: 16.resH),
+            SizedBox(height: AppConstants.spacingMd.resH),
             // ── 4. Media Section ───────────────────────────────────────────
             _buildMediaSection(),
 
-            SizedBox(height: 16.resH),
+            SizedBox(height: AppConstants.spacingMd.resH),
             // ── 5. Options Section ─────────────────────────────────────────
             _buildOptionsSection(),
 
-            SizedBox(height: 16.resH),
+            SizedBox(height: AppConstants.spacingMd.resH),
             // ── 6. Shared Groups Section ───────────────────────────────────
             _buildSharedGroupsSection(),
 
-            SizedBox(height: 16.resH),
+            SizedBox(height: AppConstants.spacingMd.resH),
             // ── 7. Danger Zone ─────────────────────────────────────────────
             _buildDangerZone(),
           ],
@@ -105,7 +106,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           children: [
             CircleAvatar(
               radius: 46.resR,
-              backgroundColor: const Color(0xFF8E60B8), // Muted purple from design
+              backgroundColor: AppColors.primary,
               backgroundImage: widget.chatData.avatarUrl.isNotEmpty
                   ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
                   : null,
@@ -113,7 +114,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                   ? Text(
                       initials,
                       style: AppTypography.headline1.copyWith(
-                        color: Colors.white,
+                        color: AppColors.surface,
                         fontSize: 32,
                         fontWeight: FontWeight.w500,
                       ),
@@ -126,30 +127,30 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                 width: 20.resW,
                 height: 20.resW,
                 decoration: BoxDecoration(
-                  color: Colors.blue,
+                  color: AppColors.info,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.grey[50]!, // matches page bg
+                    color: AppColors.background,
                     width: 3.resW,
                   ),
                 ),
               ),
           ],
         ),
-        SizedBox(height: 16.resH),
+        SizedBox(height: AppConstants.spacingMd.resH),
         Text(
           name,
           style: AppTypography.headline3.copyWith(
             fontWeight: FontWeight.w800,
-            color: Colors.black,
+            color: AppColors.textPrimary,
             fontSize: 22,
           ),
         ),
-        SizedBox(height: 4.resH),
+        SizedBox(height: AppConstants.spacingXs.resH),
         Text(
-          widget.chatData.phoneNumber.isNotEmpty ? widget.chatData.phoneNumber : '+20111000555',
+          widget.chatData.phoneNumber.isNotEmpty ? widget.chatData.phoneNumber : '',
           style: AppTypography.body2.copyWith(
-            color: Colors.grey[600],
+            color: AppColors.textSecondary,
             fontSize: 15,
           ),
         ),
@@ -159,13 +160,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildQuickActions() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.resW),
+      padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
       child: Row(
         children: [
           _buildQuickActionCard(Icons.search, 'Search'),
-          SizedBox(width: 12.resW),
+          SizedBox(width: AppConstants.spacingMd.resW * 0.75),
           _buildQuickActionCard(Icons.videocam_outlined, 'Video call'),
-          SizedBox(width: 12.resW),
+          SizedBox(width: AppConstants.spacingMd.resW * 0.75),
           _buildQuickActionCard(Icons.call_outlined, 'Voice call'),
         ],
       ),
@@ -177,11 +178,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 14.resH),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12.resR),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd.resR),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: AppColors.textPrimary.withOpacity(0.03),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -190,11 +191,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         child: Column(
           children: [
             Icon(icon, color: AppColors.primary, size: 26.resW),
-            SizedBox(height: 8.resH),
+            SizedBox(height: AppConstants.spacingSm.resH),
             Text(
               label,
               style: AppTypography.caption.copyWith(
-                color: Colors.grey[800],
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -207,24 +208,24 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildMediaSection() {
     return _buildContainerSection(
-      padding: EdgeInsets.only(left: 16.resW, top: 16.resH, bottom: 16.resH), // right padding in list
+      padding: EdgeInsets.only(left: AppConstants.spacingMd.resW, top: AppConstants.spacingMd.resH, bottom: AppConstants.spacingMd.resH),
       child: Column(
         children: [
           // Header
           Padding(
-            padding: EdgeInsets.only(right: 16.resW, bottom: 12.resH),
+            padding: EdgeInsets.only(right: AppConstants.spacingMd.resW, bottom: AppConstants.spacingMd.resH * 0.75),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'Media, links and documents',
                   style: AppTypography.body2.copyWith(
-                    color: Colors.grey[500],
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),
-                Icon(Icons.chevron_right, color: Colors.grey[400], size: 22.resW),
+                Icon(Icons.chevron_right, color: AppColors.textHint, size: 22.resW),
               ],
             ),
           ),
@@ -234,17 +235,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: 5,
-              separatorBuilder: (_, __) => SizedBox(width: 8.resW),
+              separatorBuilder: (_, __) => SizedBox(width: AppConstants.spacingSm.resW),
               itemBuilder: (context, index) {
-                // Return a dummy image
                 return ClipRRect(
-                  borderRadius: BorderRadius.circular(10.resR),
+                  borderRadius: BorderRadius.circular(AppConstants.radiusSm.resR + 2),
                   child: CachedNetworkImage(
                     imageUrl: 'https://i.pravatar.cc/200?u=${index + 5}', 
                     width: 90.resW,
                     height: 90.resW,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: Colors.grey[200]),
+                    placeholder: (context, url) => Container(color: AppColors.surfaceVariant),
                   ),
                 );
               },
@@ -257,7 +257,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildOptionsSection() {
     return _buildContainerSection(
-      padding: EdgeInsets.symmetric(vertical: 8.resH),
+      padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
       child: Column(
         children: [
           _buildOptionTile('Starred Messages', Icons.star_border, AppColors.textSecondary, trailing: _arrowIcon()),
@@ -280,49 +280,49 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildSharedGroupsSection() {
     return _buildContainerSection(
-      padding: EdgeInsets.symmetric(vertical: 16.resH),
+      padding: EdgeInsets.symmetric(vertical: AppConstants.spacingMd.resH),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.resW),
+            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
             child: Text(
               '2 shared groups',
               style: AppTypography.body2.copyWith(
-                color: Colors.grey[500],
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
             ),
           ),
-          SizedBox(height: 12.resH),
+          SizedBox(height: AppConstants.spacingMd.resH * 0.75),
           // Group 1
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 8.resH),
+            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingSm.resH),
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: const Color(0xFF1B3A57), // Dark blue
+                  backgroundColor: AppColors.secondaryDark,
                   radius: 20.resR,
-                  child: Text('TT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.resW)),
+                  child: Text('TT', style: TextStyle(color: AppColors.surface, fontWeight: FontWeight.w600, fontSize: 13.resW)),
                 ),
-                SizedBox(width: 16.resW),
-                Text('Tech Team', style: AppTypography.subtitle2.copyWith(color: Colors.black, fontWeight: FontWeight.w700)),
+                SizedBox(width: AppConstants.spacingMd.resW),
+                Text('Tech Team', style: AppTypography.subtitle2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
           // Group 2
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 8.resH),
+            padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingSm.resH),
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: const Color(0xFFC2185B), // Pinkish red
+                  backgroundColor: AppColors.error,
                   radius: 20.resR,
-                  child: Text('PM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.resW)),
+                  child: Text('PM', style: TextStyle(color: AppColors.surface, fontWeight: FontWeight.w600, fontSize: 13.resW)),
                 ),
-                SizedBox(width: 16.resW),
-                Text('Project Managers', style: AppTypography.subtitle2.copyWith(color: Colors.black, fontWeight: FontWeight.w700)),
+                SizedBox(width: AppConstants.spacingMd.resW),
+                Text('Project Managers', style: AppTypography.subtitle2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -333,13 +333,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildDangerZone() {
     return _buildContainerSection(
-      padding: EdgeInsets.symmetric(vertical: 8.resH),
+      padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
       child: Column(
         children: [
-          _buildOptionTile('Delete chat content', Icons.info_outline, const Color(0xFFE53935), isDanger: true),
-          _buildOptionTile('Block user', Icons.person_off_outlined, const Color(0xFFE53935), isDanger: true),
-          _buildOptionTile('Report', Icons.flag_outlined, const Color(0xFFE53935), isDanger: true),
-          _buildOptionTile('Delete chat', Icons.delete_outline, const Color(0xFFE53935), isDanger: true),
+          _buildOptionTile('Delete chat content', Icons.info_outline, AppColors.error, isDanger: true),
+          _buildOptionTile('Block user', Icons.person_off_outlined, AppColors.error, isDanger: true),
+          _buildOptionTile('Report', Icons.flag_outlined, AppColors.error, isDanger: true),
+          _buildOptionTile('Delete chat', Icons.delete_outline, AppColors.error, isDanger: true),
         ],
       ),
     );
@@ -351,14 +351,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildContainerSection({required Widget child, EdgeInsetsGeometry? padding}) {
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16.resW),
-      padding: padding ?? EdgeInsets.all(16.resW),
+      margin: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW),
+      padding: padding ?? EdgeInsets.all(AppConstants.spacingMd.resW),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.resR),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppConstants.spacingMd.resR),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.015),
+            color: AppColors.textPrimary.withOpacity(0.015),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -372,16 +372,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return InkWell(
       onTap: () {},
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 12.resH),
+        padding: EdgeInsets.symmetric(horizontal: AppConstants.spacingMd.resW, vertical: AppConstants.spacingMd.resH * 0.75),
         child: Row(
           children: [
             Icon(icon, color: color, size: 24.resW),
-            SizedBox(width: 16.resW),
+            SizedBox(width: AppConstants.spacingMd.resW),
             Expanded(
               child: Text(
                 title,
                 style: AppTypography.body1.copyWith(
-                  color: isDanger ? color : Colors.grey[800],
+                  color: isDanger ? color : AppColors.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -395,6 +395,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _arrowIcon() {
-    return Icon(Icons.chevron_right, color: Colors.grey[400], size: 20.resW);
+    return Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.resW);
   }
 }

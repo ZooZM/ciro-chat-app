@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
@@ -166,41 +165,19 @@ class AttachmentSheetWidget extends StatelessWidget {
   Future<void> _handleLocation(BuildContext context) async {
     Navigator.pop(context);
 
-    final status = await Permission.location.request();
-    if (!status.isGranted) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission denied')),
-        );
-      }
-      return;
-    }
+    if (!context.mounted) return;
+    final result = await LocationService.getCurrentLocation(context);
 
-    try {
-      final position = await Geolocator.getCurrentPosition();
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
+    if (result.isSuccess && context.mounted) {
+      await context.read<ChatCubit>().sendLocationMessage(
+        result.latitude!,
+        result.longitude!,
+        result.address!,
       );
-      String address = "Unknown Location";
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        address = "${p.street}, ${p.locality}, ${p.country}";
-      }
-
-      if (context.mounted) {
-        await context.read<ChatCubit>().sendLocationMessage(
-          position.latitude,
-          position.longitude,
-          address,
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
-      }
+    } else if (!result.isSuccess && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? 'Location unavailable')),
+      );
     }
   }
 

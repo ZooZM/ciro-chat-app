@@ -12,6 +12,7 @@ import '../widgets/message_bubble_widget.dart';
 import '../widgets/attachment_sheet_widget.dart';
 import '../widgets/typing_indicator.dart';
 import '../bloc/chat_cubit.dart';
+import '../bloc/voice_note_controller.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../widgets/chat_input_bar.dart';
 import 'chat_info_screen.dart';
@@ -111,8 +112,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
+  /// Stops any currently-playing voice note / audio before widget disposal.
+  /// This prevents PlatformException from native audio handles being
+  /// orphaned when the user navigates away while audio is playing.
+  void _safeStopAllAudio() {
+    VoiceNoteController().stopCurrent();
+  }
+
   @override
   void dispose() {
+    // Stop any playing audio BEFORE the widget tree is torn down.
+    _safeStopAllAudio();
     // PREVENT STALE STATE ROUTING! Explicitly flush the bound Mongo identifier.
     cubit.closeRoom();
     _msgController.dispose();
@@ -122,7 +132,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        // Stop all audio playback before the screen is popped.
+        _safeStopAllAudio();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -130,7 +146,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         leadingWidth: 40.resW,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
-          onPressed: () => context.go('/home'),
+          onPressed: () {
+            _safeStopAllAudio();
+            context.go('/home');
+          },
         ),
         title: InkWell(
           onTap: () {
@@ -364,6 +383,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ],
         ), // Column
       ), // AnimatedOpacity
-    ); // Scaffold
+    ), // Scaffold
+    ); // PopScope
   }
 }

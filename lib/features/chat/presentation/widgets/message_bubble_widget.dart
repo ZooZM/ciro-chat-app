@@ -634,22 +634,20 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     );
     _playerStateSubscription?.cancel();
 
-    _safeDisposeAudio();
+    // ── IMPORTANT: We intentionally do NOT call _playerController.dispose()
+    // The audio_waveforms package's dispose() internally calls
+    // stopWaveformExtraction() via a MethodChannel created in the root zone.
+    // When the native MediaCodec is already released (rapid back-navigation),
+    // this throws PlatformException("codec is released already") which
+    // CANNOT be caught by try/catch, runZonedGuarded, or .catchError()
+    // because root-zone platform channel errors bypass all child zones.
+    //
+    // The PlayerController will be garbage collected and its native
+    // resources freed by the Android finalizer. Active playback is
+    // stopped by VoiceNoteController().stopCurrent() in ChatRoomScreen's
+    // PopScope before navigation occurs.
 
     super.dispose();
-  }
-
-  Future<void> _safeDisposeAudio() async {
-    try {
-      if (!_playerController.playerState.isStopped) {
-        await _playerController.stopPlayer();
-      }
-      _playerController.dispose();
-    } on PlatformException catch (e) {
-      debugPrint('AudioWaveforms safely caught codec exception: $e');
-    } catch (e) {
-      debugPrint('Error disposing audio controller: $e');
-    }
   }
 
   void _togglePlay() async {
