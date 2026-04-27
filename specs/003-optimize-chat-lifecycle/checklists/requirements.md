@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Optimize Chat Lifecycle
+# Specification Quality Checklist: Optimize Chat Lifecycle (Expanded)
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: April 24, 2026
+**Purpose**: Validate specification completeness and quality before proceeding to planning  
+**Created**: April 27, 2026  
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,4 +31,9 @@
 
 ## Notes
 
-All criteria pass.
+- All 17 user stories have assigned priorities and acceptance scenarios
+- 6 new features (US11–US17) were added based on post-implementation analysis
+- FR-012 through FR-017 and SC-011 through SC-017 cover the new scope
+- Clarifications from the April 27 session are documented in the Clarifications section
+- Note: FR-008 mentions `google_maps_flutter` and FR-014 mentions `REST endpoints` — these are architectural constraints from prior clarification sessions, not implementation details
+- Ready for `/speckit.plan` or `/speckit.tasks`

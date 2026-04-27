@@ -1,115 +1,81 @@
-# Research: Optimize Chat Lifecycle (Phase 2)
+# Research: Optimize Chat Lifecycle (Expanded)
 
-**Branch**: `003-optimize-chat-lifecycle` | **Date**: 2026-04-25
+**Date**: April 27, 2026
+**Feature**: [spec.md](spec.md)
 
-## R1: Group Chat Persistence Bug — Root Cause
+## R1: Audio Waveform Caching Strategy
 
-**Decision**: The root cause is in `ChatLocalDataSourceImpl.saveMessage()` (lines 191–220). The SQL UPSERT for the `rooms` table does NOT include `type`, `participants`, or `admins` columns. When a message creates/updates a "ghost" room row, `type` defaults to `'PRIVATE'` (from the SQLite schema DEFAULT).
+**Decision**: Store extracted waveform samples as `List<double>` in the message's SQLite `metadata` JSON column under the key `waveformSamples`.
 
-**Evidence**:
-```sql
--- Current UPSERT in saveMessage() — MISSING type, participants, admins:
-INSERT OR REPLACE INTO rooms
-  (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus)
-VALUES (...)
-```
+**Rationale**: The `audio_waveforms` package's `PlayerController.extractWaveformData()` returns `List<double>`. Storing this in the existing `metadata` column avoids schema migration and keeps the data co-located with the message. SQLite JSON storage is efficient for lists of 100-200 floats.
 
-**Fix**: Extend the UPSERT to include `COALESCE((SELECT type FROM rooms WHERE id = ?), 'PRIVATE')` and similarly for `participants` and `admins`. This preserves existing values during message-driven upserts.
+**Alternatives considered**:
+- Separate SQLite table for waveforms → rejected (over-engineering, adds JOIN complexity)
+- File-based cache → rejected (harder to manage lifecycle, no auto-cleanup on message delete)
+- Hive key-value → rejected (constitution mandates SQLite for relational data)
 
-**Alternatives Considered**:
-- *Option: Separate room creation from message saving* — Rejected because it requires refactoring the JIT room creation flow and breaks the current "message auto-creates room" pattern.
+## R2: Video Message Implementation
 
----
+**Decision**: Use `image_picker` for video selection (already a dependency for camera), `video_player` for playback, and the existing `POST /chat/upload` endpoint for upload. Thumbnail generated client-side using `video_thumbnail` package.
 
-## R2: System Message Type — Frontend Gap
+**Rationale**: `image_picker` already handles gallery selection for images; adding `MediaType.video` is a configuration change. `video_player` is the official Flutter team package. Server-side thumbnail generation would require `ffmpeg` on the backend — unnecessary complexity.
 
-**Decision**: Add `MessageType.system` to the Flutter `MessageType` enum and a `case 'system':` branch to `messageTypeFromString()`. Render system messages as centered, styled event bubbles (no avatar, no alignment, no status ticks).
+**Alternatives considered**:
+- `chewie` for playback → viable but adds another dependency; `video_player` is sufficient for inline play
+- Server-side thumbnail → rejected (requires backend ffmpeg, adds latency)
+- `file_picker` for video → rejected (image_picker already supports video)
 
-**Backend Evidence**: `MessageType.SYSTEM = 'system'` in `message.schema.ts:10`. Sentinel `senderId`: `ObjectId('000000000000000000000000')`. Event text lives in `content`.
+## R3: Resend Failed Messages
 
-**Rationale**: The backend already uses `SYSTEM` for group events (create, add, remove, leave, admin promotion). The frontend silently maps them to `text` and renders broken bubbles because the sender ID doesn't match any participant.
+**Decision**: Reuse the existing `sendLocalMessage()` flow with the original `clientMessageId`. The idempotency guarantee on the backend (duplicate `clientMessageId` is rejected) ensures no double-sends.
 
----
+**Rationale**: The message is already persisted in SQLite with status `error`. Resending just needs to: (1) update status to `pending`, (2) re-emit via socket with the same payload. The backend's idempotency check via `clientMessageId` prevents duplicates even if the original was partially processed.
 
-## R3: Location & Audio — Backend Schema Extension
+**Alternatives considered**:
+- Create a new message with new `clientMessageId` → rejected (could cause duplicates if original was partially delivered)
+- Queue-based retry with exponential backoff → over-engineering for user-initiated retry
 
-**Decision**: Add `LOCATION = 'location'` and `AUDIO = 'audio'` to the backend `MessageType` enum. Also extend `MessageMetadata` with `latitude?`, `longitude?`, `address?` fields.
+## R4: Block User Architecture
 
-**Rationale**: Reusing `file` type with metadata differentiation was considered but rejected by the user in favor of explicit types for cleaner separation.
+**Decision**: Backend stores `blockedUsers: ObjectId[]` on the User schema. REST endpoints for CRUD. Socket gateway checks block list before delivering messages. Frontend syncs block list on login and caches in memory.
 
-**Changes Required**:
-1. `message.schema.ts` → Add `LOCATION` and `AUDIO` to `MessageType` enum
-2. `MessageMetadata` → Add `latitude?: number`, `longitude?: number`, `address?: string`
-3. `send-message.dto.ts` → Already supports `@IsOptional() @IsEnum(MessageType) type` — no changes needed
-4. Flutter `message.dart` → Add `location`, `audio` to `MessageType` enum and `messageTypeFromString()`
+**Rationale**: Storing on the User schema is simpler than a separate `BlockRelationship` collection. The block check in the socket gateway prevents real-time message delivery. REST endpoints allow the frontend to manage blocks without socket dependency.
 
----
+**Alternatives considered**:
+- Separate `blocks` MongoDB collection → viable for scale but unnecessary for current user count
+- Socket-only block management → rejected (no offline support)
+- Client-side filtering → rejected (blocked user's messages still consume bandwidth)
 
-## R4: Poll & Event — Backend Schema Extension
+## R5: In-Chat Search
 
-**Decision**: Add `POLL = 'poll'` and `EVENT = 'event'` to the backend `MessageType` enum. Extend `MessageMetadata` with:
-- Poll: `question?: string`, `options?: string[]`, `votes?: Record<string, string[]>` (optionIndex → userId[])
-- Event: `title?: string`, `dateTime?: string`, `description?: string`
+**Decision**: SQLite `LIKE` query on the `text` column filtered by `roomId`. Results displayed in a search bar overlay at the top of the chat room.
 
-**Rationale**: Poll is group-only. Both types use the existing flexible `metadata` bag pattern. The `SendMessageDto` already accepts arbitrary metadata.
+**Rationale**: Messages are already stored in SQLite. A `LIKE '%query%'` query is sufficient for conversations up to 10,000 messages (SC-015 target). FTS5 (full-text search) is available in sqflite but adds complexity — defer to a future optimization if performance is insufficient.
 
-**Poll Vote Mechanism**: Initial implementation stores votes in message metadata. A dedicated socket event (`vote_poll`) can be added later for real-time vote counting. For now, votes will be stored as part of the message metadata and updated via a REST endpoint.
+**Alternatives considered**:
+- SQLite FTS5 → deferred (LIKE is sufficient for current scale)
+- Server-side search → rejected (adds latency, requires network)
+- In-memory search of loaded messages → rejected (only loaded messages are in memory, not full history)
 
----
+## R6: Splash Preload Strategy
 
-## R5: Google Maps Integration
+**Decision**: After `AuthCubit.verifyAuthStatus()` resolves with an authenticated state, call `ChatCubit.loadRecentChats()` before navigating to home. Use `Future.wait()` to parallelize auth check and chat load.
 
-**Decision**: Use `google_maps_flutter` package for the location picker UI. Use Google Maps Static API for chat bubble thumbnails.
+**Rationale**: The splash screen already waits for auth verification. Adding chat list load in parallel ensures the home screen has data immediately. The splash animation (900ms) provides natural loading time.
 
-**Dependencies**:
-- `google_maps_flutter: ^2.x` (add to `pubspec.yaml`)
-- `geolocator: ^12.x` (for getting current position)
-- `geocoding: ^3.x` (for reverse geocoding — lat/lng to address)
-- `flutter_dotenv: ^5.x` (for `.env` file loading)
+**Alternatives considered**:
+- Lazy load on home screen → current behavior, causes visible loading spinner
+- Background isolate → over-engineering for a single SQLite query
+- Pre-fetch in main() before runApp → too early, DI not initialized
 
-**Platform Setup**:
-- Android: Add Google Maps API key to `AndroidManifest.xml`
-- iOS: Add Google Maps API key to `AppDelegate.swift` and `Info.plist`
-- Both: Add location permissions
+## R7: PlayerController.dispose() Bug
 
-**Thumbnail URL**: `https://maps.googleapis.com/maps/api/staticmap?center={lat},{lng}&zoom=15&size=300x200&markers=color:red%7C{lat},{lng}&key={API_KEY}`
+**Decision**: Do NOT call `PlayerController.dispose()`. Clean up Dart-side references only (listeners, subscriptions). Rely on GC finalization for native resource cleanup.
 
----
+**Rationale**: The `audio_waveforms` package's `dispose()` method calls `stopWaveformExtraction()` via a platform channel created in the root zone. When the native `MediaCodec` is already released, this throws `PlatformException("codec is released already")` which cannot be caught by any Dart mechanism (`try/catch`, `runZonedGuarded`, `.catchError()`). Active playback is stopped by `VoiceNoteController.stopCurrent()` via `PopScope` before navigation.
 
-## R6: Voice Note Stability — Known Issues
-
-**Decision**: Audit and fix voice note lifecycle. Key areas:
-1. `record` package — ensure `stop()` is always called before `dispose()`
-2. `just_audio` / `audioplayers` — ensure only one player active at a time (singleton pattern)
-3. `audio_waveforms` — ensure controller is disposed in widget `dispose()`
-
-**Current State**: The app uses `record: ^6.2.0`, `just_audio: ^0.9.42`, and `audio_waveforms: ^2.0.2`. Potential state leak: if the user navigates away mid-recording, the recorder may not be stopped.
-
----
-
-## R7: Existing Attachment Handlers — Gap Analysis
-
-**Decision**: The following handlers already exist in `AttachmentSheetWidget`:
-| Action | Handler | Status |
-|--------|---------|--------|
-| Gallery | `_handleGallery` → `ChatCubit.sendImageMessage` | ✅ Implemented |
-| Document | `_handleDocument` → `ChatCubit.sendFileMessage` | ✅ Implemented |
-| Contact | `_handleContact` → `ChatCubit.sendContactMessage` | ✅ Implemented |
-| Camera | Missing handler | ❌ Needs implementation |
-| Location | Missing handler | ❌ Needs implementation |
-| Audio | Missing handler | ❌ Needs implementation |
-| Poll | Missing handler | ❌ Needs implementation (group-only) |
-| Event | Missing handler | ❌ Needs implementation |
-
-**Camera**: Can reuse `image_picker` (already in pubspec) with `ImageSource.camera` instead of `ImageSource.gallery`.
-
----
-
-## R8: Static/Mock Data Scan — Preliminary Findings
-
-**Decision**: Key areas to audit:
-1. `_mediaPreview()` in `chat_local_data_source.dart` — does not handle `system`, `location`, `audio`, `poll`, `event` types
-2. `_buildMediaSection()` in `group_info_page.dart` — uses hardcoded `itemCount: 4` placeholder thumbnails
-3. `_buildDescriptionTile()` in `group_info_page.dart` — static text "Add description for group" with no dynamic binding
-4. `chat_screen.dart.bak` — orphan backup file should be deleted
-5. Multiple `Colors.*` literals remain in `group_info_page.dart` and `attachment_sheet_widget.dart`
+**Alternatives considered**:
+- `try/catch` → doesn't catch async platform channel errors
+- `runZonedGuarded` → platform channel runs in root zone, bypasses child zones
+- `.catchError()` → `dispose()` returns `void`, not `Future`
+- Fork the package → too much maintenance burden

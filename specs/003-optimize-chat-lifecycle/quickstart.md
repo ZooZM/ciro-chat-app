@@ -1,120 +1,49 @@
-# Quickstart: Optimize Chat Lifecycle (Phase 2)
+# Quickstart: Optimize Chat Lifecycle (Expanded)
 
-**Branch**: `003-optimize-chat-lifecycle` | **Date**: 2026-04-25
+**Date**: April 27, 2026
 
 ## Prerequisites
 
-- Flutter SDK `^3.9.2`
-- Node.js 18+ (backend)
-- Android Studio / Xcode (for platform-specific setup)
-- Google Maps API Key (for location features)
+- Flutter SDK 3.x installed
+- Android emulator or device connected
+- NestJS backend running at configured URL
+- `.env` file with `GOOGLE_MAPS_API_KEY` at project root
 
-## Setup
-
-### 1. Flutter App
-
-```bash
-cd E:\zeyad\ciro-chat-app
-flutter pub get
-```
-
-### 2. New Dependencies (to add)
+## New Dependencies to Add
 
 ```yaml
-# pubspec.yaml — add these:
-google_maps_flutter: ^2.17.0
-geolocator: ^14.0.2
-geocoding: ^4.0.0
-flutter_dotenv: ^6.0.1
+# pubspec.yaml — add if not already present
+dependencies:
+  video_player: ^2.8.0        # US12: Video message playback
+  video_thumbnail: ^0.5.3     # US12: Generate video thumbnails
 ```
 
-### 3. Environment File
+## Quick Implementation Order
 
-Create `.env` at the Flutter project root:
+1. **Phase A** (US11 — Waveform Cache): Modify `_VoiceBubble._preparePlayer()` to check/store waveform samples in metadata
+2. **Phase B** (US12 — Video): Add `MessageType.video`, `_VideoBubble`, `sendVideoMessage()`, `MediaGalleryViewer`
+3. **Phase C** (US13 — Resend): Add resend icon to error-status bubbles, `resendMessage()` to ChatCubit
+4. **Phase D** (US14 — Block): Backend REST + socket guard, then frontend ChatCubit + ChatInfoScreen
+5. **Phase E** (US15 — Search): `searchMessages()` in SQLite, `ChatSearchBar` widget, wire to menu
+6. **Phase F** (US16 — ChatInfo): Wire quick actions, real media, block button, settings toggles
+7. **Phase G** (US17 — Splash): Preload chat list during splash before navigating to home
+
+## Verification
 
 ```bash
-GOOGLE_MAPS_API_KEY=your_api_key_here
+# Run static analysis
+flutter analyze
+
+# Check for remaining hardcoded values
+grep -rn "Colors\." lib/features/chat/
+grep -rn "Color(0x" lib/features/chat/
+
+# Check for TODO/FIXME markers
+grep -rn "TODO\|FIXME\|HACK\|XXX" lib/features/chat/
 ```
 
-Add `.env` to `.gitignore`.
+## Already Completed (Hotfixes)
 
-### 4. Android Setup
-
-**`android/app/src/main/AndroidManifest.xml`**:
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="${GOOGLE_MAPS_API_KEY}"/>
-
-<!-- Location permissions -->
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-```
-
-### 5. iOS Setup
-
-**`ios/Runner/AppDelegate.swift`**:
-```swift
-import GoogleMaps
-
-// In application(_:didFinishLaunchingWithOptions:):
-GMSServices.provideAPIKey("YOUR_API_KEY")
-```
-
-**`ios/Runner/Info.plist`**:
-```xml
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Ciro needs your location to share it in chats</string>
-```
-
-### 6. Backend
-
-```bash
-cd E:\zeyad\chat-app-backend
-npm install
-npm run start:dev
-```
-
-No new backend dependencies required — only schema enum additions.
-
-## Development Commands
-
-```bash
-# Run Flutter app
-flutter run
-
-# Run code generation (if DI changes)
-flutter pub run build_runner build --delete-conflicting-outputs
-
-# Run backend
-cd E:\zeyad\chat-app-backend && npm run start:dev
-
-# Run tests
-flutter test
-cd E:\zeyad\chat-app-backend && npm test
-```
-
-## Key Files to Edit
-
-### Backend (NestJS)
-| File | Change |
-|------|--------|
-| `schemas/message.schema.ts` | Add LOCATION, AUDIO, POLL, EVENT to MessageType; extend MessageMetadata |
-
-### Flutter — Domain Layer
-| File | Change |
-|------|--------|
-| `domain/entities/message.dart` | Add system, location, audio, poll, event to MessageType enum |
-
-### Flutter — Data Layer
-| File | Change |
-|------|--------|
-| `data/datasources/chat_local_data_source.dart` | Fix room UPSERT in `saveMessage()` to preserve type/participants/admins |
-
-### Flutter — Presentation Layer
-| File | Change |
-|------|--------|
-| `presentation/widgets/message_bubble_widget.dart` | Add system bubble, location bubble, audio bubble, poll bubble, event bubble renderers |
-| `presentation/widgets/attachment_sheet_widget.dart` | Wire Camera, Location, Audio, Poll, Event handlers |
-| `presentation/bloc/chat_cubit.dart` | Add sendLocationMessage, sendAudioMessage, sendPollMessage, sendEventMessage methods |
-| `presentation/pages/group_info_page.dart` | Connect description to real data; remove mock media section |
+- [x] C1: Audio crash on back-press — `PopScope` + skip `PlayerController.dispose()`
+- [x] D1: Location crash — `LocationService` in `core/services/`
+- [x] F1: ChatInfoScreen hardcoded colors — migrated to `AppColors`/`AppConstants`

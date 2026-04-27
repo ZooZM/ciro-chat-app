@@ -1,39 +1,35 @@
-# Implementation Plan: Optimize Chat Lifecycle (Phase 2)
+# Implementation Plan: Optimize Chat Lifecycle (Expanded)
 
-**Branch**: `003-optimize-chat-lifecycle` | **Date**: 2026-04-25 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/003-optimize-chat-lifecycle/spec.md`
-
-**Note**: This plan covers User Stories 4–10 (the Phase 2 expansion). User Stories 1–3 were completed in the prior session.
+**Branch**: `003-optimize-chat-lifecycle` | **Date**: April 27, 2026 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `specs/003-optimize-chat-lifecycle/spec.md`
 
 ## Summary
 
-Stabilize and complete the Chat feature by fixing the Group Chat persistence bug (P0), resolving missing system message rendering (P0), integrating Group Info business logic, implementing 8 attachment actions (Camera, Gallery, Document, Location, Contact, Audio, Poll, Event), stabilizing Voice Notes, and performing a full static/mock data cleanup and codebase audit. Backend changes include extending the `MessageType` enum with 4 new values.
+Expand the chat lifecycle optimization with 7 new user stories: audio waveform caching (US11), video message support (US12), failed message resend (US13), block/unblock user (US14), in-chat search (US15), ChatInfoScreen full logic (US16), and splash screen chat preload (US17). This builds on the existing 10 user stories (US1–US10) which are already implemented. The approach prioritizes stability fixes first, then new features, following Clean Architecture and the offline-first constitution.
 
 ## Technical Context
 
-**Language/Version**: Dart 3.9.2 / Flutter (frontend), TypeScript / NestJS (backend)  
-**Primary Dependencies**: flutter_bloc (Cubit), sqflite, socket_io_client, injectable/get_it, image_picker, file_picker, record, just_audio, audio_waveforms, google_maps_flutter (NEW), geolocator (NEW), geocoding (NEW), flutter_dotenv (NEW)  
-**Storage**: SQLite (sqflite) for messages/rooms/contacts, Hive for tokens/preferences, MongoDB (backend)  
-**Testing**: flutter_test, bloc_test, mocktail (frontend); Jest (backend)  
-**Target Platform**: Android & iOS mobile app  
-**Project Type**: Mobile app (Flutter) + Backend (NestJS)  
-**Performance Goals**: 60fps chat scrolling, <200ms message send latency  
-**Constraints**: Offline-capable, <100MB memory, Clean Architecture compliance  
-**Scale/Scope**: ~50 screens, P2P + Group chat, Voice/Video calling
+**Language/Version**: Dart 3.x / Flutter 3.x (frontend), TypeScript / NestJS (backend)
+**Primary Dependencies**: flutter_bloc, audio_waveforms, geolocator, geocoding, google_maps_flutter, cached_network_image, video_player, sqflite, socket_io_client, get_it
+**Storage**: SQLite (sqflite) for messages/rooms, Hive for tokens/preferences, MongoDB (backend)
+**Testing**: flutter_test, manual device testing
+**Target Platform**: Android (primary), iOS (secondary)
+**Project Type**: mobile-app (Flutter) + web-service (NestJS backend)
+**Performance Goals**: 60fps chat scroll, <500ms splash-to-chatlist, <1s in-chat search
+**Constraints**: Offline-capable, <200ms message send latency on LAN, memory-leak-free
+**Scale/Scope**: ~17 screens, ~8 Cubits, 2 data sources per feature
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers. All changes respect layer boundaries. ✅
-- [x] **II. State Management**: Uses `flutter_bloc` (Cubit). States extend `Equatable`. New attachment methods go in `ChatCubit`. ✅
-- [x] **III. Offline-First**: Relational data uses `sqflite`. Key-value uses `Hive`. Messages saved locally before socket emit. ✅
-- [x] **IV. Socket.io**: Real-time logic uses singleton `SocketService`. Events are idempotent (clientMessageId guard). ✅
-- [x] **V. Teardown**: Proper `dispose`/`cancel` implemented. Voice note audit will verify no leaks. ✅
-- [x] **Code Quality**: Strict linting. `snake_case` files, `PascalCase` classes, `camelCase` methods. ✅
-- [x] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer via `fpdart` Either. ✅
-
-**Post-Design Re-Check**: ✅ All gates pass. No violations detected.
+- [x] **I. Clean Architecture**: All new features split into `presentation`, `domain`, and `data` layers. BlockUser adds backend REST endpoints + frontend Cubit methods. Video/Search/Resend extend existing `ChatCubit`.
+- [x] **II. State Management**: All state via `Cubit`. New states extend `Equatable`. Search results emitted as a distinct `ChatState` subclass.
+- [x] **III. Offline-First**: Waveform cache stored in SQLite `metadata`. Search queries SQLite locally. Block list synced to local storage. Failed messages queued with `pending` status.
+- [x] **IV. Socket.io**: Singleton `SocketService`. Block guard implemented server-side. Video messages use existing socket emit pattern. All events idempotent via `clientMessageId`.
+- [x] **V. Teardown**: `PlayerController.dispose()` intentionally skipped (audio_waveforms bug). Listeners/subscriptions cancelled. Search state cleared on room exit. Block state reset on logout.
+- [x] **Code Quality**: Strict linting. `snake_case` files. `AppColors`/`AppConstants` exclusively.
+- [x] **Error Handling**: Upload failures mapped to `Failure`. Resend mechanism catches and retries. Location errors handled by centralized `LocationService`.
 
 ## Project Structure
 
@@ -42,12 +38,14 @@ Stabilize and complete the Chat feature by fixing the Group Chat persistence bug
 ```text
 specs/003-optimize-chat-lifecycle/
 ├── plan.md              # This file
-├── spec.md              # Feature specification (10 user stories)
-├── research.md          # Phase 0 output — root cause analysis & research
-├── data-model.md        # Phase 1 output — entity models & state transitions
-├── quickstart.md        # Phase 1 output — setup & key files
-├── contracts/
-│   └── socket-events.md # Phase 1 output — socket & REST contracts
+├── spec.md              # Feature specification (17 user stories)
+├── research.md          # Phase 0 output
+├── data-model.md        # Phase 1 output
+├── quickstart.md        # Phase 1 output
+├── contracts/           # Phase 1 output
+│   └── block-user-api.md
+├── checklists/
+│   └── requirements.md
 └── tasks.md             # Phase 2 output (generated by /speckit.tasks)
 ```
 
@@ -60,55 +58,130 @@ lib/
 │   ├── di/
 │   ├── helpers/
 │   ├── network/
-│   │   └── socket_service.dart       # Singleton socket manager
 │   ├── routing/
-│   │   └── app_router.dart           # GoRouter with /chat_room route
+│   ├── services/
+│   │   └── location_service.dart     # [DONE] Centralized location handler
 │   └── theme/
-│       ├── app_colors.dart           # Centralized color palette
-│       └── app_typography.dart       # Centralized typography
+│       ├── app_colors.dart
+│       ├── app_constants.dart
+│       └── app_typography.dart
 └── features/
-    └── chat/
-        ├── data/
-        │   ├── datasources/
-        │   │   ├── chat_local_data_source.dart   # SQLite operations [FIX: room UPSERT]
-        │   │   └── chat_remote_data_source.dart   # Dio + socket event handlers
-        │   ├── models/
-        │   └── repositories/
-        ├── domain/
-        │   ├── entities/
-        │   │   ├── chat_session.dart              # Room entity with ChatRoomType
-        │   │   └── message.dart                   # Message entity [EXTEND: new MessageTypes]
-        │   └── repositories/
+    ├── chat/
+    │   ├── data/
+    │   │   ├── datasources/
+    │   │   │   ├── chat_local_data_source.dart   # Add: searchMessages(), getSharedMedia(), waveformCache
+    │   │   │   └── chat_remote_data_source.dart   # Add: blockUser(), unblockUser(), getBlockList()
+    │   │   └── repositories/
+    │   ├── domain/
+    │   │   └── entities/
+    │   │       ├── message.dart                   # Add: MessageType.video
+    │   │       └── chat_session.dart
+    │   └── presentation/
+    │       ├── bloc/
+    │       │   ├── chat_cubit.dart                # Add: resendMessage(), searchMessages(), blockUser(), sendVideoMessage()
+    │       │   └── voice_note_controller.dart
+    │       ├── pages/
+    │       │   ├── chat_room_screen.dart           # [DONE] PopScope audio safety
+    │       │   ├── chat_info_screen.dart           # [DONE] AppColors migration. TODO: wire actions
+    │       │   └── group_info_page.dart
+    │       └── widgets/
+    │           ├── message_bubble_widget.dart      # [DONE] Safe dispose. TODO: add VideoBubble, resend icon
+    │           ├── attachment_sheet_widget.dart     # [DONE] LocationService. TODO: add Video option
+    │           ├── chat_search_bar.dart            # [NEW] Search overlay widget
+    │           └── media_gallery_viewer.dart       # [NEW] Full-screen swipe gallery
+    └── splash/
         └── presentation/
-            ├── bloc/
-            │   ├── chat_cubit.dart                # Main Cubit [ADD: new send methods]
-            │   └── chat_state.dart                # State classes
-            ├── pages/
-            │   ├── chat_list_screen.dart           # Inbox screen
-            │   ├── chat_room_screen.dart           # Active chat screen
-            │   ├── group_info_page.dart            # Group details [CONNECT: real data]
-            │   └── create_group_page.dart          # Group creation flow
-            └── widgets/
-                ├── message_bubble_widget.dart      # Message renderers [ADD: new bubbles]
-                ├── attachment_sheet_widget.dart     # Attachment grid [WIRE: new handlers]
-                ├── chat_input_bar.dart             # Text input + voice note
-                ├── chat_tile_widget.dart           # Inbox tile
-                ├── typing_indicator.dart           # Typing dots
-                └── call_overlay.dart               # Global call overlay
+            └── pages/
+                └── splash_screen.dart             # TODO: preload chat list
 
-E:\zeyad\chat-app-backend\src\modules\chat\
-├── schemas/
-│   ├── message.schema.ts              # [EXTEND: LOCATION, AUDIO, POLL, EVENT enums + metadata]
-│   └── chat-room.schema.ts            # (no changes)
-├── chat.service.ts                    # (no changes — saveMessage already generic)
-├── chat.gateway.ts                    # (no changes — sendMessage already generic)
-├── chat.controller.ts                 # (no changes — upload endpoint already generic)
-└── dto/
-    └── send-message.dto.ts            # (no changes — already supports any MessageType)
+E:\zeyad\chat-app-backend\src\modules\chat/
+├── chat.service.ts                                # Add: blockUser(), unblockUser(), isBlocked() guard
+├── chat.controller.ts                             # Add: POST/DELETE /chat/block, GET /chat/block-list
+├── chat.gateway.ts                                # Add: block guard in message handler
+└── schemas/
+    ├── message.schema.ts                          # Add: VIDEO to MessageType enum
+    └── user.schema.ts                             # Add: blockedUsers: [ObjectId] field
 ```
 
-**Structure Decision**: The existing Clean Architecture structure is fully adequate. No new directories or features needed. All changes are modifications to existing files within the `chat/` feature boundary.
+**Structure Decision**: Extends the existing Clean Architecture feature structure. No new feature modules needed — all changes fit within `chat/` and `core/services/`. Backend changes are confined to the `chat` module.
+
+## Implementation Phases (New Features Only)
+
+### Phase A: Stability & Caching (US11 — Waveform Persistence)
+
+**Files**: `message_bubble_widget.dart`, `chat_local_data_source.dart`
+
+1. After `preparePlayer(shouldExtractWaveform: true)` completes, extract waveform samples from the `PlayerController`
+2. Serialize waveform data as `List<double>` and store in the message's `metadata` column in SQLite (key: `waveformSamples`)
+3. On subsequent renders, check if `metadata['waveformSamples']` exists — if yes, pass pre-extracted data to `PlayerController` without re-extracting
+
+### Phase B: Video Messages (US12)
+
+**Files**: `message.dart`, `message_bubble_widget.dart`, `attachment_sheet_widget.dart`, `chat_cubit.dart`, `media_gallery_viewer.dart` (NEW), backend `message.schema.ts`
+
+1. Add `video` to `MessageType` enum (frontend + backend)
+2. Add `_VideoBubble` widget — renders thumbnail + play icon overlay
+3. Add `sendVideoMessage()` to `ChatCubit` — pick via `image_picker`, upload via existing endpoint
+4. Create `MediaGalleryViewer` — full-screen `PageView` with all media (images + videos) for horizontal swipe
+5. Add `video_player` dependency for inline playback
+
+### Phase C: Resend Failed Messages (US13)
+
+**Files**: `message_bubble_widget.dart`, `chat_cubit.dart`
+
+1. In `MessageBubbleWidget`, detect `MessageStatus.error` and render a resend icon (circular arrow) adjacent to the bubble
+2. Add `resendMessage(String clientMessageId)` to `ChatCubit` — re-emits the original message via socket with the same `clientMessageId` for idempotency
+3. On tap: transition status `error` → `pending`, attempt re-send, handle success/failure
+
+### Phase D: Block User (US14) — Backend + Frontend
+
+**Backend files**: `chat.service.ts`, `chat.controller.ts`, `chat.gateway.ts`, `user.schema.ts` (or new `block.schema.ts`)
+
+1. **Schema**: Add `blockedUsers: [{ type: ObjectId, ref: 'User' }]` to User schema
+2. **REST**: `POST /chat/block/:userId` — adds to blockedUsers array. `DELETE /chat/block/:userId` — removes. `GET /chat/block-list` — returns blocked user IDs
+3. **Socket guard**: In `chat.gateway.ts` message handler, check if sender is in recipient's `blockedUsers` — if yes, silently drop the message
+4. **Frontend**: Add `blockUser()`, `unblockUser()`, `isUserBlocked()` to `ChatCubit`. Wire to ChatInfoScreen "Block user" tile with confirmation dialog
+
+### Phase E: Search in Chat Room (US15)
+
+**Files**: `chat_search_bar.dart` (NEW), `chat_room_screen.dart`, `chat_cubit.dart`, `chat_local_data_source.dart`
+
+1. Add `searchMessages(String roomId, String query)` to `ChatLocalDataSource` — SQL `LIKE` query on `text` column
+2. Add `searchMessages()` to `ChatCubit` — emits search results as a state
+3. Create `ChatSearchBar` widget — overlay at top of chat room, shows results as a scrollable list
+4. Tapping a result scrolls `ListView` to that message index and briefly highlights it
+
+### Phase F: ChatInfoScreen Full Logic (US16)
+
+**Files**: `chat_info_screen.dart`, `chat_cubit.dart`, `chat_local_data_source.dart`
+
+1. Wire "Video call" and "Voice call" quick actions to `CallCubit.initiateCall()`
+2. Wire "Search" quick action to open search overlay (from Phase E)
+3. Add `getSharedMedia(String roomId)` to `ChatLocalDataSource` — queries messages with `type IN ('image', 'video', 'file')`
+4. Replace static media grid with real shared media from the database
+5. Wire "Block user" to Phase D logic
+6. Wire mute/lock toggles to Hive-persisted preferences
+
+### Phase G: Splash Preload (US17)
+
+**Files**: `splash_screen.dart`, `chat_cubit.dart`
+
+1. In `SplashScreen.initState()`, after `verifyAuthStatus()` resolves successfully, call `ChatCubit.loadRecentChats()`
+2. Wait for both auth verification and chat list load before navigating to home
+3. The home screen `BlocBuilder` renders the pre-loaded chat list immediately
+
+## Dependency Graph
+
+```
+Phase A (Waveform Cache) ── independent
+Phase B (Video Messages) ── independent
+Phase C (Resend Failed)  ── independent
+Phase D (Block User)     ── independent
+Phase E (Search)         ── independent
+Phase F (ChatInfoScreen) ── depends on Phase D (block), Phase E (search)
+Phase G (Splash Preload) ── independent
+```
 
 ## Complexity Tracking
 
-> No constitution violations detected. All changes fit within the established architecture.
+No constitution violations. All features follow established patterns.
