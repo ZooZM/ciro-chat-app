@@ -544,7 +544,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   Widget _buildDangerZone() {
     final cubit = context.watch<ChatCubit>();
-    final isBlocked = cubit.isUserBlocked(widget.chatData.targetUserId);
+    final targetId = widget.chatData.participants.firstWhere(
+      (id) => id != cubit.currentUserId,
+      orElse: () => '',
+    );
+    final isBlocked = cubit.isUserBlocked(targetId);
 
     return _buildContainerSection(
       padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
@@ -582,7 +586,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
   void _handleBlockToggle(bool isCurrentlyBlocked) async {
     final cubit = context.read<ChatCubit>();
-    final targetId = widget.chatData.targetUserId;
+    final targetId = widget.chatData.participants.firstWhere(
+      (id) => id != cubit.currentUserId,
+      orElse: () => '',
+    );
 
     if (isCurrentlyBlocked) {
       await cubit.unblockUser(targetId);

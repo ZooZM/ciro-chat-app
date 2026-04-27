@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:fpdart/fpdart.dart'; // Import for Either
-import 'package:ciro_chat_app/core/error/failures.dart'; // Import for Failure
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -582,7 +580,9 @@ class ChatCubit extends Cubit<ChatState> {
   // ── sendVideoMessage ────────────────────────────────────────────────────────
 
   Future<void> sendVideoMessage(BuildContext context) async {
-    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    final pickedFile = await ImagePicker().pickVideo(
+      source: ImageSource.gallery,
+    );
     if (pickedFile == null) return;
 
     final filePath = pickedFile.path;
@@ -640,11 +640,13 @@ class ChatCubit extends Cubit<ChatState> {
         },
         (serverMeta) async {
           final fileUrl = serverMeta['fileUrl'] as String? ?? '';
-          
+
           // 2. Upload Thumbnail
           String thumbUrl = '';
           if (thumbPath != null && File(thumbPath).existsSync()) {
-            final thumbUpload = await _chatRepository.uploadFile(File(thumbPath));
+            final thumbUpload = await _chatRepository.uploadFile(
+              File(thumbPath),
+            );
             thumbUpload.fold(
               (l) => debugPrint('[ChatCubit] Thumbnail upload failed: $l'),
               (r) => thumbUrl = r['fileUrl'] as String? ?? '',
@@ -1146,19 +1148,20 @@ class ChatCubit extends Cubit<ChatState> {
     if (msg == null || msg.status != MessageStatus.error) return;
 
     // Update status to pending
-    await _localDataSource.updateMessageStatus(
-      msg.id,
-      MessageStatus.pending,
-    );
+    await _localDataSource.updateMessageStatus(msg.id, MessageStatus.pending);
 
     // Update the local state if the room is active
     if (state is ChatRoomActive) {
       final activeState = state as ChatRoomActive;
       if (activeState.roomId == msg.roomId) {
         final messages = List<Message>.from(activeState.messages);
-        final index = messages.indexWhere((m) => m.clientMessageId == clientMessageId);
+        final index = messages.indexWhere(
+          (m) => m.clientMessageId == clientMessageId,
+        );
         if (index != -1) {
-          messages[index] = messages[index].copyWith(status: MessageStatus.pending);
+          messages[index] = messages[index].copyWith(
+            status: MessageStatus.pending,
+          );
           emit(activeState.copyWith(messages: messages));
         }
       }
@@ -1166,7 +1169,8 @@ class ChatCubit extends Cubit<ChatState> {
 
     try {
       // Re-emit via socket
-      if (msg.type == MessageType.text || (msg.fileUrl != null && msg.fileUrl!.isNotEmpty)) {
+      if (msg.type == MessageType.text ||
+          (msg.fileUrl != null && msg.fileUrl!.isNotEmpty)) {
         _socketService.sendMessage(
           roomId: msg.roomId,
           messageId: msg.clientMessageId,
@@ -1182,33 +1186,46 @@ class ChatCubit extends Cubit<ChatState> {
         // If re-upload is needed, we should fetch localPath from metadata and upload.
         final localPath = msg.metadata?['localPath'] as String?;
         if (localPath != null && File(localPath).existsSync()) {
-            final uploadResult = await _chatRepository.uploadFile(File(localPath));
-            await uploadResult.fold(
-              (failure) async {
-                await _localDataSource.updateMessageStatus(msg.id, MessageStatus.error);
-                handleMessageStatusUpdate(msg.clientMessageId, MessageStatus.error);
-              },
-              (serverMeta) async {
-                final fileUrl = serverMeta['fileUrl'] as String? ?? '';
-                final meta = Map<String, dynamic>.from(msg.metadata ?? {});
-                meta['mimeType'] = serverMeta['mimeType'] ?? meta['mimeType'];
-                meta['fileName'] = serverMeta['fileName'] ?? meta['fileName'];
-                meta['fileSize'] = serverMeta['fileSize'] ?? meta['fileSize'];
+          final uploadResult = await _chatRepository.uploadFile(
+            File(localPath),
+          );
+          await uploadResult.fold(
+            (failure) async {
+              await _localDataSource.updateMessageStatus(
+                msg.id,
+                MessageStatus.error,
+              );
+              handleMessageStatusUpdate(
+                msg.clientMessageId,
+                MessageStatus.error,
+              );
+            },
+            (serverMeta) async {
+              final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+              final meta = Map<String, dynamic>.from(msg.metadata ?? {});
+              meta['mimeType'] = serverMeta['mimeType'] ?? meta['mimeType'];
+              meta['fileName'] = serverMeta['fileName'] ?? meta['fileName'];
+              meta['fileSize'] = serverMeta['fileSize'] ?? meta['fileSize'];
 
-                await _localDataSource.updateMessageMedia(msg.id, fileUrl, meta);
-                _socketService.sendMessage(
-                  roomId: msg.roomId,
-                  messageId: msg.clientMessageId,
-                  text: msg.text,
-                  type: messageTypeToString(msg.type),
-                  fileUrl: fileUrl,
-                  metadata: meta,
-                );
-              }
-            );
+              await _localDataSource.updateMessageMedia(msg.id, fileUrl, meta);
+              _socketService.sendMessage(
+                roomId: msg.roomId,
+                messageId: msg.clientMessageId,
+                text: msg.text,
+                type: messageTypeToString(msg.type),
+                fileUrl: fileUrl,
+                metadata: meta,
+              );
+            },
+          );
         } else {
-          debugPrint('[ChatCubit] Cannot resend media message: no fileUrl and no localPath');
-          await _localDataSource.updateMessageStatus(msg.id, MessageStatus.error);
+          debugPrint(
+            '[ChatCubit] Cannot resend media message: no fileUrl and no localPath',
+          );
+          await _localDataSource.updateMessageStatus(
+            msg.id,
+            MessageStatus.error,
+          );
           handleMessageStatusUpdate(msg.clientMessageId, MessageStatus.error);
         }
       }
@@ -1403,7 +1420,7 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   // ── Block Management ────────────────────────────────────────────────────────
-  
+
   bool isUserBlocked(String targetUserId) {
     return _blockedUserIds.contains(targetUserId);
   }
@@ -1445,7 +1462,10 @@ class ChatCubit extends Cubit<ChatState> {
       searchResults.value = [];
       return;
     }
-    final results = await _localDataSource.searchMessages(_activeRoomId!, query);
+    final results = await _localDataSource.searchMessages(
+      _activeRoomId!,
+      query,
+    );
     searchResults.value = results;
   }
 

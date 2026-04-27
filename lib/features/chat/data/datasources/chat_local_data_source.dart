@@ -750,7 +750,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp DESC',
       limit: 50,
     );
-    return maps.map((map) => _mapToMessage(map)).toList();
+    return maps.map((map) => Message.fromMap(map)).toList();
   }
 
   @override
@@ -764,6 +764,6 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       whereArgs: [roomId, MessageType.image.name, MessageType.video.name, MessageType.file.name],
       orderBy: 'timestamp DESC',
     );
-    return maps.map((map) => _mapToMessage(map)).toList();
+    return maps.map((map) => Message.fromMap(map)).toList();
   }
 }
