@@ -18,7 +18,7 @@ void main() async {
   await configureDependencies();
 
   // Link Network failure fallback strictly after router & DI initialization
-  globalOnUnauthorizedRedirect = () => appRouter.go('/auth');
+  globalOnUnauthorizedRedirect = () => appRouter.go(AppRouterName.auth);
 
   runApp(const MainApp());
 }

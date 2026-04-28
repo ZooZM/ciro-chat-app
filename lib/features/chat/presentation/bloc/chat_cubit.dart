@@ -108,6 +108,9 @@ class ChatCubit extends Cubit<ChatState> {
     currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
     await _localDataSource.initDB();
 
+    _socketService.onUserStatusChanged = (userId, isOnline) async {
+      await _localDataSource.updateUserOnlineStatus(userId, isOnline);
+    };
     // Fetch block list — emit into state; no mutable field.
     final blockListResult = await _chatRepository.getBlockList();
     blockListResult.fold(
@@ -642,7 +645,8 @@ class ChatCubit extends Cubit<ChatState> {
         if (thumbPath != null && File(thumbPath).existsSync()) {
           final thumbUpload = await _chatRepository.uploadFile(File(thumbPath));
           thumbUpload.fold(
-            (l) => debugPrint('[ChatCubit] Thumbnail upload failed: ${l.message}'),
+            (l) =>
+                debugPrint('[ChatCubit] Thumbnail upload failed: ${l.message}'),
             (r) => thumbUrl = r['fileUrl'] as String? ?? '',
           );
         }
@@ -1402,8 +1406,10 @@ class ChatCubit extends Cubit<ChatState> {
 
   /// Reads the current blocked list from state (safe fallback to empty).
   List<String> get _currentBlockedIds {
-    if (state is ChatRoomActive) return (state as ChatRoomActive).blockedUserIds;
-    if (state is ChatBlockUpdated) return (state as ChatBlockUpdated).blockedUserIds;
+    if (state is ChatRoomActive)
+      return (state as ChatRoomActive).blockedUserIds;
+    if (state is ChatBlockUpdated)
+      return (state as ChatBlockUpdated).blockedUserIds;
     return const [];
   }
 
@@ -1436,7 +1442,9 @@ class ChatCubit extends Cubit<ChatState> {
         return false;
       },
       (_) {
-        final updated = _currentBlockedIds.where((id) => id != targetUserId).toList();
+        final updated = _currentBlockedIds
+            .where((id) => id != targetUserId)
+            .toList();
         if (state is ChatRoomActive) {
           emit((state as ChatRoomActive).copyWith(blockedUserIds: updated));
         } else {

@@ -68,6 +68,7 @@ abstract class ChatLocalDataSource {
 
   Future<List<Message>> searchMessages(String roomId, String query);
   Future<List<Message>> getSharedMedia(String roomId);
+  Future<void> updateUserOnlineStatus(String userId, bool isOnline);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,11 +179,19 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 8) {
           try {
-            await db.execute("ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'PRIVATE'");
-            await db.execute("ALTER TABLE rooms ADD COLUMN participants TEXT DEFAULT '[]'");
-            await db.execute("ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'");
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'PRIVATE'",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN participants TEXT DEFAULT '[]'",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'",
+            );
           } catch (e) {
-            debugPrint('[LocalData] Migration error or columns already exist: $e');
+            debugPrint(
+              '[LocalData] Migration error or columns already exist: $e',
+            );
           }
         }
       },
@@ -294,7 +303,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<double>?> getWaveformCache(String messageId) async {
     final msg = await getMessageById(messageId);
     if (msg == null) return null;
-    
+
     final meta = msg.metadata;
     if (meta != null && meta.containsKey('waveformSamples')) {
       final rawList = meta['waveformSamples'];
@@ -611,13 +620,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             ),
             participants: e['participants'] != null
                 ? (jsonDecode(e['participants'] as String) as List<dynamic>)
-                    .map((p) => p as String)
-                    .toList()
+                      .map((p) => p as String)
+                      .toList()
                 : [],
             admins: e['admins'] != null
                 ? (jsonDecode(e['admins'] as String) as List<dynamic>)
-                    .map((a) => a as String)
-                    .toList()
+                      .map((a) => a as String)
+                      .toList()
                 : [],
           ),
         )
@@ -698,7 +707,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.delete('rooms', where: 'id = ?', whereArgs: [roomId]);
     await db.delete('messages', where: 'room_id = ?', whereArgs: [roomId]);
-    
+
     await _dispatchRecentChatsUpdate();
     closeRoomStream(roomId);
   }
@@ -742,7 +751,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<Message>> searchMessages(String roomId, String query) async {
     final db = _db;
     if (db == null) return [];
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'messages',
       where: 'room_id = ? AND text LIKE ?',
@@ -754,14 +763,43 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   }
 
   @override
+  Future<void> updateUserOnlineStatus(String userId, bool isOnline) async {
+    final db = _db;
+    if (db == null) return;
+    // For private rooms, the 'id' is often the user's ID or phone.
+    // We update any room where this user is the "other" participant.
+    final contact = await db.query(
+      'contacts',
+      columns: ['phoneNumber'],
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+    if (contact.isNotEmpty) {
+      final phone = contact.first['phoneNumber'] as String;
+      await db.update(
+        'rooms',
+        {'isOnline': isOnline ? 1 : 0},
+        where: 'phoneNumber = ?',
+        whereArgs: [phone],
+      );
+    }
+    await _dispatchRecentChatsUpdate();
+  }
+
+  @override
   Future<List<Message>> getSharedMedia(String roomId) async {
     final db = _db;
     if (db == null) return [];
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'messages',
       where: 'room_id = ? AND type IN (?, ?, ?)',
-      whereArgs: [roomId, MessageType.image.name, MessageType.video.name, MessageType.file.name],
+      whereArgs: [
+        roomId,
+        MessageType.image.name,
+        MessageType.video.name,
+        MessageType.file.name,
+      ],
       orderBy: 'timestamp DESC',
     );
     return maps.map((map) => Message.fromMap(map)).toList();

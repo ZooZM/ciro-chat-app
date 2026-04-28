@@ -20,8 +20,23 @@ import '../di/injection.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
+class AppRouterName {
+  static const String splash = '/splash';
+  static const String auth = '/auth';
+  static const String verify = '/auth/verify';
+  static const String home = '/home';
+  static const String createGroup = '/home/create_group';
+  static const String chatRoom = '/chat_room';
+  static const String groupChat = '/group_chat';
+  static const String contacts = '/contacts';
+  static const String incomingCall = '/incoming_call';
+  static const String videoCall = '/video_call';
+  static const String outgoingCall = '/outgoing_call';
+  static const String voiceCall = '/voice_call';
+}
+
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/splash',
+  initialLocation: AppRouterName.splash,
   // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
   // Every time AuthCubit emits a new state, the redirect guard below is re-run.
   refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),

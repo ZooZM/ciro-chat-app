@@ -95,9 +95,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       _isSearching = false;
       _highlightMessageId = targetMessage.id;
     });
-    
+
     // Reverse index since ListView is reversed
-    final index = allMessages.reversed.toList().indexWhere((m) => m.id == targetMessage.id);
+    final index = allMessages.reversed.toList().indexWhere(
+      (m) => m.id == targetMessage.id,
+    );
     if (index != -1 && _scrollController.hasClients) {
       // Very rough approximation: 80 pixels per message
       final targetOffset = index * 80.resH;
@@ -171,287 +173,309 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _safeStopAllAudio();
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leadingWidth: 40.resW,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
-          onPressed: () {
-            _safeStopAllAudio();
-            context.go('/home');
-          },
-        ),
-        title: InkWell(
-          onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => widget.chatData.type == ChatRoomType.GROUP
-                    ? GroupInfoPage(chatData: widget.chatData)
-                    : ChatInfoScreen(chatData: widget.chatData),
-              ),
-            );
-            if (result == 'search' && mounted) {
-              setState(() => _isSearching = true);
-            }
-          },
-          child: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 18.resR,
-                    backgroundColor: AppColors.divider,
-                    backgroundImage: widget.chatData.avatarUrl.isNotEmpty
-                        ? CachedNetworkImageProvider(widget.chatData.avatarUrl)
-                        : null,
-                    child: widget.chatData.avatarUrl.isEmpty
-                        ? (widget.chatData.type == ChatRoomType.GROUP
-                              ? Icon(Icons.groups, color: AppColors.primary)
-                              : Text(
-                                  widget.chatData.name.isNotEmpty
-                                      ? widget.chatData.name[0].toUpperCase()
-                                      : '?',
-                                  style: AppTypography.subtitle1.copyWith(
-                                    color: AppColors.primary,
-                                  ),
-                                ))
-                        : null,
-                  ),
-                  if (widget.chatData.isOnline &&
-                      widget.chatData.type == ChatRoomType.PRIVATE)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: 10.resW,
-                        height: 10.resW,
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 1.5.resW,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              SizedBox(width: 12.resW),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.chatData.name,
-                      style: AppTypography.subtitle1.copyWith(
-                        color: Colors.black,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    TypingIndicatorWidget(
-                      roomId: widget.chatData.id,
-                      roomType: widget.chatData.type,
-                      idleSubtitle: widget.chatData.type == ChatRoomType.GROUP
-                          ? '${widget.chatData.participants.length} participants'
-                          : (widget.chatData.isOnline ? 'online' : 'offline'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leadingWidth: 40.resW,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
+            onPressed: () {
+              _safeStopAllAudio();
+              context.go('/home');
+            },
           ),
-        ),
-        actions: [
-          if (widget.chatData.type == ChatRoomType.PRIVATE) ...[
-            IconButton(
-              icon: Icon(
-                Icons.phone_outlined,
-                color: AppColors.textSecondary,
-                size: 24.resW,
-              ),
-              onPressed: () {
-                context.read<CallCubit>().initiateCall(
-                  targetUserId: widget.chatData.phoneNumber,
-                  targetName: widget.chatData.name,
-                  targetAvatarUrl: widget.chatData.avatarUrl,
-                  isVideo: false,
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.videocam_outlined,
-                color: AppColors.textSecondary,
-                size: 24.resW,
-              ),
-              onPressed: () {
-                context.read<CallCubit>().initiateCall(
-                  targetUserId: widget.chatData.phoneNumber,
-                  targetName: widget.chatData.name,
-                  targetAvatarUrl: widget.chatData.avatarUrl,
-                );
-              },
-            ),
-          ],
-          PopupMenuButton<String>(
-            icon: Icon(
-              Icons.more_vert,
-              color: AppColors.textSecondary,
-              size: 24.resW,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            color: Colors.white,
-            elevation: 8,
-            offset: const Offset(0, 48), // push dropdown below the icon
-            onOpened: () => setState(() => _isMenuOpen = true),
-            onCanceled: () => setState(() => _isMenuOpen = false),
-            onSelected: (value) {
-              setState(() => _isMenuOpen = false);
-              if (value == 'search') {
+          title: InkWell(
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => widget.chatData.type == ChatRoomType.GROUP
+                      ? GroupInfoPage(chatData: widget.chatData)
+                      : ChatInfoScreen(chatData: widget.chatData),
+                ),
+              );
+              if (result == 'search' && mounted) {
                 setState(() => _isSearching = true);
               }
-              // Handle other menu actions here
             },
-            itemBuilder: (context) => [
-              _buildMenuItem(
-                'search',
-                Icons.search,
-                'Search in conversation',
-                AppColors.textPrimary,
+            child: StreamBuilder<List<ChatSession>>(
+              stream: cubit.recentChatsStream,
+              builder: (context, snapshot) {
+                final chats = snapshot.data ?? [];
+                final chatData = chats.firstWhere(
+                  (c) => c.id == widget.chatData.id,
+                  orElse: () => widget.chatData,
+                );
+                return ChatRoomIcon(chatData: chatData, chatCubit: cubit);
+              },
+            ),
+          ),
+          actions: [
+            if (widget.chatData.type == ChatRoomType.PRIVATE) ...[
+              IconButton(
+                icon: Icon(
+                  Icons.phone_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () {
+                  context.read<CallCubit>().initiateCall(
+                    targetUserId: widget.chatData.phoneNumber,
+                    targetName: widget.chatData.name,
+                    targetAvatarUrl: widget.chatData.avatarUrl,
+                    isVideo: false,
+                  );
+                },
               ),
-              _buildMenuItem(
-                'mute',
-                Icons.notifications_off_outlined,
-                'Mute notification',
-                AppColors.textPrimary,
+              IconButton(
+                icon: Icon(
+                  Icons.videocam_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () {
+                  context.read<CallCubit>().initiateCall(
+                    targetUserId: widget.chatData.phoneNumber,
+                    targetName: widget.chatData.name,
+                    targetAvatarUrl: widget.chatData.avatarUrl,
+                  );
+                },
               ),
-              _buildMenuItem(
-                'block',
-                Icons.person_off_outlined,
-                'Block user',
-                Colors.red,
+            ],
+            PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_vert,
+                color: AppColors.textSecondary,
+                size: 24.resW,
               ),
-              _buildMenuItem(
-                'report',
-                Icons.flag_outlined,
-                'Report',
-                Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              _buildMenuItem(
-                'delete',
-                Icons.delete_outline,
-                'Delete chat',
-                Colors.red,
+              color: Colors.white,
+              elevation: 8,
+              offset: const Offset(0, 48), // push dropdown below the icon
+              onOpened: () => setState(() => _isMenuOpen = true),
+              onCanceled: () => setState(() => _isMenuOpen = false),
+              onSelected: (value) {
+                setState(() => _isMenuOpen = false);
+                if (value == 'search') {
+                  setState(() => _isSearching = true);
+                }
+                // Handle other menu actions here
+              },
+              itemBuilder: (context) => [
+                _buildMenuItem(
+                  'search',
+                  Icons.search,
+                  'Search in conversation',
+                  AppColors.textPrimary,
+                ),
+                _buildMenuItem(
+                  'mute',
+                  Icons.notifications_off_outlined,
+                  'Mute notification',
+                  AppColors.textPrimary,
+                ),
+                _buildMenuItem(
+                  'block',
+                  Icons.person_off_outlined,
+                  'Block user',
+                  Colors.red,
+                ),
+                _buildMenuItem(
+                  'report',
+                  Icons.flag_outlined,
+                  'Report',
+                  Colors.red,
+                ),
+                _buildMenuItem(
+                  'delete',
+                  Icons.delete_outline,
+                  'Delete chat',
+                  Colors.red,
+                ),
+              ],
+            ),
+          ],
+        ),
+        body: Stack(
+          children: [
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _isMenuOpen ? 0.3 : 1.0,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: BlocConsumer<ChatCubit, ChatState>(
+                      // Only rebuild the message list when messages actually change.
+                      // TypingUpdate, TypingUpdate → never triggers a message-list rebuild.
+                      buildWhen: (prev, curr) {
+                        if (curr is TypingUpdate) return false;
+                        if (curr is ChatRoomActive && prev is ChatRoomActive) {
+                          // Only rebuild if the messages list itself changed.
+                          return curr.messages != prev.messages ||
+                              curr.roomId != prev.roomId;
+                        }
+                        return true;
+                      },
+                      listenWhen: (prev, curr) =>
+                          curr is ChatRoomActive || curr is ChatLoading,
+                      listener: (context, state) {
+                        if (state is ChatRoomActive) {
+                          _scrollToBottom();
+                        }
+                      },
+                      builder: (context, state) {
+                        if (state is ChatLoading) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        // Strictly mapping to the localized Stream
+                        List<Message> displayMessages = [];
+                        if (state is ChatRoomActive) {
+                          displayMessages = state.messages.reversed.toList();
+                        }
+
+                        return ListView.builder(
+                          reverse:
+                              true, // Forces keyboard constraints up correctly (WhatsApp spec)
+                          controller: _scrollController,
+                          padding: EdgeInsets.symmetric(vertical: 16.resH),
+                          itemCount: displayMessages.length,
+                          itemBuilder: (context, index) {
+                            final msg = displayMessages[index];
+                            return Container(
+                              color: _highlightMessageId == msg.id
+                                  ? AppColors.primary.withOpacity(0.2)
+                                  : Colors.transparent,
+                              child: MessageBubbleWidget(
+                                message: msg,
+                                currentUserId: _currentUserId,
+                                isGroup:
+                                    widget.chatData.type == ChatRoomType.GROUP,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Bottom Input Bar
+                  ChatInputBar(
+                    onAttachmentTap: () => _showAttachmentSheet(context),
+                    onSendText: (text) {
+                      context.read<ChatCubit>().sendLocalMessage(
+                        MessageDraft(text: text),
+                      );
+                      _scrollToBottom();
+                    },
+                  ),
+                ],
+              ),
+            ), // AnimatedOpacity
+
+            if (_isSearching)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: BlocBuilder<ChatCubit, ChatState>(
+                  builder: (context, state) {
+                    List<Message> allMessages = [];
+                    if (state is ChatRoomActive) {
+                      allMessages = state.messages;
+                    }
+                    return ChatSearchBar(
+                      onClose: () => setState(() => _isSearching = false),
+                      onResultTap: (msg) => _scrollToMessage(msg, allMessages),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ), // Stack
+      ), // Scaffold
+    ); // PopScope
+  }
+}
+
+class ChatRoomIcon extends StatelessWidget {
+  const ChatRoomIcon({
+    super.key,
+    required this.chatData,
+    required this.chatCubit,
+  });
+
+  final ChatSession chatData;
+  final ChatCubit chatCubit;
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Stack(
+          children: [
+            CircleAvatar(
+              radius: 18.resR,
+              backgroundColor: AppColors.divider,
+              backgroundImage: chatData.avatarUrl.isNotEmpty
+                  ? CachedNetworkImageProvider(chatData.avatarUrl)
+                  : null,
+              child: chatData.avatarUrl.isEmpty
+                  ? (chatData.type == ChatRoomType.GROUP
+                        ? Icon(Icons.groups, color: AppColors.primary)
+                        : Text(
+                            chatData.name.isNotEmpty
+                                ? chatData.name[0].toUpperCase()
+                                : '?',
+                            style: AppTypography.subtitle1.copyWith(
+                              color: AppColors.primary,
+                            ),
+                          ))
+                  : null,
+            ),
+            if (chatData.isOnline && chatData.type == ChatRoomType.PRIVATE)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 10.resW,
+                  height: 10.resW,
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5.resW),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        SizedBox(width: 12.resW),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                chatData.name,
+                style: AppTypography.subtitle1.copyWith(color: Colors.black),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              TypingIndicatorWidget(
+                roomId: chatData.id,
+                roomType: chatData.type,
+                idleSubtitle: chatData.type == ChatRoomType.GROUP
+                    ? '${chatData.participants.length} participants'
+                    : (chatData.isOnline ? 'online' : 'offline'),
               ),
             ],
           ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: _isMenuOpen ? 0.3 : 1.0,
-            child: Column(
-              children: [
-                Expanded(
-              child: BlocConsumer<ChatCubit, ChatState>(
-                // Only rebuild the message list when messages actually change.
-                // TypingUpdate, TypingUpdate → never triggers a message-list rebuild.
-                buildWhen: (prev, curr) {
-                  if (curr is TypingUpdate) return false;
-                  if (curr is ChatRoomActive && prev is ChatRoomActive) {
-                    // Only rebuild if the messages list itself changed.
-                    return curr.messages != prev.messages ||
-                        curr.roomId != prev.roomId;
-                  }
-                  return true;
-                },
-                listenWhen: (prev, curr) =>
-                    curr is ChatRoomActive || curr is ChatLoading,
-                listener: (context, state) {
-                  if (state is ChatRoomActive) {
-                    _scrollToBottom();
-                  }
-                },
-                builder: (context, state) {
-                  if (state is ChatLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  // Strictly mapping to the localized Stream
-                  List<Message> displayMessages = [];
-                  if (state is ChatRoomActive) {
-                    displayMessages = state.messages.reversed.toList();
-                  }
-
-                  return ListView.builder(
-                    reverse:
-                        true, // Forces keyboard constraints up correctly (WhatsApp spec)
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(vertical: 16.resH),
-                    itemCount: displayMessages.length,
-                    itemBuilder: (context, index) {
-                      final msg = displayMessages[index];
-                      return Container(
-                        color: _highlightMessageId == msg.id 
-                            ? AppColors.primary.withOpacity(0.2) 
-                            : Colors.transparent,
-                        child: MessageBubbleWidget(
-                          message: msg,
-                          currentUserId: _currentUserId,
-                          isGroup: widget.chatData.type == ChatRoomType.GROUP,
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            // Bottom Input Bar
-            ChatInputBar(
-              onAttachmentTap: () => _showAttachmentSheet(context),
-              onSendText: (text) {
-                context.read<ChatCubit>().sendLocalMessage(
-                  MessageDraft(text: text),
-                );
-                _scrollToBottom();
-              },
-            ),
-          ],
-            ),
-          ), // AnimatedOpacity
-
-          if (_isSearching)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: BlocBuilder<ChatCubit, ChatState>(
-                builder: (context, state) {
-                  List<Message> allMessages = [];
-                  if (state is ChatRoomActive) {
-                    allMessages = state.messages;
-                  }
-                  return ChatSearchBar(
-                    onClose: () => setState(() => _isSearching = false),
-                    onResultTap: (msg) => _scrollToMessage(msg, allMessages),
-                  );
-                },
-              ),
-            ),
-        ],
-      ), // Stack
-    ), // Scaffold
-    ); // PopScope
+        ),
+      ],
+    );
   }
 }
