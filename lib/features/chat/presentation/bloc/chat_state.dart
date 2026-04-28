@@ -51,8 +51,15 @@ class ChatContactsSynced extends ChatState {
 class ChatRoomActive extends ChatState {
   final String roomId;
   final List<Message> messages;
+  /// IDs of users blocked by the current user. Part of state so the UI
+  /// rebuilds reactively via [BlocBuilder] without any [ValueNotifier].
+  final List<String> blockedUserIds;
 
-  const ChatRoomActive(this.roomId, this.messages);
+  const ChatRoomActive(
+    this.roomId,
+    this.messages, {
+    this.blockedUserIds = const [],
+  });
 
   /// Surgical update: copies the state, replacing only the provided fields.
   /// The [Equatable] props include [messages], so BlocBuilder rebuilds ONLY
@@ -60,15 +67,17 @@ class ChatRoomActive extends ChatState {
   ChatRoomActive copyWith({
     String? roomId,
     List<Message>? messages,
+    List<String>? blockedUserIds,
   }) {
     return ChatRoomActive(
       roomId ?? this.roomId,
       messages ?? this.messages,
+      blockedUserIds: blockedUserIds ?? this.blockedUserIds,
     );
   }
 
   @override
-  List<Object> get props => [roomId, messages];
+  List<Object> get props => [roomId, messages, blockedUserIds];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,4 +105,29 @@ class TypingUpdate extends ChatState {
 
   @override
   List<Object> get props => [roomId, typingUsers];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Block update — lightweight surgical state for block/unblock operations.
+//
+// Emitted after blockUser() / unblockUser() succeed. Contains the FULL
+// updated blocked-user list so any listening widget can rebuild selectively:
+//
+//   BlocBuilder<ChatCubit, ChatState>(
+//     buildWhen: (prev, curr) => curr is ChatBlockUpdated,
+//     builder: (ctx, state) {
+//       final blocked = state is ChatBlockUpdated ? state.blockedUserIds : [];
+//       ...
+//     },
+//   )
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ChatBlockUpdated extends ChatState {
+  /// The full list of blocked user IDs after the operation.
+  final List<String> blockedUserIds;
+
+  const ChatBlockUpdated(this.blockedUserIds);
+
+  @override
+  List<Object> get props => [blockedUserIds];
 }

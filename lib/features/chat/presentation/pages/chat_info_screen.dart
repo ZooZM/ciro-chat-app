@@ -10,7 +10,6 @@ import '../../../../core/theme/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/entities/chat_session.dart';
 import '../../domain/entities/message.dart';
-import '../bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import 'dart:math' as math;
 
@@ -543,57 +542,65 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _buildDangerZone() {
-    final cubit = context.watch<ChatCubit>();
-    final targetId = widget.chatData.participants.firstWhere(
-      (id) => id != cubit.currentUserId,
-      orElse: () => '',
-    );
-    final isBlocked = cubit.isUserBlocked(targetId);
+    // BlocBuilder scoped to block state changes only.
+    // buildWhen ensures this section rebuilds ONLY when block status changes,
+    // not on every message or typing update.
+    return BlocBuilder<ChatCubit, ChatState>(
+      buildWhen: (prev, curr) =>
+          curr is ChatBlockUpdated ||
+          (curr is ChatRoomActive && prev is ChatRoomActive &&
+              curr.blockedUserIds != prev.blockedUserIds),
+      builder: (context, state) {
+        final cubit = context.read<ChatCubit>();
+        final targetId = widget.chatData.participants.firstWhere(
+          (id) => id != cubit.currentUserId,
+          orElse: () => '',
+        );
+        final isBlocked = cubit.isUserBlocked(targetId);
 
-    return _buildContainerSection(
-      padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
-      child: Column(
-        children: [
-          _buildOptionTile(
-            'Delete chat content',
-            Icons.info_outline,
-            AppColors.error,
-            isDanger: true,
+        return _buildContainerSection(
+          padding: EdgeInsets.symmetric(vertical: AppConstants.spacingSm.resH),
+          child: Column(
+            children: [
+              _buildOptionTile(
+                'Delete chat content',
+                Icons.info_outline,
+                AppColors.error,
+                isDanger: true,
+              ),
+              _buildOptionTile(
+                isBlocked ? 'Unblock user' : 'Block user',
+                Icons.person_off_outlined,
+                AppColors.error,
+                isDanger: true,
+                onTap: () => _handleBlockToggle(isBlocked, targetId),
+              ),
+              _buildOptionTile(
+                'Report',
+                Icons.flag_outlined,
+                AppColors.error,
+                isDanger: true,
+              ),
+              _buildOptionTile(
+                'Delete chat',
+                Icons.delete_outline,
+                AppColors.error,
+                isDanger: true,
+              ),
+            ],
           ),
-          _buildOptionTile(
-            isBlocked ? 'Unblock user' : 'Block user',
-            Icons.person_off_outlined,
-            AppColors.error,
-            isDanger: true,
-            onTap: () => _handleBlockToggle(isBlocked),
-          ),
-          _buildOptionTile(
-            'Report',
-            Icons.flag_outlined,
-            AppColors.error,
-            isDanger: true,
-          ),
-          _buildOptionTile(
-            'Delete chat',
-            Icons.delete_outline,
-            AppColors.error,
-            isDanger: true,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _handleBlockToggle(bool isCurrentlyBlocked) async {
+  void _handleBlockToggle(bool isCurrentlyBlocked, String targetId) async {
     final cubit = context.read<ChatCubit>();
-    final targetId = widget.chatData.participants.firstWhere(
-      (id) => id != cubit.currentUserId,
-      orElse: () => '',
-    );
 
     if (isCurrentlyBlocked) {
+      // Unblock — no confirmation dialog needed.
       await cubit.unblockUser(targetId);
-      if (mounted) setState(() {});
+      // No setState() needed — BlocBuilder reacts to the emitted state change.
     } else {
       final confirm = await showDialog<bool>(
         context: context,
@@ -620,7 +627,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
 
       if (confirm == true && mounted) {
         await cubit.blockUser(targetId);
-        if (mounted) setState(() {});
+        // No setState() needed — BlocBuilder reacts to the emitted state change.
       }
     }
   }
