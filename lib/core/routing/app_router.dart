@@ -1,4 +1,5 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
@@ -43,7 +44,7 @@ final GoRouter appRouter = GoRouter(
   refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),
   // Pure state-driven redirect: reads AuthCubit synchronously — no async,
   // no stale boolean flags, no race conditions.
-  redirect: (context, state) {
+  redirect: (context, state) async {
     // Remove the native splash on the very first routing evaluation.
     FlutterNativeSplash.remove();
 
@@ -64,6 +65,7 @@ final GoRouter appRouter = GoRouter(
     // ── RULE 2: Authenticated ─────────────────────────────────────────────────
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
+      await context.read<ChatCubit>().hydrateRooms();
       if (isAuthRoute) return '/home';
       return null;
     }

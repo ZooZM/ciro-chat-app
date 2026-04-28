@@ -3,7 +3,19 @@ import 'package:equatable/equatable.dart';
 
 enum MessageStatus { pending, sent, delivered, read, error }
 
-enum MessageType { text, image, file, voiceNote, contact, system, location, audio, poll, event, video }
+enum MessageType {
+  text,
+  image,
+  file,
+  voiceNote,
+  contact,
+  system,
+  location,
+  audio,
+  poll,
+  event,
+  video,
+}
 
 /// Maps a raw string from SQLite / socket payload to a [MessageType].
 /// Falls back to [MessageType.text] for any unknown / null value.
@@ -172,18 +184,46 @@ class Message extends Equatable {
       metadata: parsedMeta,
     );
   }
-
+  factory Message.fromNetworkMap(Map<String, dynamic> map) {
+    Map<String, dynamic>? parsedMeta;
+    final rawMeta = map['metadata'] as String?;
+    if (rawMeta != null && rawMeta.isNotEmpty) {
+      try {
+        parsedMeta = jsonDecode(rawMeta) as Map<String, dynamic>;
+      } catch (_) {
+        parsedMeta = null;
+      }
+    }
+    Map<String, dynamic> sender = map['senderId'];
+    return Message(
+      id: map['_id'] ?? '',
+      clientMessageId: map['clientMessageId'] ?? map['id'] ?? '',
+      roomId: map['chatRoomId'] ?? '',
+      senderId: sender['_id'] ?? '',
+      text: map['content'] ?? '',
+      timestamp: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
+      status: MessageStatus.values.firstWhere(
+        (e) => e.name == map['status'],
+        orElse: () => MessageStatus.pending,
+      ),
+      type: messageTypeFromString(map['messageType'] as String?),
+      fileUrl: (map['fileUrl'] as String?)?.isNotEmpty == true
+          ? map['fileUrl'] as String
+          : null,
+      metadata: parsedMeta,
+    );
+  }
   @override
   List<Object?> get props => [
-        id,
-        clientMessageId,
-        roomId,
-        senderId,
-        text,
-        timestamp,
-        status,
-        type,
-        fileUrl,
-        metadata,
-      ];
+    id,
+    clientMessageId,
+    roomId,
+    senderId,
+    text,
+    timestamp,
+    status,
+    type,
+    fileUrl,
+    metadata,
+  ];
 }

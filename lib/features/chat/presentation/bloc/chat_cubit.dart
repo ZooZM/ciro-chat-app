@@ -257,7 +257,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   // ── Room lifecycle ──────────────────────────────────────────────────────────
 
-  void openRoom(String roomId, {ChatSession? contact}) {
+  void openRoom(String roomId, {ChatSession? contact, ChatSession? room}) async {
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
@@ -265,6 +265,29 @@ class ChatCubit extends Cubit<ChatState> {
       return;
     }
     if (_activeRoomId == roomId) return;
+
+    if (room != null && room.lastMessageId.isNotEmpty) {
+      final messages = await _localDataSource.getRoomMessages(roomId);
+      final localLastMsgId = messages.isNotEmpty ? messages.first.id : null;
+      
+      if (localLastMsgId != room.lastMessageId) {
+        _chatRepository.fetchRoomMessages(roomId).then((res) {
+          res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
+            for (final msg in newMsgs.reversed) {
+              await _localDataSource.saveMessage(msg, incrementUnread: false);
+            }
+          });
+        });
+      }
+    } else {
+      _chatRepository.fetchRoomMessages(roomId).then((res) {
+        res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
+          for (final msg in newMsgs.reversed) {
+            await _localDataSource.saveMessage(msg, incrementUnread: false);
+          }
+        });
+      });
+    }
 
     _pendingContact = null;
     _activeRoomId = roomId;

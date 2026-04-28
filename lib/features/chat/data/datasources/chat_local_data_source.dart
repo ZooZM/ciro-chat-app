@@ -136,6 +136,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       id                  TEXT PRIMARY KEY,
       name                TEXT,
       lastMessage         TEXT,
+      lastMessageId       TEXT,
       timestamp           TEXT,
       unreadCount         INTEGER,
       isOnline            INTEGER,
@@ -181,8 +182,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      // Version 9: adds statuses table.
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -202,16 +202,23 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               "ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'",
             );
           } catch (e) {
-            debugPrint(
-              '[LocalData] Migration error or columns already exist: $e',
-            );
+            debugPrint('Migration v8 error: $e');
           }
         }
         if (oldVersion < 9) {
           try {
             await db.execute(_statusesSchema);
           } catch (e) {
-            debugPrint('[LocalData] Migration error for statuses: $e');
+            debugPrint('Migration v9 error: $e');
+          }
+        }
+        if (oldVersion < 10) {
+          try {
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN lastMessageId TEXT DEFAULT ''",
+            );
+          } catch (e) {
+            debugPrint('Migration v10 error: $e');
           }
         }
       },
@@ -560,13 +567,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.rawInsert(
       '''
-      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus, type, participants, admins)
-      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO rooms (id, name, lastMessage, lastMessageId, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus, type, participants, admins)
+      VALUES (?, ?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?, ?, ?, ?)
     ''',
       [
         room.id,
         room.name,
         room.lastMessage,
+        room.lastMessageId,
         room.timestamp.toIso8601String(),
         room.id,
         room.isOnline ? 1 : 0,
@@ -600,6 +608,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         r.id,
         COALESCE(NULLIF(c.name, ''), NULLIF(r.name, ''), r.phoneNumber) AS name,
         r.lastMessage,
+        r.lastMessageId,
         r.timestamp,
         r.unreadCount,
         r.isOnline,
@@ -700,6 +709,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     if (!_contactsController.isClosed) {
       _contactsController.add(maps.map((e) => ChatSession.fromMap(e)).toList());
     }
+    await _dispatchRecentChatsUpdate();
   }
 
   // ── resetUnreadCount ────────────────────────────────────────────────────────

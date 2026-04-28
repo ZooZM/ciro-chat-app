@@ -59,7 +59,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       // Cubit can call createRoom(contact.id) at that moment.
       cubit.openRoom('', contact: widget.chatData);
     } else {
-      cubit.openRoom(widget.chatData.id);
+      cubit.openRoom(widget.chatData.id, room: widget.chatData);
       // Mark any delivered-but-unread messages as read now that the user is here.
       // Fire-and-forget: the StreamBuilder will reactively update the UI.
       cubit.markRoomMessagesRead(widget.chatData.id).ignore();

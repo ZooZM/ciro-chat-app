@@ -29,6 +29,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     // Authenticated and the socket is already connected with a fresh token.
     // We only need to trigger a background room hydration from the API.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      debugPrint(
+        'ChatListScreen: isHydrationComplete: ${context.read<ChatCubit>().isHydrationComplete}',
+      );
       if (mounted && !context.read<ChatCubit>().isHydrationComplete) {
         context.read<ChatCubit>().hydrateRooms();
       }
@@ -43,62 +46,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 16.resW,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // ── Bubble icon — left side of logo ─────────────────────────────
-            Image.asset(
-              AppLogo.assetPath,
-              width: 80,
-              height: 80,
-              fit: BoxFit.contain,
-            ),
-            // ── CIRO / CONNECT stacked text — right side of logo ─────────────
-            Transform.translate(
-              offset: Offset(-6.resW, 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CIRO',
-                    style: AppTypography.logoMark.copyWith(
-                      fontSize: 16,
-                      height: 1.1,
-                      letterSpacing: 2,
-                      color: const Color(0xFF222222),
-                    ),
-                  ),
-                  Text(
-                    'CONNECT',
-                    style: AppTypography.logoTagline.copyWith(
-                      fontSize: 8,
-                      height: 1.1,
-                      letterSpacing: 2.5,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  // ── "Connecting..." subtle status below branding ────────────
-                  ValueListenableBuilder<bool>(
-                    valueListenable: getIt<SocketService>().isConnectedNotifier,
-                    builder: (context, isConnected, _) {
-                      if (isConnected) return const SizedBox.shrink();
-                      return Text(
-                        'Connecting...',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        title: ChatListAppBar(),
         actions: [
           IconButton(
             icon: Icon(
@@ -153,9 +101,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             fontWeight: FontWeight.w700,
             fontSize: 11,
           ),
-          unselectedLabelStyle: AppTypography.caption.copyWith(
-            fontSize: 11,
-          ),
+          unselectedLabelStyle: AppTypography.caption.copyWith(fontSize: 11),
           elevation: 0,
           items: [
             // ── 1. Chats — logo asset ──────────────────────────────────────
@@ -223,10 +169,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: 16.resW,
-            vertical: 8.resH,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 8.resH),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -311,7 +254,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     stream: context.read<ChatCubit>().allTypingUsersStream,
                     builder: (context, typingSnapshot) {
                       final typingMap = typingSnapshot.data ?? {};
-                      
+
                       return ListView.separated(
                         itemCount: activeChats.length,
                         separatorBuilder: (context, index) => Divider(
@@ -321,8 +264,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         ),
                         itemBuilder: (context, index) {
                           final chat = activeChats[index];
-                          final isTyping = (typingMap[chat.id]?.isNotEmpty ?? false);
-                          
+                          final isTyping =
+                              (typingMap[chat.id]?.isNotEmpty ?? false);
+
                           return ChatTileWidget(
                             key: ValueKey(chat.id),
                             chat: chat,
@@ -341,6 +285,70 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 },
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ChatListAppBar extends StatelessWidget {
+  const ChatListAppBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // ── Bubble icon — left side of logo ─────────────────────────────
+        Image.asset(
+          AppLogo.assetPath,
+          width: 80,
+          height: 80,
+          fit: BoxFit.contain,
+        ),
+        // ── CIRO / CONNECT stacked text — right side of logo ─────────────
+        Transform.translate(
+          offset: Offset(-6.resW, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CIRO',
+                style: AppTypography.logoMark.copyWith(
+                  fontSize: 16,
+                  height: 1.1,
+                  letterSpacing: 2,
+                  color: const Color(0xFF222222),
+                ),
+              ),
+              Text(
+                'CONNECT',
+                style: AppTypography.logoTagline.copyWith(
+                  fontSize: 8,
+                  height: 1.1,
+                  letterSpacing: 2.5,
+                  color: AppColors.primary,
+                ),
+              ),
+              // ── "Connecting..." subtle status below branding ────────────
+              ValueListenableBuilder<bool>(
+                valueListenable: getIt<SocketService>().isConnectedNotifier,
+                builder: (context, isConnected, _) {
+                  if (isConnected) return const SizedBox.shrink();
+                  return Text(
+                    'Connecting...',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ],

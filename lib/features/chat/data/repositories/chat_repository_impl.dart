@@ -98,4 +98,9 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<Either<Failure, List<String>>> getBlockList() {
     return remoteDataSource.getBlockList();
   }
+
+  @override
+  Future<Either<Failure, List<Message>>> fetchRoomMessages(String roomId) {
+    return remoteDataSource.fetchRoomMessages(roomId);
+  }
 }
