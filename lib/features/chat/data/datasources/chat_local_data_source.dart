@@ -158,6 +158,18 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     )
   ''';
 
+  static const _statusesSchema = '''
+    CREATE TABLE statuses(
+      id           TEXT PRIMARY KEY,
+      author_name  TEXT,
+      author_avatar TEXT,
+      timestamp    INTEGER,
+      expires_at   INTEGER,
+      is_viewed    INTEGER DEFAULT 0,
+      is_mine      INTEGER DEFAULT 0
+    )
+  ''';
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -168,12 +180,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      // Version 8: adds type, participants, admins columns to rooms table.
-      version: 8,
+      // Version 9: adds statuses table.
+      version: 9,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
+        await db.execute(_statusesSchema);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 8) {
@@ -183,6 +196,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             await db.execute("ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'");
           } catch (e) {
             debugPrint('[LocalData] Migration error or columns already exist: $e');
+          }
+        }
+        if (oldVersion < 9) {
+          try {
+            await db.execute(_statusesSchema);
+          } catch (e) {
+            debugPrint('[LocalData] Migration error for statuses: $e');
           }
         }
       },
@@ -723,6 +743,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await db.delete('messages');
     await db.delete('rooms');
     await db.delete('contacts');
+    await db.delete('statuses');
 
     for (final controller in _roomStreamControllers.values) {
       if (!controller.isClosed) {

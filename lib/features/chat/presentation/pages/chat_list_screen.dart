@@ -11,6 +11,7 @@ import '../widgets/chat_tile_widget.dart';
 import '../bloc/chat_cubit.dart';
 import '../../../../core/theme/app_logo.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
+import '../../../status/presentation/pages/updates_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -128,132 +129,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 16.resW,
-              vertical: 8.resH,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Chats',
-                  style: AppTypography.subtitle1.copyWith(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(width: 12.resW),
-                // Pill Search Bar
-                Expanded(
-                  child: Container(
-                    height: 40.resH,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20.resR),
-                      border: Border.all(
-                        color: AppColors.primary.withOpacity(0.5),
-                        width: 1.resW,
-                      ),
-                    ),
-                    padding: EdgeInsets.symmetric(horizontal: 12.resW),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.search,
-                          color: AppColors.textSecondary,
-                          size: 20.resW,
-                        ),
-                        SizedBox(width: 8.resW),
-                        Text(
-                          'Search',
-                          style: AppTypography.body1.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: BlocBuilder<ChatCubit, ChatState>(
-              builder: (context, state) {
-                return StreamBuilder<List<ChatSession>>(
-                  stream: context
-                      .read<ChatCubit>()
-                      .recentChatsStream, // Direct pure SQLite hook!
-                  builder: (context, snapshot) {
-                    // Offline-First UX: Prevent 1-frame flashes while SQLite boots or network spins
-                    if (snapshot.connectionState == ConnectionState.waiting &&
-                        !snapshot.hasData) {
-                      return const SizedBox.shrink(); // Silent buffer
-                    }
-
-                    final activeChats = snapshot.data ?? [];
-
-                    // Do NOT show empty state permanently unless DB is truly empty AND Hydration natively finished!
-                    if (activeChats.isEmpty) {
-                      if (!context.read<ChatCubit>().isHydrationComplete) {
-                        return const Center(
-                          child: CircularProgressIndicator(),
-                        ); // Subtle fallback if zero cache
-                      }
-
-                      return Center(
-                        child: Text(
-                          'No active chats yet.\nTap the + button to start one!',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.body1.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return StreamBuilder<Map<String, Set<String>>>(
-                      stream: context.read<ChatCubit>().allTypingUsersStream,
-                      builder: (context, typingSnapshot) {
-                        final typingMap = typingSnapshot.data ?? {};
-                        
-                        return ListView.separated(
-                          itemCount: activeChats.length,
-                          separatorBuilder: (context, index) => Divider(
-                            height: 1,
-                            color: AppColors.divider.withOpacity(0.5),
-                            indent: 80.resW, // Lines up under names
-                          ),
-                          itemBuilder: (context, index) {
-                            final chat = activeChats[index];
-                            final isTyping = (typingMap[chat.id]?.isNotEmpty ?? false);
-                            
-                            return ChatTileWidget(
-                              key: ValueKey(chat.id),
-                              chat: chat,
-                              currentUserId: context
-                                  .read<ChatCubit>()
-                                  .currentUserId,
-                              isTyping: isTyping,
-                              onTap: () {
-                                context.push('/chat_room', extra: chat);
-                              },
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+      body: _buildBody(context),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
@@ -327,12 +203,147 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          context.push('/home/create_group');
-        },
-        child: const Icon(Icons.group_add),
-      ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: () {
+                context.push('/home/create_group');
+              },
+              child: const Icon(Icons.group_add),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_currentIndex == 1) {
+      return const UpdatesScreen();
+    }
+    // Default to Chat List
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 16.resW,
+            vertical: 8.resH,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'Chats',
+                style: AppTypography.subtitle1.copyWith(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(width: 12.resW),
+              // Pill Search Bar
+              Expanded(
+                child: Container(
+                  height: 40.resH,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20.resR),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.5),
+                      width: 1.resW,
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 12.resW),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.search,
+                        color: AppColors.textSecondary,
+                        size: 20.resW,
+                      ),
+                      SizedBox(width: 8.resW),
+                      Text(
+                        'Search',
+                        style: AppTypography.body1.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: BlocBuilder<ChatCubit, ChatState>(
+            builder: (context, state) {
+              return StreamBuilder<List<ChatSession>>(
+                stream: context
+                    .read<ChatCubit>()
+                    .recentChatsStream, // Direct pure SQLite hook!
+                builder: (context, snapshot) {
+                  // Offline-First UX: Prevent 1-frame flashes while SQLite boots or network spins
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const SizedBox.shrink(); // Silent buffer
+                  }
+
+                  final activeChats = snapshot.data ?? [];
+
+                  // Do NOT show empty state permanently unless DB is truly empty AND Hydration natively finished!
+                  if (activeChats.isEmpty) {
+                    if (!context.read<ChatCubit>().isHydrationComplete) {
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      ); // Subtle fallback if zero cache
+                    }
+
+                    return Center(
+                      child: Text(
+                        'No active chats yet.\nTap the + button to start one!',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.body1.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return StreamBuilder<Map<String, Set<String>>>(
+                    stream: context.read<ChatCubit>().allTypingUsersStream,
+                    builder: (context, typingSnapshot) {
+                      final typingMap = typingSnapshot.data ?? {};
+                      
+                      return ListView.separated(
+                        itemCount: activeChats.length,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          color: AppColors.divider.withOpacity(0.5),
+                          indent: 80.resW, // Lines up under names
+                        ),
+                        itemBuilder: (context, index) {
+                          final chat = activeChats[index];
+                          final isTyping = (typingMap[chat.id]?.isNotEmpty ?? false);
+                          
+                          return ChatTileWidget(
+                            key: ValueKey(chat.id),
+                            chat: chat,
+                            currentUserId: context
+                                .read<ChatCubit>()
+                                .currentUserId,
+                            isTyping: isTyping,
+                            onTap: () {
+                              context.push('/chat_room', extra: chat);
+                            },
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

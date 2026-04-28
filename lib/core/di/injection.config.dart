@@ -38,6 +38,15 @@ import '../../features/payment/data/repositories/payment_repository_impl.dart'
 import '../../features/payment/domain/repositories/payment_repository.dart'
     as _i639;
 import '../../features/payment/presentation/bloc/payment_cubit.dart' as _i420;
+import '../../features/status/data/datasources/status_local_data_source.dart'
+    as _i137;
+import '../../features/status/data/datasources/status_remote_data_source.dart'
+    as _i483;
+import '../../features/status/data/repositories/status_repository_impl.dart'
+    as _i539;
+import '../../features/status/domain/repositories/status_repository.dart'
+    as _i171;
+import '../../features/status/presentation/bloc/status_cubit.dart' as _i484;
 import '../../features/video_call/data/datasources/video_call_remote_data_source.dart'
     as _i5;
 import '../../features/video_call/data/repositories/livekit_video_call_repository_impl.dart'
@@ -82,11 +91,20 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
+    gh.lazySingleton<_i171.StatusRepository>(
+      () => _i539.StatusRepositoryImpl(
+        localDataSource: gh<_i137.StatusLocalDataSource>(),
+        remoteDataSource: gh<_i483.StatusRemoteDataSource>(),
+      ),
+    );
     gh.lazySingleton<_i104.CallCubit>(
       () => _i104.CallCubit(gh<_i917.SocketService>()),
     );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
+    );
+    gh.factory<_i484.StatusCubit>(
+      () => _i484.StatusCubit(gh<_i171.StatusRepository>()),
     );
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
