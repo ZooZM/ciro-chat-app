@@ -1,4 +1,5 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
@@ -180,6 +181,10 @@ final GoRouter appRouter = GoRouter(
           livekitToken: data['livekitToken'] as String? ?? '',
         );
       },
+    ),
+    GoRoute(
+      path: '/updates',
+      builder: (context, state) => const UpdatesScreen(),
     ),
   ],
 );
