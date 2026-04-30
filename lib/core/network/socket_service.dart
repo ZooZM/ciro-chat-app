@@ -51,6 +51,9 @@ class SocketService {
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
 
+  /// FR-022: Fired when someone deletes a message for everyone.
+  void Function(String clientMessageId)? onMessageDeleted;
+
   /// Connects to the NestJS WebSocket Gateway.
   /// ONLY call this after the backend has definitively verified the token
   /// (i.e., inside AuthCubit after checkAuthStatus() or verifyOtp() succeeds).
@@ -195,6 +198,17 @@ class SocketService {
       debugPrint('[STATUS] statusReceived: $data');
       onStatusReceived?.call(data as Map<String, dynamic>);
     });
+
+    // ── FR-022: Message deletion ──────────────────────────────────────────
+    _socket?.on('messageDeleted', (data) {
+      debugPrint('[DELETE] messageDeleted: $data');
+      if (data is Map<String, dynamic>) {
+        final clientMsgId = data['clientMessageId']?.toString() ?? '';
+        if (clientMsgId.isNotEmpty) {
+          onMessageDeleted?.call(clientMsgId);
+        }
+      }
+    });
   }
 
   // ── Chat emitters ─────────────────────────────────────────────────────────
@@ -292,6 +306,11 @@ class SocketService {
 
   void notifyStatusViewed(String statusId) {
     _socket?.emit('statusViewed', {'statusId': statusId});
+  }
+
+  // ── FR-022: Message Deletion ─────────────────────────────────────────────
+  void deleteMessageForEveryone(String clientMessageId) {
+    _socket?.emit('deleteForEveryone', {'clientMessageId': clientMessageId});
   }
 
   void disconnect() {

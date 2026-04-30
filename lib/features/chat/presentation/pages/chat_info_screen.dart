@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
+import 'shared_media_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -296,23 +297,33 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               right: AppConstants.spacingMd.resW,
               bottom: AppConstants.spacingMd.resH * 0.75,
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Media, links and documents',
-                  style: AppTypography.body2.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SharedMediaScreen(roomId: widget.chatData.id),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textHint,
-                  size: 22.resW,
-                ),
-              ],
+                );
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Media, links and documents',
+                    style: AppTypography.body2.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textHint,
+                    size: 22.resW,
+                  ),
+                ],
+              ),
             ),
           ),
           // Horizontal Images

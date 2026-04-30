@@ -112,6 +112,36 @@ class MessageBubbleWidget extends StatelessWidget {
       return _buildSystemBubble(context);
     }
 
+    // FR-022: Render deleted placeholder instead of content.
+    if (message.isDeleted) {
+      return Align(
+        alignment: _isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+          padding: EdgeInsets.symmetric(horizontal: 14.resW, vertical: 10.resH),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: _borderRadius(),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, size: 14.resW, color: AppColors.textSecondary),
+              SizedBox(width: 6.resW),
+              Text(
+                'This message was deleted',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final bubble = Container(
       margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
       constraints: BoxConstraints(
@@ -161,7 +191,7 @@ class MessageBubbleWidget extends StatelessWidget {
       ),
     );
 
-    return Align(
+    final aligned = Align(
       alignment: _isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: _isMine && message.status == MessageStatus.error
           ? Row(
@@ -181,6 +211,57 @@ class MessageBubbleWidget extends StatelessWidget {
               ],
             )
           : bubble,
+    );
+
+    // FR-022: Long-press menu for delete options.
+    return GestureDetector(
+      onLongPress: () => _showDeleteMenu(context),
+      child: aligned,
+    );
+  }
+
+  void _showDeleteMenu(BuildContext context) {
+    final cubit = context.read<ChatCubit>();
+    final canDeleteForEveryone = _isMine &&
+        DateTime.now().difference(message.timestamp).inHours < 1;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: const Text('Delete for me'),
+                onTap: () {
+                  Navigator.pop(context);
+                  cubit.deleteMessageForMe(message.clientMessageId);
+                },
+              ),
+              if (canDeleteForEveryone)
+                ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete for everyone'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    cubit.deleteMessageForEveryone(message.clientMessageId);
+                  },
+                ),
+              ListTile(
+                leading: Icon(Icons.cancel_outlined, color: AppColors.textSecondary),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

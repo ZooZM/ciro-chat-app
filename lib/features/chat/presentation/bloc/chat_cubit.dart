@@ -156,6 +156,11 @@ class ChatCubit extends Cubit<ChatState> {
       syncPendingMessages().ignore();
     };
 
+    // FR-022: Recipient receives a "delete for everyone" notification.
+    _socketService.onMessageDeleted = (clientMessageId) {
+      _handleDeletedMessage(clientMessageId).ignore();
+    };
+
     _socketService.onUserTyping = (roomId, userId, phoneNumber, isTyping) {
       final identifier = phoneNumber.isNotEmpty ? phoneNumber : userId;
       if (identifier.isEmpty) return;
@@ -451,7 +456,7 @@ class ChatCubit extends Cubit<ChatState> {
         _pendingContact = null;
 
         _socketService.joinRoom(roomId);
-        await Future.delayed(const Duration(milliseconds: 300));
+        // FR-021: No artificial delay — socket join is synchronous registration.
 
         _localDataSource.resetUnreadCount(roomId);
         _roomStreamSub?.cancel();
@@ -1569,5 +1574,41 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<List<Message>> getSharedMedia(String roomId) async {
     return _localDataSource.getSharedMedia(roomId);
+  }
+
+  Future<List<Message>> getSharedLinks(String roomId) async {
+    return _localDataSource.getSharedLinks(roomId);
+  }
+
+  Future<List<Message>> getSharedDocs(String roomId) async {
+    return _localDataSource.getSharedDocs(roomId);
+  }
+
+  Future<Map<String, int>> getMediaCount(String roomId) async {
+    return _localDataSource.getMediaCount(roomId);
+  }
+
+  // ── FR-022: Message Deletion ─────────────────────────────────────────────
+
+  /// Deletes a message locally only ("Delete for me").
+  Future<void> deleteMessageForMe(String clientMessageId) async {
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Stream refresh is triggered inside markMessageDeleted.
+  }
+
+  /// Deletes a message for everyone — emits socket event and marks locally.
+  /// Only works within 1 hour of the message timestamp.
+  Future<void> deleteMessageForEveryone(String clientMessageId) async {
+    // Optimistic local update first.
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Emit socket event so the server + recipient are notified.
+    _socketService.deleteMessageForEveryone(clientMessageId);
+  }
+
+  /// Called when we receive a `messageDeleted` socket event from the server.
+  /// Marks the message as deleted in local DB and updates state.
+  Future<void> _handleDeletedMessage(String clientMessageId) async {
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Stream watcher will auto-emit new state.
   }
 }

@@ -72,6 +72,19 @@ abstract class ChatLocalDataSource {
 
   Future<List<Message>> searchMessages(String roomId, String query);
   Future<List<Message>> getSharedMedia(String roomId);
+
+  /// FR-022: Soft-delete a message in local DB — sets is_deleted = 1.
+  Future<void> markMessageDeleted(String clientMessageId);
+
+  /// FR-024: Returns messages containing URLs (for Links tab).
+  Future<List<Message>> getSharedLinks(String roomId);
+
+  /// FR-024: Returns messages where type = 'file' (for Docs tab).
+  Future<List<Message>> getSharedDocs(String roomId);
+
+  /// FR-024: Returns photo/video count summary for ChatInfoScreen.
+  Future<Map<String, int>> getMediaCount(String roomId);
+
   Future<void> updateUserOnlineStatus(String userId, bool isOnline);
 }
 
@@ -148,7 +161,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       status            TEXT,
       type              TEXT DEFAULT 'text',
       file_url          TEXT DEFAULT '',
-      metadata          TEXT DEFAULT ''
+      metadata          TEXT DEFAULT '',
+      is_deleted        INTEGER DEFAULT 0
     )
   ''';
 
@@ -203,7 +217,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -246,6 +260,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             );
           } catch (e) {
             debugPrint('Migration v10 error: $e');
+          }
+        }
+        if (oldVersion < 11) {
+          try {
+            await db.execute(
+              'ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0',
+            );
+          } catch (e) {
+            debugPrint('Migration v11 error: $e');
           }
         }
       },
@@ -936,5 +959,81 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp DESC',
     );
     return maps.map((map) => Message.fromMap(map)).toList();
+  }
+
+  // ── FR-022: Soft delete ──────────────────────────────────────────────────
+
+  @override
+  Future<void> markMessageDeleted(String clientMessageId) async {
+    final db = _db;
+    if (db == null) return;
+    await db.update(
+      'messages',
+      {'is_deleted': 1, 'text': ''},
+      where: 'client_message_id = ?',
+      whereArgs: [clientMessageId],
+    );
+    // Refresh stream for the affected room
+    final rows = await db.query(
+      'messages',
+      columns: ['room_id'],
+      where: 'client_message_id = ?',
+      whereArgs: [clientMessageId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final roomId = rows.first['room_id'] as String;
+      await _dispatchUpdateForRoom(roomId);
+    }
+  }
+
+  // ── FR-024: Shared links, docs & counts ─────────────────────────────────
+
+  @override
+  Future<List<Message>> getSharedLinks(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+    // Match messages whose text contains a URL
+    final maps = await db.query(
+      'messages',
+      where: "room_id = ? AND text LIKE '%http%' AND is_deleted = 0",
+      whereArgs: [roomId],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => Message.fromMap(m)).toList();
+  }
+
+  @override
+  Future<List<Message>> getSharedDocs(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+    final maps = await db.query(
+      'messages',
+      where: 'room_id = ? AND type = ? AND is_deleted = 0',
+      whereArgs: [roomId, MessageType.file.name],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => Message.fromMap(m)).toList();
+  }
+
+  @override
+  Future<Map<String, int>> getMediaCount(String roomId) async {
+    final db = _db;
+    if (db == null) return {'photos': 0, 'videos': 0};
+    final photoCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
+            [roomId, MessageType.image.name],
+          ),
+        ) ??
+        0;
+    final videoCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
+            [roomId, MessageType.video.name],
+          ),
+        ) ??
+        0;
+    return {'photos': photoCount, 'videos': videoCount};
   }
 }

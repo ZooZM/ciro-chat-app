@@ -101,6 +101,9 @@ class Message extends Equatable {
   ///   contact    : { contactName, contactPhone }
   final Map<String, dynamic>? metadata;
 
+  /// FR-022: True if this message has been soft-deleted ("This message was deleted").
+  final bool isDeleted;
+
   const Message({
     required this.id,
     required this.clientMessageId,
@@ -112,6 +115,7 @@ class Message extends Equatable {
     this.type = MessageType.text,
     this.fileUrl,
     this.metadata,
+    this.isDeleted = false,
   });
 
   Message copyWith({
@@ -125,6 +129,7 @@ class Message extends Equatable {
     MessageType? type,
     String? fileUrl,
     Map<String, dynamic>? metadata,
+    bool? isDeleted,
   }) {
     return Message(
       id: id ?? this.id,
@@ -137,6 +142,7 @@ class Message extends Equatable {
       type: type ?? this.type,
       fileUrl: fileUrl ?? this.fileUrl,
       metadata: metadata ?? this.metadata,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
@@ -152,6 +158,7 @@ class Message extends Equatable {
       'type': messageTypeToString(type),
       'file_url': fileUrl ?? '',
       'metadata': metadata != null ? jsonEncode(metadata) : '',
+      'is_deleted': isDeleted ? 1 : 0,
     };
   }
 
@@ -182,6 +189,7 @@ class Message extends Equatable {
           ? map['file_url'] as String
           : null,
       metadata: parsedMeta,
+      isDeleted: (map['is_deleted'] as int? ?? 0) == 1,
     );
   }
   factory Message.fromNetworkMap(Map<String, dynamic> map) {
@@ -225,5 +233,6 @@ class Message extends Equatable {
     type,
     fileUrl,
     metadata,
+    isDeleted,
   ];
 }
