@@ -91,9 +91,9 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Frontend Implementation
 
-- [ ] T131 Update `createPrivateChatRoom()` to accept optional `firstMessage` parameter and parse response for both `roomId` and `message` in `lib/features/chat/data/datasources/chat_remote_data_source.dart`
-- [ ] T132 Remove `Future.delayed(const Duration(milliseconds: 300))` from `_ensureRoom()` and use atomic resolve for first message in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T133 Update `sendMessage()` — if `roomId` is empty (JIT), call atomic resolve with first message payload. Use response to set roomId and confirm message sent in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T131 Update `createPrivateChatRoom()` to accept optional `firstMessage` parameter and parse response for both `roomId` and `message` in `lib/features/chat/data/datasources/chat_remote_data_source.dart`
+- [x] T132 Remove `Future.delayed(const Duration(milliseconds: 300))` from `_ensureRoom()` and use atomic resolve for first message in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T133 Update `sendMessage()` — if `roomId` is empty (JIT), call atomic resolve with first message payload. Use response to set roomId and confirm message sent in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
 **Checkpoint**: First message in new chat arrives without delay. No `Future.delayed` hack.
 
@@ -107,8 +107,8 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Schema & Entity
 
-- [ ] T134 [P] Add `is_deleted INTEGER DEFAULT 0` column to messages schema and `ALTER TABLE` migration in `initDB()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T135 [P] Add `final bool isDeleted` field (default `false`) to `Message` entity, update `fromMap()`/`toMap()` in `lib/features/chat/domain/entities/message.dart`
+- [x] T134 [P] Add `is_deleted INTEGER DEFAULT 0` column to messages schema and `ALTER TABLE` migration in `initDB()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T135 [P] Add `final bool isDeleted` field (default `false`) to `Message` entity, update `fromMap()`/`toMap()` in `lib/features/chat/domain/entities/message.dart`
 
 ### Backend
 
@@ -117,11 +117,11 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Frontend
 
-- [ ] T138 Implement `deleteMessageForMe(String messageId)` with confirmation dialog in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T139 Implement `deleteMessageForEveryone(String clientMessageId)` — emit socket event, update local SQLite, refresh UI in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T140 Listen for `messageDeleted` socket event — find message by `clientMessageId`, set `isDeleted = true` in local DB and state in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T141 Update `MessageBubbleWidget` — if `message.isDeleted`, render "🚫 This message was deleted" in italic grey text in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T142 Update long-press menu — show "Delete for Me" always, show "Delete for Everyone" only if `isMine && DateTime.now() - message.createdAt < 1 hour` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [x] T138 Implement `deleteMessageForMe(String messageId)` with confirmation dialog in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T139 Implement `deleteMessageForEveryone(String clientMessageId)` — emit socket event, update local SQLite, refresh UI in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T140 Listen for `messageDeleted` socket event — find message by `clientMessageId`, set `isDeleted = true` in local DB and state in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T141 Update `MessageBubbleWidget` — if `message.isDeleted`, render "🚫 This message was deleted" in italic grey text in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [x] T142 Update long-press menu — show "Delete for Me" always, show "Delete for Everyone" only if `isMine && DateTime.now() - message.createdAt < 1 hour` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
 
 **Checkpoint**: Both delete modes work. Deleted messages show placeholder. Time limit enforced.
 
@@ -168,14 +168,14 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Data Layer
 
-- [ ] T150 [P] Add `getSharedLinks(String roomId)` method — query messages containing URLs in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T151 [P] Add `getSharedDocs(String roomId)` method — query messages where `type = 'file'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T152 [P] Add `getMediaCount(String roomId)` method — return `{photos: int, videos: int}` counts in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T150 [P] Add `getSharedLinks(String roomId)` method — query messages containing URLs in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T151 [P] Add `getSharedDocs(String roomId)` method — query messages where `type = 'file'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T152 [P] Add `getMediaCount(String roomId)` method — return `{photos: int, videos: int}` counts in `lib/features/chat/data/datasources/chat_local_data_source.dart`
 
 ### Presentation Layer
 
-- [ ] T153 Create `SharedMediaScreen` page with `TabBarView` (3 tabs: Media, Links, Docs). Media tab: 4-column `GridView.builder`. Links/Docs tabs: `ListView.builder`. Footer with count summary. "Select" button for multi-select. Styled with `AppColors`, matching `images_ui/media_screen.jpeg` in `lib/features/chat/presentation/pages/shared_media_screen.dart`
-- [ ] T154 Wrap "Media, links and documents" header in `ChatInfoScreen` with `GestureDetector` → navigate to `SharedMediaScreen` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
+- [x] T153 Create `SharedMediaScreen` page with `TabBarView` (3 tabs: Media, Links, Docs). Media tab: 4-column `GridView.builder`. Links/Docs tabs: `ListView.builder`. Footer with count summary. "Select" button for multi-select. Styled with `AppColors`, matching `images_ui/media_screen.jpeg` in `lib/features/chat/presentation/pages/shared_media_screen.dart`
+- [x] T154 Wrap "Media, links and documents" header in `ChatInfoScreen` with `GestureDetector` → navigate to `SharedMediaScreen` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
 
 **Checkpoint**: Tabbed media screen opens from ChatInfoScreen. Media loads instantly from SQLite cache.
 
