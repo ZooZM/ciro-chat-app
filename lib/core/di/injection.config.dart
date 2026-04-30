@@ -91,6 +91,12 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
+    gh.lazySingleton<_i137.StatusLocalDataSource>(
+      () => _i137.StatusLocalDataSourceImpl(),
+    );
+    gh.lazySingleton<_i483.StatusRemoteDataSource>(
+      () => _i483.StatusRemoteDataSourceImpl(gh<_i917.SocketService>()),
+    );
     gh.lazySingleton<_i171.StatusRepository>(
       () => _i539.StatusRepositoryImpl(
         localDataSource: gh<_i137.StatusLocalDataSource>(),

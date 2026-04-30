@@ -7,6 +7,7 @@ import 'core/bloc/app_bloc_observer.dart';
 import 'core/network/dio_client.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/chat/presentation/widgets/call_overlay.dart';
+import 'features/status/presentation/bloc/status_cubit.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -36,9 +37,10 @@ class MainApp extends StatelessWidget {
         return MultiBlocProvider(
           providers: [
             BlocProvider<ChatCubit>(create: (_) => getIt<ChatCubit>()),
-            // CallCubit is global — IncomingCall / OutgoingCall can be
-            // triggered from any screen in the app.
             BlocProvider<CallCubit>(create: (_) => getIt<CallCubit>()),
+            BlocProvider<StatusCubit>(
+              create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
+            ),
           ],
           // CallOverlay centralizes all call navigation via GoRouter so the
           // chat back-stack is preserved across incoming and outgoing calls.
