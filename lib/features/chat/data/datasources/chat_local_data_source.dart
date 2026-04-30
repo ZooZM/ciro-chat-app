@@ -32,7 +32,11 @@ abstract class ChatLocalDataSource {
     Map<String, dynamic> metadata,
   );
 
-  Future<List<Message>> getRoomMessages(String roomId, {int limit = 30, int offset = 0});
+  Future<List<Message>> getRoomMessages(
+    String roomId, {
+    int limit = 30,
+    int offset = 0,
+  });
   Stream<List<Message>> watchRoomMessages(String roomId, {int limit = 30});
   Future<void> saveRoom(ChatSession room);
   Stream<List<ChatSession>> watchRecentChats();
@@ -177,6 +181,18 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     )
   ''';
 
+  static const _statusesSchema = '''
+    CREATE TABLE statuses(
+      id           TEXT PRIMARY KEY,
+      author_name  TEXT,
+      author_avatar TEXT,
+      timestamp    INTEGER,
+      expires_at   INTEGER,
+      is_viewed    INTEGER DEFAULT 0,
+      is_mine      INTEGER DEFAULT 0
+    )
+  ''';
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -193,24 +209,39 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
+        await db.execute(_statusesSchema);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 8) {
           try {
-            await db.execute("ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'PRIVATE'");
-            await db.execute("ALTER TABLE rooms ADD COLUMN participants TEXT DEFAULT '[]'");
-            await db.execute("ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'");
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'PRIVATE'",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN participants TEXT DEFAULT '[]'",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'",
+            );
           } catch (e) {
-            debugPrint('[LocalData] Migration error or columns already exist: $e');
+            debugPrint(
+              '[LocalData] Migration error or columns already exist: $e',
+            );
           }
         }
         // FR-020: Add last_message_id and last_message_sender_id columns.
         if (oldVersion < 9) {
           try {
-            await db.execute("ALTER TABLE rooms ADD COLUMN last_message_id TEXT DEFAULT ''");
-            await db.execute("ALTER TABLE rooms ADD COLUMN last_message_sender_id TEXT DEFAULT ''");
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN last_message_id TEXT DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN last_message_sender_id TEXT DEFAULT ''",
+            );
           } catch (e) {
-            debugPrint('[LocalData] Migration v9 error or columns already exist: $e');
+            debugPrint(
+              '[LocalData] Migration v9 error or columns already exist: $e',
+            );
           }
         }
       },
@@ -344,7 +375,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<double>?> getWaveformCache(String messageId) async {
     final msg = await getMessageById(messageId);
     if (msg == null) return null;
-    
+
     final meta = msg.metadata;
     if (meta != null && meta.containsKey('waveformSamples')) {
       final rawList = meta['waveformSamples'];
@@ -474,12 +505,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       updateData['timestamp'] = createdAt.millisecondsSinceEpoch;
     }
 
-    await db.update(
-      'messages',
-      updateData,
-      where: 'id = ?',
-      whereArgs: [dbId],
-    );
+    await db.update('messages', updateData, where: 'id = ?', whereArgs: [dbId]);
 
     // FR-020: Only update room status if this message is the room's latest.
     final roomRows = await db.query(
@@ -518,7 +544,11 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   // ── getRoomMessages ─────────────────────────────────────────────────────────
 
   @override
-  Future<List<Message>> getRoomMessages(String roomId, {int limit = 30, int offset = 0}) async {
+  Future<List<Message>> getRoomMessages(
+    String roomId, {
+    int limit = 30,
+    int offset = 0,
+  }) async {
     final db = _db;
     if (db == null) return [];
 
@@ -717,13 +747,13 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             ),
             participants: e['participants'] != null
                 ? (jsonDecode(e['participants'] as String) as List<dynamic>)
-                    .map((p) => p as String)
-                    .toList()
+                      .map((p) => p as String)
+                      .toList()
                 : [],
             admins: e['admins'] != null
                 ? (jsonDecode(e['admins'] as String) as List<dynamic>)
-                    .map((a) => a as String)
-                    .toList()
+                      .map((a) => a as String)
+                      .toList()
                 : [],
           ),
         )
@@ -804,7 +834,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.delete('rooms', where: 'id = ?', whereArgs: [roomId]);
     await db.delete('messages', where: 'room_id = ?', whereArgs: [roomId]);
-    
+
     await _dispatchRecentChatsUpdate();
     closeRoomStream(roomId);
   }
@@ -829,6 +859,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     await db.delete('messages');
     await db.delete('rooms');
     await db.delete('contacts');
+    await db.delete('statuses');
 
     for (final controller in _roomStreamControllers.values) {
       if (!controller.isClosed) {
@@ -848,7 +879,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<Message>> searchMessages(String roomId, String query) async {
     final db = _db;
     if (db == null) return [];
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'messages',
       where: 'room_id = ? AND text LIKE ?',
@@ -863,11 +894,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<List<Message>> getSharedMedia(String roomId) async {
     final db = _db;
     if (db == null) return [];
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'messages',
       where: 'room_id = ? AND type IN (?, ?, ?)',
-      whereArgs: [roomId, MessageType.image.name, MessageType.video.name, MessageType.file.name],
+      whereArgs: [
+        roomId,
+        MessageType.image.name,
+        MessageType.video.name,
+        MessageType.file.name,
+      ],
       orderBy: 'timestamp DESC',
     );
     return maps.map((map) => Message.fromMap(map)).toList();

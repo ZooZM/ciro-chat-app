@@ -41,6 +41,9 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
 
+  // ── Status updates callbacks ──────────────────────────────────────────────
+  void Function(Map<String, dynamic> data)? onStatusReceived;
+
   /// Connects to the NestJS WebSocket Gateway.
   /// ONLY call this after the backend has definitively verified the token
   /// (i.e., inside AuthCubit after checkAuthStatus() or verifyOtp() succeeds).
@@ -168,6 +171,12 @@ class SocketService {
       debugPrint('[CALL] callRejected: $data');
       onCallRejected?.call(data as Map<String, dynamic>);
     });
+
+    // ── Status events ─────────────────────────────────────────────────────
+    _socket?.on('statusReceived', (data) {
+      debugPrint('[STATUS] statusReceived: $data');
+      onStatusReceived?.call(data as Map<String, dynamic>);
+    });
   }
 
   // ── Chat emitters ─────────────────────────────────────────────────────────
@@ -252,6 +261,15 @@ class SocketService {
   /// Either side ends the active call
   void endCall() {
     _socket?.emit('endCall', {});
+  }
+
+  // ── Status emitters ─────────────────────────────────────────────────────
+  void uploadStatus(Map<String, dynamic> statusPayload) {
+    _socket?.emit('uploadStatus', statusPayload);
+  }
+
+  void notifyStatusViewed(String statusId) {
+    _socket?.emit('statusViewed', {'statusId': statusId});
   }
 
   void disconnect() {
