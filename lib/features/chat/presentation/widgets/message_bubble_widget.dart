@@ -53,7 +53,13 @@ class MessageBubbleWidget extends StatelessWidget {
 
   bool get _isMine => message.senderId == currentUserId;
 
-  Color get _bgColor => _isMine ? AppColors.primaryLight : AppColors.surface;
+  /// Image & video bubbles have their own ClipRRect — the outer container
+  /// must be transparent and have no padding so the media fills edge-to-edge.
+  bool get _isMediaBubble =>
+      message.type == MessageType.image || message.type == MessageType.video;
+
+  Color get _bgColor =>
+      _isMediaBubble ? Colors.transparent : (_isMine ? AppColors.primaryLight : AppColors.surface);
 
   BorderRadius _borderRadius() {
     final r = Radius.circular(12.resR);
@@ -149,14 +155,16 @@ class MessageBubbleWidget extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: _bgColor,
-        borderRadius: _borderRadius(),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 2.resR,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        borderRadius: _isMediaBubble ? null : _borderRadius(),
+        boxShadow: _isMediaBubble
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 2.resR,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,52 +423,74 @@ class _ImageBubble extends StatelessWidget {
     final url = _resolveUrl(fileUrl);
     final isUploading = !hasLocal && url.isEmpty;
 
-    return Column(
-      crossAxisAlignment: isMine
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.resR),
-          child: isUploading
-              ? _UploadingPlaceholder()
-              : GestureDetector(
-                  onTap: () => _openMediaGallery(context, message),
-                  child: hasLocal
-                      ? Image.file(
-                          File(localPath),
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: url,
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => _UploadingPlaceholder(),
-                          errorWidget: (_, __, ___) => Container(
-                            width: 220.resW,
-                            height: 180.resH,
-                            color: AppColors.surfaceVariant,
-                            child: const Icon(
-                              Icons.broken_image_outlined,
-                              color: AppColors.textSecondary,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16.resR),
+      child: SizedBox(
+        width: 220.resW,
+        height: 180.resH,
+        child: isUploading
+            ? _UploadingPlaceholder()
+            : GestureDetector(
+                onTap: () => _openMediaGallery(context, message),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Image
+                    hasLocal
+                        ? Image.file(
+                            File(localPath),
+                            fit: BoxFit.cover,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => _UploadingPlaceholder(),
+                            errorWidget: (_, __, ___) => Container(
+                              color: AppColors.surfaceVariant,
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
+                    // T155: Footer overlay — dark gradient at bottom-right
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: EdgeInsets.only(
+                          left: 8.resW,
+                          right: 6.resW,
+                          top: 18.resH,
+                          bottom: 6.resH,
                         ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.55),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.bottomRight,
+                          child: DefaultTextStyle(
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.resSp,
+                            ),
+                            child: footer,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-        ),
-        Padding(
-          padding: EdgeInsets.only(
-            left: 8.resW,
-            right: 8.resW,
-            bottom: 6.resH,
-            top: 4.resH,
-          ),
-          child: footer,
-        ),
-      ],
+              ),
+      ),
     );
   }
 
@@ -473,7 +503,7 @@ class _ImageBubble extends StatelessWidget {
           )
           .toList()
           .reversed
-          .toList(); // Reverse to chronological order if they are newest-first
+          .toList();
 
       final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
 
@@ -538,50 +568,103 @@ class _VideoBubble extends StatelessWidget {
     final meta = message.metadata ?? {};
     final localThumb = meta['localThumbPath'] as String?;
     final thumbUrl = meta['thumbnailUrl'] as String?;
+    final durationSec = meta['duration'] as int?;
+    final durationLabel = durationSec != null
+        ? '${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}'
+        : null;
 
     final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
     final url = _resolveUrl(thumbUrl);
     final isUploading = !hasLocalThumb && url.isEmpty;
 
-    return Column(
-      crossAxisAlignment: isMine
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.resR),
-          child: isUploading
-              ? _UploadingPlaceholder()
-              : GestureDetector(
-                  onTap: () => _openMediaGallery(context, message),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (hasLocalThumb)
-                        Image.file(
-                          File(localThumb),
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                        )
-                      else
-                        CachedNetworkImage(
-                          imageUrl: url,
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => _UploadingPlaceholder(),
-                          errorWidget: (_, __, ___) => Container(
-                            width: 220.resW,
-                            height: 180.resH,
-                            color: AppColors.surfaceVariant,
-                            child: const Icon(
-                              Icons.broken_image_outlined,
-                              color: AppColors.textSecondary,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16.resR),
+      child: SizedBox(
+        width: 220.resW,
+        height: 180.resH,
+        child: isUploading
+            ? _UploadingPlaceholder()
+            : GestureDetector(
+                onTap: () => _openMediaGallery(context, message),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Thumbnail
+                    hasLocalThumb
+                        ? Image.file(File(localThumb), fit: BoxFit.cover)
+                        : CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => _UploadingPlaceholder(),
+                            errorWidget: (_, __, ___) => Container(
+                              color: AppColors.surfaceVariant,
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
+                    // Dark gradient overlay
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: EdgeInsets.only(
+                          left: 8.resW,
+                          right: 6.resW,
+                          top: 18.resH,
+                          bottom: 6.resH,
                         ),
-                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.6),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // T156: Duration chip bottom-left
+                            if (durationLabel != null)
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 5.resW,
+                                  vertical: 2.resH,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(4.resR),
+                                ),
+                                child: Text(
+                                  durationLabel,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.resSp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            const Spacer(),
+                            // Footer overlay bottom-right
+                            DefaultTextStyle(
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.resSp,
+                              ),
+                              child: footer,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // T156: Centered play button
+                    Center(
+                      child: Container(
                         width: 48.resW,
                         height: 48.resW,
                         decoration: BoxDecoration(
@@ -589,25 +672,16 @@ class _VideoBubble extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          Icons.play_arrow,
+                          Icons.play_arrow_rounded,
                           color: Colors.white,
                           size: 32.resW,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-        ),
-        Padding(
-          padding: EdgeInsets.only(
-            left: 8.resW,
-            right: 8.resW,
-            bottom: 6.resH,
-            top: 4.resH,
-          ),
-          child: footer,
-        ),
-      ],
+              ),
+      ),
     );
   }
 
@@ -797,6 +871,12 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     final localPath = meta['localPath'] as String?;
     final fileUrl = widget.message.fileUrl;
 
+    // T145: Use pre-extracted waveform from sender if available.
+    final rawSamples = meta['waveformSamples'];
+    if (rawSamples is List && rawSamples.isNotEmpty) {
+      _cachedWaveformData = rawSamples.whereType<num>().map((e) => e.toDouble()).toList();
+    }
+
     String? path;
     if (localPath != null && File(localPath).existsSync()) {
       path = localPath;
@@ -806,18 +886,23 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
     if (path != null) {
       try {
-        final cached = await context.read<ChatCubit>().getWaveformCache(
-          widget.message.clientMessageId,
-        );
+        // If we already have waveform from metadata, skip extraction on receiver.
+        final skipExtraction = _cachedWaveformData != null && _cachedWaveformData!.isNotEmpty;
+
+        final cached = skipExtraction
+            ? _cachedWaveformData
+            : await context.read<ChatCubit>().getWaveformCache(
+                widget.message.clientMessageId,
+              );
 
         await _playerController.preparePlayer(
           path: path,
-          shouldExtractWaveform: cached == null,
+          shouldExtractWaveform: !skipExtraction && cached == null,
           noOfSamples: 50,
           volume: 1.0,
         );
 
-        if (cached == null) {
+        if (!skipExtraction && cached == null) {
           final extracted = await _playerController.waveformExtraction
               .extractWaveformData(path: path, noOfSamples: 50);
           if (extracted.isNotEmpty) {
@@ -827,7 +912,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
             );
             _cachedWaveformData = extracted;
           }
-        } else {
+        } else if (cached != null) {
           _cachedWaveformData = cached;
         }
 

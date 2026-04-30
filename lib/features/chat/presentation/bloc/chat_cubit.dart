@@ -1016,6 +1016,7 @@ class ChatCubit extends Cubit<ChatState> {
     BuildContext context,
     String localPath, {
     int durationSeconds = 0,
+    List<double> waveformSamples = const [],
   }) async {
     final pendingContact = _pendingContact;
     final roomCreated = await _ensureRoom(pendingContact);
@@ -1034,7 +1035,11 @@ class ChatCubit extends Cubit<ChatState> {
       timestamp: DateTime.now(),
       status: MessageStatus.pending,
       type: MessageType.voiceNote,
-      metadata: {'localPath': localPath, 'duration': durationSeconds},
+      metadata: {
+        'localPath': localPath,
+        'duration': durationSeconds,
+        if (waveformSamples.isNotEmpty) 'waveformSamples': waveformSamples,
+      },
     );
     await _localDataSource.saveMessage(
       optimistic,
@@ -1060,6 +1065,7 @@ class ChatCubit extends Cubit<ChatState> {
           'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
           'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',
           'fileSize': serverMeta['fileSize'] ?? 0,
+          if (waveformSamples.isNotEmpty) 'waveformSamples': waveformSamples,
         };
 
         // 3. Patch bubble.

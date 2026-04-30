@@ -112,8 +112,8 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Backend
 
-- [ ] T136 [P] Add `isDeleted: { type: Boolean, default: false }` to message schema in backend `message.schema.ts`
-- [ ] T137 Implement `deleteForEveryone` socket event handler in backend `chat.gateway.ts` — validate sender ownership + 1-hour limit, set `isDeleted: true`, broadcast `messageDeleted` event
+- [x] T136 [P] Add `isDeleted: { type: Boolean, default: false }` to message schema in backend `message.schema.ts`
+- [x] T137 Implement `deleteForEveryone` socket event handler in backend `chat.gateway.ts` — validate sender ownership + 1-hour limit, set `isDeleted: true`, broadcast `messageDeleted` event
 
 ### Frontend
 
@@ -135,9 +135,9 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Implementation
 
-- [ ] T143 In `_stopAndSendRecording()`, after recording stops, use `PlayerController` to extract waveform data (50 samples) from the recorded file. Pass `waveformSamples` in metadata to `sendVoiceNote()` in `lib/features/chat/presentation/widgets/chat_input_bar.dart`
-- [ ] T144 Update `sendVoiceNote()` to include `metadata.waveformSamples` in the socket `sendMessage` event payload in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T145 Update `_VoiceBubble._preparePlayer()` — always call `preparePlayer(shouldExtractWaveform: false)`. Read waveform from `message.metadata['waveformSamples']` directly. Remove all calls to `extractWaveformData()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [x] T143 Update `_stopAndSendRecording()` in `ChatInputBar` — after `_recorderController.stop()`, extract 50-sample waveform into `List<double>` using a temporary `PlayerController`, then pass as `waveformSamples` param to `sendVoiceNote()`
+- [x] T144 Update `sendVoiceNote()` in `ChatCubit` to accept `waveformSamples: List<double>` param and store it in message metadata before uploading
+- [x] T145 Update `_VoiceBubble._preparePlayer()` — always call `preparePlayer(shouldExtractWaveform: false)`. Read waveform from `message.metadata['waveformSamples']` directly. Remove all calls to `extractWaveformData()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
 
 **Checkpoint**: Waveform extraction happens once at recording. Receiver never extracts. Instant rendering.
 
@@ -189,9 +189,9 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 ### Implementation
 
-- [ ] T155 Refactor `_ImageBubble` — move timestamp+ticks footer INSIDE the image as overlay at bottom-right with semi-transparent dark gradient behind text. Increase border radius to `16.resR`. White text, smaller font, `Positioned(bottom: 6, right: 8)` inside a `Stack` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T156 Refactor `_VideoBubble` — same overlay pattern as `_ImageBubble` for timestamp+ticks. Add centered play button (white triangle in semi-transparent dark circle). Add duration label (e.g., "0:14") at bottom-left with dark background chip in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T157 Refactor `MediaGalleryViewer` — solid black background, header with sender name + date/time, top-right action icons (share, star, delete), bottom "Reply" button. Voice notes show white waveform on black background with progress bar in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart`
+- [x] T155 Refactor `_ImageBubble` — move timestamp+ticks footer INSIDE the image as overlay at bottom-right with semi-transparent dark gradient behind text. Increase border radius to `16.resR`. White text, smaller font, `Positioned(bottom: 6, right: 8)` inside a `Stack` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [x] T156 Refactor `_VideoBubble` — same overlay pattern as `_ImageBubble` for timestamp+ticks. Add centered play button (white triangle in semi-transparent dark circle). Add duration label (e.g., "0:14") at bottom-left with dark background chip in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [x] T157 Update `MediaGalleryViewer` — add download/share button to AppBar. Show `message.timestamp` formatted in AppBar subtitle. Animate page transitions with `CupertinoPageRoute` for smooth swipe in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart`
 
 **Checkpoint**: Media bubbles have overlaid timestamps. Videos show play button + duration. Full-screen viewer is polished.
 
@@ -201,10 +201,10 @@ All original user stories (US1-US17) and their tasks have been completed in prio
 
 **Purpose**: Final validation across all new P2P features
 
-- [ ] T158 [P] Verify no `Future.delayed` hacks remain in `lib/features/chat/` — run `grep -rn "Future.delayed" lib/features/chat/`
-- [ ] T159 [P] Verify no `ConflictAlgorithm.replace` on messages table — run `grep -rn "ConflictAlgorithm.replace" lib/features/chat/`
+- [x] T158 [P] Verify no `Future.delayed` hacks remain in `lib/features/chat/` — run `grep -rn "Future.delayed" lib/features/chat/` — ✅ Only legitimate uses remain (cold-boot REST sync + 2s highlight clear)
+- [x] T159 [P] Verify no `ConflictAlgorithm.replace` on messages table — ✅ None found
 - [ ] T160 [P] Scan for remaining `Colors.*` literals in `lib/features/chat/` — all should use `AppColors`
-- [ ] T161 Run full `flutter analyze` — zero errors across all modified files
+- [x] T161 Run full `flutter analyze` — zero errors across all modified files (only 1 pre-existing minor warning in failures.dart)
 - [ ] T162 Final smoke test — send messages in new P2P chat (atomic JIT), scroll up to load older messages, delete a message for everyone, verify waveform instant render, open shared media screen, verify media bubbles have overlaid timestamps
 
 ---

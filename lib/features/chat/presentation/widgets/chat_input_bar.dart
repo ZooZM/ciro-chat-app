@@ -65,7 +65,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
     _timer?.cancel();
     if (_isRecording) {
       // Best-effort stop before disposing to release native resources
-      _recorderController.stop().catchError((_) {});
+      _recorderController.stop().catchError((_) => null);
     }
     _recorderController.dispose();
     _msgController.dispose();
@@ -154,11 +154,28 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
       if (path != null && File(path).existsSync()) {
         if (duration > 0) {
+          // T143: Extract waveform at record-time (sender side) so receiver
+          // never needs to re-extract (FR-025).
+          List<double> waveformSamples = [];
+          try {
+            final tmpController = PlayerController();
+            await tmpController.preparePlayer(
+              path: path,
+              shouldExtractWaveform: true,
+              noOfSamples: 50,
+            );
+            waveformSamples = await tmpController.waveformExtraction
+                .extractWaveformData(path: path, noOfSamples: 50);
+          } catch (e) {
+            debugPrint('[ChatInputBar] Waveform extraction failed: $e');
+          }
+
           if (mounted) {
             context.read<ChatCubit>().sendVoiceNote(
               context,
               path,
               durationSeconds: duration,
+              waveformSamples: waveformSamples,
             );
           }
         } else {
