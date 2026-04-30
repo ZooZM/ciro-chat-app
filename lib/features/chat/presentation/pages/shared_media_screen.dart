@@ -280,10 +280,10 @@ class _DocList extends StatelessWidget {
             width: 40.resW,
             height: 40.resW,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: AppColors.warning.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8.resR),
             ),
-            child: Icon(Icons.insert_drive_file, color: Colors.orange[700], size: 20.resW),
+            child: Icon(Icons.insert_drive_file, color: AppColors.warning, size: 20.resW),
           ),
           title: Text(
             fileName,

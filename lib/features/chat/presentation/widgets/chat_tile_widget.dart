@@ -54,7 +54,7 @@ class ChatTileWidget extends StatelessWidget {
                 width: 14.resW,
                 height: 14.resW,
                 decoration: BoxDecoration(
-                  color: Colors.blue, // Same blue shown in mockups
+                  color: AppColors.info,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.surface, width: 2.resW),
                 ),
@@ -82,7 +82,7 @@ class ChatTileWidget extends StatelessWidget {
                   : Icons.done_all,
               size: 16.resW,
               color: chat.lastMessageStatus == MessageStatus.read
-                  ? Colors.blue
+                  ? AppColors.info
                   : AppColors.textSecondary,
             ),
             SizedBox(width: 4.resW),

@@ -1363,48 +1363,137 @@ class _PollBubble extends StatelessWidget {
     final meta = message.metadata ?? {};
     final question = meta['question'] as String? ?? 'Poll';
     final options = (meta['options'] as List<dynamic>?)?.cast<String>() ?? [];
+    final votes = (meta['votes'] as Map?)?.cast<String, List>() ?? {};
+    final totalVotes = votes.values.fold<int>(0, (sum, list) => sum + list.length);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
-      child: Column(
-        crossAxisAlignment: isMine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Text(
-            '📊 $question',
-            style: AppTypography.body1.copyWith(
-              fontWeight: FontWeight.bold,
-              color: isMine ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 8.resH),
-          ...options.map(
-            (opt) => Padding(
-              padding: EdgeInsets.only(bottom: 4.resH),
-              child: Container(
-                width: 200.resW,
-                padding: EdgeInsets.symmetric(
-                  vertical: 6.resH,
-                  horizontal: 12.resW,
+    // Poll bubble uses the same green bubble background as regular messages.
+    final textColor = AppColors.textPrimary;
+    final dimColor = AppColors.textSecondary;
+    final accentColor = AppColors.primaryDark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(14.resW, 12.resH, 14.resW, 4.resH),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Question
+              Text(
+                question,
+                style: AppTypography.body1.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                  fontSize: 15.resSp,
                 ),
-                decoration: BoxDecoration(
-                  color: isMine ? Colors.white24 : AppColors.divider,
-                  borderRadius: BorderRadius.circular(8.resR),
-                ),
-                child: Text(
-                  opt,
-                  style: AppTypography.caption.copyWith(
-                    color: isMine ? Colors.white : AppColors.textPrimary,
+              ),
+              SizedBox(height: 4.resH),
+              // "Select one or more" hint
+              Row(
+                children: [
+                  Icon(
+                    Icons.checklist_rounded,
+                    size: 14.resW,
+                    color: dimColor,
                   ),
+                  SizedBox(width: 4.resW),
+                  Text(
+                    'Select one or more',
+                    style: AppTypography.caption.copyWith(
+                      color: dimColor,
+                      fontSize: 12.resSp,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 10.resH),
+              // Options with progress bars
+              ...options.asMap().entries.map((entry) {
+                final opt = entry.value;
+                final optVotes = votes[opt]?.length ?? 0;
+                final frac = totalVotes > 0 ? optVotes / totalVotes : 0.0;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 10.resH),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 20.resW,
+                            height: 20.resW,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: dimColor,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10.resW),
+                          Expanded(
+                            child: Text(
+                              opt,
+                              style: AppTypography.body2.copyWith(
+                                color: textColor,
+                                fontSize: 15.resSp,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$optVotes',
+                            style: AppTypography.caption.copyWith(
+                              color: dimColor,
+                              fontSize: 13.resSp,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 5.resH),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3.resR),
+                        child: LinearProgressIndicator(
+                          value: frac,
+                          minHeight: 3.resH,
+                          backgroundColor: accentColor.withOpacity(0.2),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            accentColor.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              SizedBox(height: 2.resH),
+              footer,
+              SizedBox(height: 4.resH),
+            ],
+          ),
+        ),
+        // Divider + View votes button
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 11.resH,
+              horizontal: 14.resW,
+            ),
+            child: Center(
+              child: Text(
+                'View votes',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
                 ),
               ),
             ),
           ),
-          SizedBox(height: 4.resH),
-          footer,
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1424,6 +1513,37 @@ class _EventBubble extends StatelessWidget {
     required this.footer,
   });
 
+  String _formatEventDateRange(DateTime? start) {
+    if (start == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final now = DateTime.now();
+    String fmtDay(DateTime d) {
+      if (d.year == now.year && d.month == now.month && d.day == now.day) {
+        return 'Today';
+      }
+      final tomorrow = now.add(const Duration(days: 1));
+      if (d.year == tomorrow.year &&
+          d.month == tomorrow.month &&
+          d.day == tomorrow.day) {
+        return 'Tomorrow';
+      }
+      return '${d.day} ${months[d.month - 1]}';
+    }
+
+    final h = start.hour == 0 ? 12 : (start.hour > 12 ? start.hour - 12 : start.hour);
+    final m = start.minute.toString().padLeft(2, '0');
+    final ampm = start.hour < 12 ? 'AM' : 'PM';
+    // Show end as 2 hours later by default
+    final end = start.add(const Duration(hours: 2));
+    final eh = end.hour == 0 ? 12 : (end.hour > 12 ? end.hour - 12 : end.hour);
+    final em = end.minute.toString().padLeft(2, '0');
+    final eampm = end.hour < 12 ? 'AM' : 'PM';
+    return '${fmtDay(start)}, $h:$m $ampm - ${fmtDay(end)}, $eh:$em $eampm';
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
@@ -1432,59 +1552,138 @@ class _EventBubble extends StatelessWidget {
     final desc = meta['description'] as String? ?? '';
 
     DateTime? date;
-    if (dateStr != null) {
-      date = DateTime.tryParse(dateStr);
-    }
+    if (dateStr != null) date = DateTime.tryParse(dateStr);
+    final dateLabel = _formatEventDateRange(date);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
-      child: Column(
-        crossAxisAlignment: isMine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+    final accentColor = AppColors.primaryDark;
+    final textColor = AppColors.textPrimary;
+    final dimColor = AppColors.textSecondary;
+    const iconBg = Color(0xFF2D5A1B);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(14.resW, 14.resH, 14.resW, 8.resH),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.calendar_today,
-                color: isMine ? Colors.white : AppColors.primary,
-                size: 20.resW,
+              // Circular calendar icon
+              Container(
+                width: 44.resW,
+                height: 44.resW,
+                decoration: const BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  color: Colors.white,
+                  size: 24.resW,
+                ),
               ),
-              SizedBox(width: 8.resW),
-              Flexible(
-                child: Text(
-                  title,
-                  style: AppTypography.body1.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isMine ? Colors.white : AppColors.textPrimary,
-                  ),
+              SizedBox(width: 12.resW),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.body1.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                        fontSize: 15.resSp,
+                      ),
+                    ),
+                    if (dateLabel.isNotEmpty) ...[
+                      SizedBox(height: 2.resH),
+                      Text(
+                        dateLabel,
+                        style: AppTypography.caption.copyWith(
+                          color: textColor,
+                          fontSize: 13.resSp,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (desc.isNotEmpty) ...[
+                      SizedBox(height: 2.resH),
+                      Text(
+                        desc,
+                        style: AppTypography.caption.copyWith(
+                          color: dimColor,
+                          fontSize: 13.resSp,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    SizedBox(height: 6.resH),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 10.resR,
+                          backgroundColor: AppColors.primary.withOpacity(0.3),
+                          child: Icon(
+                            Icons.person,
+                            size: 12.resW,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        SizedBox(width: 6.resW),
+                        Text(
+                          '1 Going',
+                          style: AppTypography.caption.copyWith(
+                            color: dimColor,
+                            fontSize: 12.resSp,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 6.resH),
+                    footer,
+                  ],
                 ),
               ),
             ],
           ),
-          if (date != null) ...[
-            SizedBox(height: 4.resH),
-            Text(
-              DateFormat('MMM d, yyyy • h:mm a').format(date),
-              style: AppTypography.caption.copyWith(
-                color: isMine ? Colors.white70 : AppColors.textSecondary,
+        ),
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 11.resH),
+            child: Center(
+              child: Text(
+                'Join call',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
+                ),
               ),
             ),
-          ],
-          if (desc.isNotEmpty) ...[
-            SizedBox(height: 4.resH),
-            Text(
-              desc,
-              style: AppTypography.caption.copyWith(
-                color: isMine ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 11.resH),
+            child: Center(
+              child: Text(
+                'Add to calendar',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
+                ),
               ),
             ),
-          ],
-          SizedBox(height: 4.resH),
-          footer,
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
