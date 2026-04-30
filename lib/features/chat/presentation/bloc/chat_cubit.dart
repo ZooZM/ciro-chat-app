@@ -108,6 +108,9 @@ class ChatCubit extends Cubit<ChatState> {
     currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
     await _localDataSource.initDB();
 
+    _socketService.onUserStatusChanged = (userId, isOnline) async {
+      await _localDataSource.updateUserOnlineStatus(userId, isOnline);
+    };
     // Fetch block list — emit into state; no mutable field.
     final blockListResult = await _chatRepository.getBlockList();
     blockListResult.fold(
@@ -254,7 +257,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   // ── Room lifecycle ──────────────────────────────────────────────────────────
 
-  void openRoom(String roomId, {ChatSession? contact}) {
+  void openRoom(String roomId, {ChatSession? contact, ChatSession? room}) async {
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
@@ -262,6 +265,44 @@ class ChatCubit extends Cubit<ChatState> {
       return;
     }
     if (_activeRoomId == roomId) return;
+
+    final currentState = state;
+    if (currentState is ChatRoomActive &&
+        currentState.roomId == roomId &&
+        currentState.messages.isNotEmpty) {
+      _activeRoomId = roomId;
+      _pendingContact = null;
+      _roomStreamSub?.cancel();
+      _localDataSource.resetUnreadCount(roomId);
+      _roomStreamSub = _localDataSource.watchRoomMessages(roomId).listen(
+        (messages) => emit(ChatRoomActive(roomId, messages)),
+        onError: (e) => emit(ChatError(e.toString())),
+      );
+      return;
+    }
+
+    if (room != null && room.lastMessageId.isNotEmpty) {
+      final messages = await _localDataSource.getRoomMessages(roomId);
+      final localLastMsgId = messages.isNotEmpty ? messages.first.id : null;
+      
+      if (localLastMsgId != room.lastMessageId) {
+        _chatRepository.fetchRoomMessages(roomId).then((res) {
+          res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
+            for (final msg in newMsgs.reversed) {
+              await _localDataSource.saveMessage(msg, incrementUnread: false);
+            }
+          });
+        });
+      }
+    } else {
+      _chatRepository.fetchRoomMessages(roomId).then((res) {
+        res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
+          for (final msg in newMsgs.reversed) {
+            await _localDataSource.saveMessage(msg, incrementUnread: false);
+          }
+        });
+      });
+    }
 
     _pendingContact = null;
     _activeRoomId = roomId;
@@ -642,7 +683,8 @@ class ChatCubit extends Cubit<ChatState> {
         if (thumbPath != null && File(thumbPath).existsSync()) {
           final thumbUpload = await _chatRepository.uploadFile(File(thumbPath));
           thumbUpload.fold(
-            (l) => debugPrint('[ChatCubit] Thumbnail upload failed: ${l.message}'),
+            (l) =>
+                debugPrint('[ChatCubit] Thumbnail upload failed: ${l.message}'),
             (r) => thumbUrl = r['fileUrl'] as String? ?? '',
           );
         }
@@ -1402,8 +1444,10 @@ class ChatCubit extends Cubit<ChatState> {
 
   /// Reads the current blocked list from state (safe fallback to empty).
   List<String> get _currentBlockedIds {
-    if (state is ChatRoomActive) return (state as ChatRoomActive).blockedUserIds;
-    if (state is ChatBlockUpdated) return (state as ChatBlockUpdated).blockedUserIds;
+    if (state is ChatRoomActive)
+      return (state as ChatRoomActive).blockedUserIds;
+    if (state is ChatBlockUpdated)
+      return (state as ChatBlockUpdated).blockedUserIds;
     return const [];
   }
 
@@ -1436,7 +1480,9 @@ class ChatCubit extends Cubit<ChatState> {
         return false;
       },
       (_) {
-        final updated = _currentBlockedIds.where((id) => id != targetUserId).toList();
+        final updated = _currentBlockedIds
+            .where((id) => id != targetUserId)
+            .toList();
         if (state is ChatRoomActive) {
           emit((state as ChatRoomActive).copyWith(blockedUserIds: updated));
         } else {

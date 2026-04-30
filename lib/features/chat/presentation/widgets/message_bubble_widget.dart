@@ -172,7 +172,9 @@ class MessageBubbleWidget extends StatelessWidget {
                   icon: const Icon(Icons.refresh),
                   color: AppColors.error,
                   onPressed: () {
-                    context.read<ChatCubit>().resendMessage(message.clientMessageId);
+                    context.read<ChatCubit>().resendMessage(
+                      message.clientMessageId,
+                    );
                   },
                 ),
                 bubble,
@@ -385,14 +387,15 @@ class _ImageBubble extends StatelessWidget {
     final state = context.read<ChatCubit>().state;
     if (state is ChatRoomActive) {
       final mediaMessages = state.messages
-          .where((m) =>
-              m.type == MessageType.image || m.type == MessageType.video)
+          .where(
+            (m) => m.type == MessageType.image || m.type == MessageType.video,
+          )
           .toList()
           .reversed
           .toList(); // Reverse to chronological order if they are newest-first
-      
+
       final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
-      
+
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => MediaGalleryViewer(
@@ -531,14 +534,15 @@ class _VideoBubble extends StatelessWidget {
     final state = context.read<ChatCubit>().state;
     if (state is ChatRoomActive) {
       final mediaMessages = state.messages
-          .where((m) =>
-              m.type == MessageType.image || m.type == MessageType.video)
+          .where(
+            (m) => m.type == MessageType.image || m.type == MessageType.video,
+          )
           .toList()
           .reversed
           .toList();
-      
+
       final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
-      
+
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => MediaGalleryViewer(
@@ -721,8 +725,10 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
     if (path != null) {
       try {
-        final cached = await context.read<ChatCubit>().getWaveformCache(widget.message.clientMessageId);
-        
+        final cached = await context.read<ChatCubit>().getWaveformCache(
+          widget.message.clientMessageId,
+        );
+
         await _playerController.preparePlayer(
           path: path,
           shouldExtractWaveform: cached == null,
@@ -731,9 +737,13 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
         );
 
         if (cached == null) {
-          final extracted = await _playerController.waveformExtraction.extractWaveformData(path: path, noOfSamples: 50);
+          final extracted = await _playerController.waveformExtraction
+              .extractWaveformData(path: path, noOfSamples: 50);
           if (extracted.isNotEmpty) {
-            await context.read<ChatCubit>().saveWaveformCache(widget.message.clientMessageId, extracted);
+            await context.read<ChatCubit>().saveWaveformCache(
+              widget.message.clientMessageId,
+              extracted,
+            );
             _cachedWaveformData = extracted;
           }
         } else {
@@ -893,18 +903,18 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                   ],
                 ),
               ),
-              SizedBox(width: 8.resW),
+              // SizedBox(width: 8.resW),
 
               // Avatar placeholder (optional)
-              CircleAvatar(
-                radius: 18.resR,
-                backgroundColor: AppColors.divider,
-                child: Icon(
-                  Icons.person,
-                  color: AppColors.surface,
-                  size: 20.resW,
-                ),
-              ),
+              // CircleAvatar(
+              //   radius: 18.resR,
+              //   backgroundColor: AppColors.divider,
+              //   child: Icon(
+              //     Icons.person,
+              //     color: AppColors.surface,
+              //     size: 20.resW,
+              //   ),
+              // ),
             ],
           ),
           SizedBox(height: 6.resH),
