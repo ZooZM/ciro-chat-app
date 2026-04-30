@@ -17,7 +17,7 @@ abstract class ChatRepository {
   );
   Future<Either<Failure, Map<String, dynamic>>> uploadFile(File file);
   Future<Either<Failure, List<ChatSession>>> fetchRooms();
-
+  Future<Either<Failure, List<Message>>> fetchRoomMessages(String roomId);
   // New group chat methods
   Future<Either<Failure, Map<String, dynamic>>> createGroup(
     String groupName,

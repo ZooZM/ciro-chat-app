@@ -1,4 +1,5 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
@@ -21,14 +22,29 @@ import '../di/injection.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
+class AppRouterName {
+  static const String splash = '/splash';
+  static const String auth = '/auth';
+  static const String verify = '/auth/verify';
+  static const String home = '/home';
+  static const String createGroup = '/home/create_group';
+  static const String chatRoom = '/chat_room';
+  static const String groupChat = '/group_chat';
+  static const String contacts = '/contacts';
+  static const String incomingCall = '/incoming_call';
+  static const String videoCall = '/video_call';
+  static const String outgoingCall = '/outgoing_call';
+  static const String voiceCall = '/voice_call';
+}
+
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/splash',
+  initialLocation: AppRouterName.splash,
   // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
   // Every time AuthCubit emits a new state, the redirect guard below is re-run.
   refreshListenable: GoRouterRefreshStream(getIt<AuthCubit>().stream),
   // Pure state-driven redirect: reads AuthCubit synchronously — no async,
   // no stale boolean flags, no race conditions.
-  redirect: (context, state) {
+  redirect: (context, state) async {
     // Remove the native splash on the very first routing evaluation.
     FlutterNativeSplash.remove();
 
@@ -49,6 +65,7 @@ final GoRouter appRouter = GoRouter(
     // ── RULE 2: Authenticated ─────────────────────────────────────────────────
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
+      await context.read<ChatCubit>().hydrateRooms();
       if (isAuthRoute) return '/home';
       return null;
     }

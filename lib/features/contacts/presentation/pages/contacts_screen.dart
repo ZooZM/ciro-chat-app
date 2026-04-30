@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
@@ -39,11 +40,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
     //                                    can call createRoom(contactUserId) on first Send
     if (mounted) {
       context.pushReplacement(
-        '/chat_room',
-        extra: targetUser.copyWith(
-          id: '',
-          contactUserId: targetUser.id,
-        ),
+        AppRouterName.chatRoom,
+        extra: targetUser.copyWith(id: '', contactUserId: targetUser.id),
       );
     }
   }

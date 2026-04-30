@@ -17,6 +17,7 @@ class SocketService {
   bool get isConnected => _socket?.connected ?? false;
 
   // ── Chat callbacks ────────────────────────────────────────────────────────
+  void Function(String userId, bool isOnline)? onUserStatusChanged;
 
   /// Fired when SERVER confirms it stored our message. pending → sent (1 grey tick)
   void Function(String clientMessageId, DateTime? createdAt)? onMessageSent;
@@ -34,7 +35,13 @@ class SocketService {
   void Function()? onReconnected;
 
   /// Fired when another user in the active room is typing.
-  void Function(String roomId, String userId, String phoneNumber, bool isTyping)? onUserTyping;
+  void Function(
+    String roomId,
+    String userId,
+    String phoneNumber,
+    bool isTyping,
+  )?
+  onUserTyping;
 
   // ── Call signaling callbacks (set by CallCubit) ───────────────────────────
   void Function(Map<String, dynamic> data)? onIncomingCall;
@@ -114,7 +121,9 @@ class SocketService {
       final map = data as Map<String, dynamic>;
       final id = map['clientMessageId'] as String?;
       final createdAtStr = map['createdAt'] as String?;
-      final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+      final createdAt = createdAtStr != null
+          ? DateTime.tryParse(createdAtStr)
+          : null;
       if (id != null) onMessageSent?.call(id, createdAt);
     });
 
@@ -123,7 +132,8 @@ class SocketService {
       debugPrint('[SocketService] Message delivered: $data');
       final ids =
           (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null) onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
+      if (ids != null)
+        onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
     });
 
     // RECIPIENT read the message: delivered → read (2 blue ticks)
@@ -132,7 +142,8 @@ class SocketService {
 
       final ids =
           (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null) onMessageRead?.call(ids.map((e) => e.toString()).toList());
+      if (ids != null)
+        onMessageRead?.call(ids.map((e) => e.toString()).toList());
     });
 
     // Inbound message from another user.
@@ -170,6 +181,13 @@ class SocketService {
     _socket?.on('callRejected', (data) {
       debugPrint('[CALL] callRejected: $data');
       onCallRejected?.call(data as Map<String, dynamic>);
+    });
+    _socket?.on('userStatus', (data) {
+      if (data != null && data is Map<String, dynamic>) {
+        final userId = data['userId']?.toString() ?? '';
+        final isOnline = data['isOnline'] == true;
+        onUserStatusChanged?.call(userId, isOnline);
+      }
     });
 
     // ── Status events ─────────────────────────────────────────────────────
@@ -211,7 +229,8 @@ class SocketService {
         'type': type,
       };
       if (fileUrl != null && fileUrl.isNotEmpty) payload['fileUrl'] = fileUrl;
-      if (metadata != null && metadata.isNotEmpty) payload['metadata'] = metadata;
+      if (metadata != null && metadata.isNotEmpty)
+        payload['metadata'] = metadata;
 
       _socket!.emit('sendMessage', payload);
     } else {
@@ -221,7 +240,10 @@ class SocketService {
 
   /// Emits `markDelivered` so the SENDER's UI promotes to 2 grey ticks.
   /// Call this immediately when WE receive a message (recipient side).
-  void markDelivered({required String roomId, required List<String> messageIds}) {
+  void markDelivered({
+    required String roomId,
+    required List<String> messageIds,
+  }) {
     _socket?.emit('markDelivered', {
       'chatRoomId': roomId,
       'clientMessageIds': messageIds,

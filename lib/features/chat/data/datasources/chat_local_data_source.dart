@@ -72,6 +72,7 @@ abstract class ChatLocalDataSource {
 
   Future<List<Message>> searchMessages(String roomId, String query);
   Future<List<Message>> getSharedMedia(String roomId);
+  Future<void> updateUserOnlineStatus(String userId, bool isOnline);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,21 +154,20 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
   static const _roomsSchema = '''
     CREATE TABLE rooms(
-      id                    TEXT PRIMARY KEY,
-      name                  TEXT,
-      lastMessage           TEXT,
-      timestamp             TEXT,
-      unreadCount           INTEGER,
-      isOnline              INTEGER,
-      avatarUrl             TEXT,
-      phoneNumber           TEXT DEFAULT '',
-      lastMessageSenderId   TEXT DEFAULT '',
-      lastMessageStatus     TEXT DEFAULT 'pending',
-      type                  TEXT DEFAULT 'PRIVATE',
-      participants          TEXT DEFAULT '[]',
-      admins                TEXT DEFAULT '[]',
-      last_message_id       TEXT DEFAULT '',
-      last_message_sender_id TEXT DEFAULT ''
+      id                  TEXT PRIMARY KEY,
+      name                TEXT,
+      lastMessage         TEXT,
+      lastMessageId       TEXT,
+      timestamp           TEXT,
+      unreadCount         INTEGER,
+      isOnline            INTEGER,
+      avatarUrl           TEXT,
+      phoneNumber         TEXT DEFAULT '',
+      lastMessageSenderId TEXT DEFAULT '',
+      lastMessageStatus   TEXT DEFAULT 'pending',
+      type                TEXT DEFAULT 'PRIVATE',
+      participants        TEXT DEFAULT '[]',
+      admins              TEXT DEFAULT '[]'
     )
   ''';
 
@@ -203,8 +203,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      // Version 9: adds last_message_id, last_message_sender_id columns to rooms table.
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -224,9 +223,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               "ALTER TABLE rooms ADD COLUMN admins TEXT DEFAULT '[]'",
             );
           } catch (e) {
-            debugPrint(
-              '[LocalData] Migration error or columns already exist: $e',
-            );
+            debugPrint('Migration v8 error: $e');
           }
         }
         // FR-020: Add last_message_id and last_message_sender_id columns.
@@ -239,9 +236,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               "ALTER TABLE rooms ADD COLUMN last_message_sender_id TEXT DEFAULT ''",
             );
           } catch (e) {
-            debugPrint(
-              '[LocalData] Migration v9 error or columns already exist: $e',
+            debugPrint('Migration v9 error: $e');
+          }
+        }
+        if (oldVersion < 10) {
+          try {
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN lastMessageId TEXT DEFAULT ''",
             );
+          } catch (e) {
+            debugPrint('Migration v10 error: $e');
           }
         }
       },
@@ -290,11 +294,11 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         : _mediaPreview(message.type);
 
     // GHOST CHAT FIX: UPSERT the room row so JIT rooms appear immediately.
-    // FR-020: Also track last_message_id and last_message_sender_id for scoped status.
+    // FR-020: Also track lastMessageId for scoped status.
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms
-        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus, type, participants, admins, last_message_id, last_message_sender_id)
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus, type, participants, admins, lastMessageId)
       VALUES (
         ?,
         COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
@@ -309,7 +313,6 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         COALESCE((SELECT type          FROM rooms WHERE id = ?), 'PRIVATE'),
         COALESCE((SELECT participants  FROM rooms WHERE id = ?), '[]'),
         COALESCE((SELECT admins        FROM rooms WHERE id = ?), '[]'),
-        ?,
         ?
       )
       ''',
@@ -327,8 +330,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         message.roomId, // type
         message.roomId, // participants
         message.roomId, // admins
-        message.id, // last_message_id (FR-020)
-        message.senderId, // last_message_sender_id (FR-020)
+        message.id, // lastMessageId (FR-020)
       ],
     );
 
@@ -510,18 +512,18 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     // FR-020: Only update room status if this message is the room's latest.
     final roomRows = await db.query(
       'rooms',
-      columns: ['last_message_id'],
+      columns: ['lastMessageId'],
       where: 'id = ?',
       whereArgs: [roomId],
       limit: 1,
     );
 
-    final lastMsgId = roomRows.isNotEmpty
-        ? (roomRows.first['last_message_id'] as String? ?? '')
+    final roomLastMsgId = roomRows.isNotEmpty
+        ? (roomRows.first['lastMessageId'] as String? ?? '')
         : '';
 
     // Only update room status if this IS the latest message (or no tracking yet).
-    if (lastMsgId.isEmpty || lastMsgId == dbId || lastMsgId == messageId) {
+    if (roomLastMsgId.isEmpty || roomLastMsgId == dbId || roomLastMsgId == messageId) {
       final roomUpdateData = <String, dynamic>{
         'lastMessageStatus': status.name,
       };
@@ -665,13 +667,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     await db.rawInsert(
       '''
-      INSERT OR REPLACE INTO rooms (id, name, lastMessage, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus, type, participants, admins)
-      VALUES (?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO rooms (id, name, lastMessage, lastMessageId, timestamp, unreadCount, isOnline, avatarUrl, phoneNumber, lastMessageSenderId, lastMessageStatus, type, participants, admins)
+      VALUES (?, ?, ?, ?, ?, COALESCE((SELECT unreadCount FROM rooms WHERE id = ?), 0), ?, ?, ?, ?, ?, ?, ?, ?)
     ''',
       [
         room.id,
         room.name,
         room.lastMessage,
+        room.lastMessageId,
         room.timestamp.toIso8601String(),
         room.id,
         room.isOnline ? 1 : 0,
@@ -705,6 +708,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         r.id,
         COALESCE(NULLIF(c.name, ''), NULLIF(r.name, ''), r.phoneNumber) AS name,
         r.lastMessage,
+        r.lastMessageId,
         r.timestamp,
         r.unreadCount,
         r.isOnline,
@@ -712,7 +716,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         r.phoneNumber,
         r.lastMessageSenderId,
         r.lastMessageStatus,
-        r.last_message_id,
+        r.lastMessageId,
         r.type,
         r.participants,
         r.admins
@@ -740,7 +744,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               (st) => st.name == e['lastMessageStatus'],
               orElse: () => MessageStatus.pending,
             ),
-            lastMessageId: (e['last_message_id'] as String?) ?? '',
+            lastMessageId: (e['lastMessageId'] as String?) ?? '',
             type: ChatRoomType.values.firstWhere(
               (t) => t.name == (e['type'] as String? ?? 'PRIVATE'),
               orElse: () => ChatRoomType.PRIVATE,
@@ -807,6 +811,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     if (!_contactsController.isClosed) {
       _contactsController.add(maps.map((e) => ChatSession.fromMap(e)).toList());
     }
+    await _dispatchRecentChatsUpdate();
   }
 
   // ── resetUnreadCount ────────────────────────────────────────────────────────
@@ -888,6 +893,30 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       limit: 50,
     );
     return maps.map((map) => Message.fromMap(map)).toList();
+  }
+
+  @override
+  Future<void> updateUserOnlineStatus(String userId, bool isOnline) async {
+    final db = _db;
+    if (db == null) return;
+    // For private rooms, the 'id' is often the user's ID or phone.
+    // We update any room where this user is the "other" participant.
+    final contact = await db.query(
+      'contacts',
+      columns: ['phoneNumber'],
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+    if (contact.isNotEmpty) {
+      final phone = contact.first['phoneNumber'] as String;
+      await db.update(
+        'rooms',
+        {'isOnline': isOnline ? 1 : 0},
+        where: 'phoneNumber = ?',
+        whereArgs: [phone],
+      );
+    }
+    await _dispatchRecentChatsUpdate();
   }
 
   @override

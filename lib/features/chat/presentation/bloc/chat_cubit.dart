@@ -278,7 +278,6 @@ class ChatCubit extends Cubit<ChatState> {
     _messageOffset = 0;
     _hasMoreMessages = true;
     _isLoadingMore = false;
-
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
@@ -301,7 +300,6 @@ class ChatCubit extends Cubit<ChatState> {
       );
       return;
     }
-
     if (room != null && room.lastMessageId.isNotEmpty) {
       final messages = await _localDataSource.getRoomMessages(roomId);
       final localLastMsgId = messages.isNotEmpty ? messages.first.id : null;

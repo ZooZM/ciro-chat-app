@@ -61,11 +61,11 @@ class ChatSession extends Equatable {
         lastMessageSenderId,
         lastMessageStatus,
         lastMessageId,
+        contactUserId,
         type,
         participants,
         admins,
         description,
-        contactUserId,
       ];
 
   /// Creates a copy with specific fields overridden.
@@ -173,11 +173,13 @@ class ChatSession extends Equatable {
     String lastMsgText = '';
     DateTime lastMsgTime = DateTime.now();
     String lastMsgSender = '';
+    String lastMsgId = '';
     MessageStatus lastMsgStatus = MessageStatus.pending;
     final lastMsg = json['lastMessage'];
     if (lastMsg is Map) {
       lastMsgText = lastMsg['content'] ?? '';
       lastMsgSender = lastMsg['senderId'] ?? '';
+      lastMsgId = lastMsg['_id'] ?? lastMsg['id'] ?? '';
       if (lastMsg['status'] != null) {
         lastMsgStatus = MessageStatus.values.firstWhere(
           (e) => e.name == lastMsg['status'],
@@ -203,11 +205,12 @@ class ChatSession extends Equatable {
       timestamp: lastMsgTime,
       avatarUrl: otherAvatar.isNotEmpty
           ? otherAvatar
-          : 'https://i.pravatar.cc/150?u=$roomId',
+          : 'https://i.pravatar.cc/150?u=${roomId.toString()}',
       isOnline: otherIsOnline,
       phoneNumber: otherPhone,
       lastMessageSenderId: lastMsgSender,
       lastMessageStatus: lastMsgStatus,
+      lastMessageId: lastMsgId,
       type: roomType,
       participants: rawParticipants,
       admins: rawAdmins,
@@ -229,7 +232,7 @@ class ChatSession extends Equatable {
       'phoneNumber': phoneNumber,
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageStatus': lastMessageStatus.name,
-      'last_message_id': lastMessageId,
+      'lastMessageId': lastMessageId,
       'type': type.name, // Store enum as string
       'participants': jsonEncode(participants), // Convert list to JSON string
       'admins': jsonEncode(admins), // Convert list to JSON string
@@ -249,12 +252,13 @@ class ChatSession extends Equatable {
       phoneNumber: map['phoneNumber'] ?? '',
       lastMessageSenderId: map['lastMessageSenderId'] ?? '',
       lastMessageStatus: MessageStatus.values.firstWhere(
-        (e) => e.name == map['lastMessageStatus'],
+        (e) => e.name == (map['lastMessageStatus'] as String? ?? 'pending'),
         orElse: () => MessageStatus.pending,
       ),
-      lastMessageId: map['last_message_id'] ?? '',
+      lastMessageId: map['lastMessageId'] as String? ?? '',
       type: ChatRoomType.values.firstWhere(
-        (e) => e.name == (map['type'] as String? ?? 'PRIVATE'),
+        (e) =>
+            e.name == (map['type'] as String? ?? 'PRIVATE').toUpperCase(),
         orElse: () => ChatRoomType.PRIVATE,
       ),
       participants: (jsonDecode(map['participants'] ?? '[]') as List).cast<String>(),

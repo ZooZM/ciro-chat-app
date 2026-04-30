@@ -24,7 +24,7 @@ abstract class ChatRemoteDataSource {
   );
   Future<Either<Failure, Map<String, dynamic>>> uploadFile(File file);
   Future<Either<Failure, List<ChatSession>>> fetchRooms();
-
+  Future<Either<Failure, List<Message>>> fetchRoomMessages(String roomId);
   // Group chat API endpoints
   Future<Either<Failure, Map<String, dynamic>>> createGroup(
     String groupName,
@@ -63,10 +63,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final message = Message(
         id: data['id']?.toString() ?? '',
         clientMessageId:
-            data['clientMessageId']?.toString() ??
-            data['id']?.toString() ??
-            '',
-        roomId: data['chatRoomId']?.toString() ?? data['roomId']?.toString() ?? 'unknown',
+            data['clientMessageId']?.toString() ?? data['id']?.toString() ?? '',
+        roomId:
+            data['chatRoomId']?.toString() ??
+            data['roomId']?.toString() ??
+            'unknown',
         senderId: data['senderId']?.toString() ?? '',
         text: data['content']?.toString() ?? '',
         timestamp: data['createdAt'] != null
@@ -129,14 +130,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         ServerFailure(response.data['message'] ?? 'Failed to create group'),
       );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -159,14 +153,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         ServerFailure(response.data['message'] ?? 'Failed to add participants'),
       );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -191,14 +178,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         ),
       );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -215,14 +195,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         ServerFailure(response.data['message'] ?? 'Failed to leave group'),
       );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -237,12 +210,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       if (response.statusCode == 200) {
         return const Right(null);
       }
-      return Left(ServerFailure(response.data['message'] ?? 'Failed to block user'));
+      return Left(
+        ServerFailure(response.data['message'] ?? 'Failed to block user'),
+      );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -255,12 +227,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       if (response.statusCode == 200) {
         return const Right(null);
       }
-      return Left(ServerFailure(response.data['message'] ?? 'Failed to unblock user'));
+      return Left(
+        ServerFailure(response.data['message'] ?? 'Failed to unblock user'),
+      );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -283,12 +254,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         }
         return Right(list.map((e) => e.toString()).toList());
       }
-      return Left(ServerFailure(response.data['message'] ?? 'Failed to get block list'));
+      return Left(
+        ServerFailure(response.data['message'] ?? 'Failed to get block list'),
+      );
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(ServerFailure(e.response?.data['message'] ?? e.message ?? 'Server error'));
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -308,18 +278,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final data = response.data['data'] ?? response.data;
       final roomId = data['roomId'] ?? data['_id'] ?? data['id'];
       if (roomId == null) {
-        return const Left(ServerFailure('Backend returned no roomId'));
+        return Left(ServerFailure('Backend returned no roomId'));
       }
       return Right(roomId.toString());
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -362,14 +325,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
             item['clientMessageId'].toString(): item['status'].toString(),
       });
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -385,9 +341,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final response = await _dio.post(
         '/chat/upload',
         data: formData,
-        options: Options(
-          headers: {'Content-Type': 'multipart/form-data'},
-        ),
+        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
       );
       final raw = response.data;
       final payload = (raw is Map && raw.containsKey('data'))
@@ -395,14 +349,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           : raw as Map<String, dynamic>;
       return Right(payload);
     } on DioException catch (e) {
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
@@ -411,8 +358,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   @override
   Future<Either<Failure, List<ChatSession>>> fetchRooms() async {
     try {
-      final currentUserPhone =
-          await _authLocalDataSource.getUserPhone() ?? '';
+      final currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
       final response = await _dio.get('/chat/rooms');
 
       final raw = response.data;
@@ -422,6 +368,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       debugPrint('[ChatRemoteDataSource] Fetched ${roomsJson.length} room(s)');
 
       final List<ChatSession> chatSessions = [];
+
       for (final json in roomsJson) {
         try {
           chatSessions.add(
@@ -439,16 +386,40 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       return Right(chatSessions);
     } on DioException catch (e) {
       debugPrint('[ChatRemoteDataSource] fetchRooms failed: $e');
-      if (e.response != null) {
-        return Left(
-          ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Server error',
-          ),
-        );
-      }
-      return Left(NetworkFailure(e.message ?? 'Network error'));
+      return Left(ServerFailure.fromDioException(e));
     } catch (e) {
       debugPrint('[ChatRemoteDataSource] fetchRooms failed: $e');
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<Message>>> fetchRoomMessages(
+    String roomId,
+  ) async {
+    try {
+      final response = await _dio.get('/chat/rooms/$roomId/messages');
+      if (response.statusCode == 200) {
+        final data = response.data;
+        List<dynamic> messagesJson = [];
+        if (data is List) {
+          messagesJson = data;
+        } else if (data['data'] is List) {
+          messagesJson = data['data'];
+        } else {
+          messagesJson = [];
+        }
+        final messages = messagesJson
+            .map((e) => Message.fromNetworkMap(e as Map<String, dynamic>))
+            .toList();
+        return Right(messages);
+      }
+      return Left(
+        ServerFailure(response.data['message'] ?? 'Failed to fetch messages'),
+      );
+    } on DioException catch (e) {
+      return Left(ServerFailure.fromDioException(e));
+    } catch (e) {
       return Left(ServerFailure(e.toString()));
     }
   }
