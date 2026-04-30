@@ -18,6 +18,7 @@ class ChatSession extends Equatable {
   final String phoneNumber;
   final String lastMessageSenderId;
   final MessageStatus lastMessageStatus;
+  final String lastMessageId; // FR-020: tracks the latest message for scoped status
   final ChatRoomType type; // New field
   final List<String> participants; // New field for group chat
   final List<String> admins; // New field
@@ -39,6 +40,7 @@ class ChatSession extends Equatable {
     required this.phoneNumber,
     this.lastMessageSenderId = '',
     this.lastMessageStatus = MessageStatus.pending,
+    this.lastMessageId = '',
     this.contactUserId = '',     // defaults to empty; only set for JIT contact flows
     this.type = ChatRoomType.PRIVATE, // Default to private
     this.participants = const [],
@@ -58,6 +60,7 @@ class ChatSession extends Equatable {
         phoneNumber,
         lastMessageSenderId,
         lastMessageStatus,
+        lastMessageId,
         type,
         participants,
         admins,
@@ -79,6 +82,7 @@ class ChatSession extends Equatable {
     String? phoneNumber,
     String? lastMessageSenderId,
     MessageStatus? lastMessageStatus,
+    String? lastMessageId,
     String? contactUserId,
     ChatRoomType? type,
     List<String>? participants,
@@ -96,6 +100,7 @@ class ChatSession extends Equatable {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
       lastMessageStatus: lastMessageStatus ?? this.lastMessageStatus,
+      lastMessageId: lastMessageId ?? this.lastMessageId,
       contactUserId: contactUserId ?? this.contactUserId,
       type: type ?? this.type,
       participants: participants ?? this.participants,
@@ -224,6 +229,7 @@ class ChatSession extends Equatable {
       'phoneNumber': phoneNumber,
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageStatus': lastMessageStatus.name,
+      'last_message_id': lastMessageId,
       'type': type.name, // Store enum as string
       'participants': jsonEncode(participants), // Convert list to JSON string
       'admins': jsonEncode(admins), // Convert list to JSON string
@@ -246,6 +252,7 @@ class ChatSession extends Equatable {
         (e) => e.name == map['lastMessageStatus'],
         orElse: () => MessageStatus.pending,
       ),
+      lastMessageId: map['last_message_id'] ?? '',
       type: ChatRoomType.values.firstWhere(
         (e) => e.name == (map['type'] as String? ?? 'PRIVATE'),
         orElse: () => ChatRoomType.PRIVATE,

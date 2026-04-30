@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
@@ -52,6 +53,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       });
     }
     cubit = context.read<ChatCubit>();
+
+    // FR-018: Listen for scroll-to-top (older messages) in reversed ListView.
+    _scrollController.addListener(_onScroll);
 
     if (widget.chatData.id.isEmpty) {
       // No room exists yet — entering from ContactsScreen. JIT room will be
@@ -118,6 +122,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         });
       }
     });
+  }
+
+  // FR-018: Trigger pagination when scrolling towards older messages.
+  // In a reversed ListView, scrolling "up" (older) means approaching maxScrollExtent.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      context.read<ChatCubit>().loadMoreMessages();
+    }
   }
 
   PopupMenuItem<String> _buildMenuItem(
@@ -344,8 +358,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               true, // Forces keyboard constraints up correctly (WhatsApp spec)
                           controller: _scrollController,
                           padding: EdgeInsets.symmetric(vertical: 16.resH),
-                          itemCount: displayMessages.length,
+                          // +1 for the loading indicator at the top (end in reversed list)
+                          itemCount: displayMessages.length + 1,
                           itemBuilder: (context, index) {
+                            // FR-018: Last item (top of screen) shows loading indicator.
+                            if (index == displayMessages.length) {
+                              if (state is ChatRoomActive && state.isLoadingMore) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Center(child: CupertinoActivityIndicator()),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }
                             final msg = displayMessages[index];
                             return Container(
                               key: ValueKey(msg.clientMessageId),

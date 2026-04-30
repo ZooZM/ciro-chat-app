@@ -15,286 +15,197 @@ description: "Task list for Optimize Chat Lifecycle feature"
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
 - Include exact file paths in descriptions
 
-## Phase 1: Setup (Shared Infrastructure)
+## Phases 1-21: COMPLETED (T001-T110) ✅
 
-**Purpose**: Project initialization and basic structure. This feature refactors the existing chat.
-
-- [x] T001 Create `CallState` in `lib/features/call/presentation/bloc/call_state.dart`. **RESOLVED**: Already implemented at `lib/features/video_call/presentation/bloc/call_cubit.dart`.
+All original user stories (US1-US17) and their tasks have been completed in prior sessions. The following phases cover the new P2P-focused requirements (FR-018 through FR-026) added in the April 30, 2026 planning session.
 
 ---
 
-## Phase 2: Foundational (Blocking Prerequisites)
+## Phase 22: Message Idempotency & Monotonic Status (FR-019) — Priority: P0 🐛
 
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
+**Goal**: Prevent duplicate message inserts on socket reconnect and enforce monotonic-only status promotion (pending→sent→delivered→read, never backward).
 
-- [x] T002 Refactor `SocketService` to separate messaging events from call signaling events in `lib/core/network/socket_service.dart`. **RESOLVED**: Already separated.
-- [x] T003 Ensure `Message` entity uses `MessageStatus` correctly in `lib/features/chat/domain/entities/message.dart`. **RESOLVED**.
-- [x] T004 Create or update `CallCubit` to manage `CallState`. **RESOLVED**: Fully implemented at `lib/features/video_call/presentation/bloc/call_cubit.dart`.
-- [x] T005 Register `CallCubit` in `lib/core/di/injection.dart`. **RESOLVED**: Already registered as `@lazySingleton`.
+**Independent Test**: Simulate socket reconnect that replays already-received messages. Verify no duplicates in SQLite. Manually call `updateMessageStatus` with a lower-rank status and verify it's silently ignored.
 
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+### Implementation
 
----
+- [x] T111 [FR-019] Add `_statusRank(MessageStatus status)` helper method returning `{pending:0, sent:1, delivered:2, read:3}` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T112 [FR-019] Modify `saveMessage()` to check `SELECT id FROM messages WHERE client_message_id = ?` before insert — if row exists, return early (skip insert) in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T113 [FR-019] Modify `updateMessageStatus()` to query by `client_message_id` instead of `id`, fetch current status rank, and skip update if incoming rank ≤ current rank in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T114 [FR-019] Update `ChatCubit.handleMessageStatusUpdate()` to pass `clientMessageId` instead of `id` to `updateMessageStatus()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T115 [FR-019] Add dedup check in `ChatCubit._handleIncomingMessage()` — if `clientMessageId` already exists in current `state.messages`, skip processing in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
-## Phase 3: User Story 1 - Real-time Chat Experience (Priority: P1) 🎯 MVP
-
-- [x] T006 [US1] Update `ChatState` to optimize field updates via `copyWith` in `lib/features/chat/presentation/bloc/chat_state.dart`
-- [x] T007 [US1] Refactor `ChatCubit` to selectively emit state changes in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T008 [US1] Refactor `ChatPage` to use `buildWhen` in `BlocBuilder` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
-- [x] T009 [US1] Refactor list rendering to avoid full rebuilds in `lib/features/chat/presentation/pages/chat_room_screen.dart`
-- [x] T010 [US1] Extract typing indicator into a separate widget in `lib/features/chat/presentation/widgets/typing_indicator.dart`
+**Checkpoint**: Duplicate messages are silently rejected. Status never regresses.
 
 ---
 
-## Phase 4: User Story 2 - Non-Intrusive Call Integration (Priority: P1)
+## Phase 23: Scoped Inbox Status Ticks (FR-020) — Priority: P0 🐛
 
-- [x] T011 [US2] Implement `CallOverlay` widget in `lib/features/chat/presentation/widgets/call_overlay.dart`
-- [x] T012 [US2] Integrate `CallOverlay` into root widget tree in `lib/main.dart`
-- [x] T013 [US2] Connect `CallOverlay` to `CallCubit` for all `CallState` transitions
-- [x] T014 [US2] Verify `SocketService` properly delegates call events to `CallCubit`. **RESOLVED**.
+**Goal**: Inbox tick icons only show for the user's own sent messages (WhatsApp behavior). Room status updates only apply to the latest message.
 
----
+**Independent Test**: Send a message, verify tick shows. Receive a message from other party, verify NO tick shows on inbox tile for that received message.
 
-## Phase 5: User Story 3 - Codebase Consistency (Priority: P2)
+### Implementation
 
-- [x] T015 [US3] [P] Replace hardcoded colors with `AppColors` in `lib/features/chat/presentation/`
-- [x] T016 [US3] [P] Replace hardcoded text styles with `AppTypography`
-- [x] T017 [US3] [P] Scan hardcoded strings — functional status strings only
-- [x] T018 [US3] [P] Scan hardcoded icons — all use `Icons.*` constants
+- [x] T116 [FR-020] Add `last_message_id TEXT DEFAULT ''` and `last_message_sender_id TEXT DEFAULT ''` columns to `_roomsSchema` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T117 [FR-020] Add `ALTER TABLE rooms ADD COLUMN last_message_id TEXT DEFAULT ''; ALTER TABLE rooms ADD COLUMN last_message_sender_id TEXT DEFAULT '';` migration in `initDB()` wrapped in try/catch in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T118 [FR-020] Update `saveMessage()` room upsert to set `last_message_id` and `last_message_sender_id` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T119 [FR-020] In `updateMessageStatus()`, before updating `rooms.lastMessageStatus`, verify the message matches `rooms.last_message_id` — skip room update if mismatch in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T120 [FR-020] Add `lastMessageSenderId` field to `ChatSession` entity in `lib/features/chat/domain/entities/chat_session.dart` and update `fromMap()`/`toMap()`
+- [x] T121 [FR-020] Update `ChatTileWidget` to only render tick icons when `lastMessageSenderId == currentUserId` — hide ticks for received messages in `lib/features/chat/presentation/widgets/` (chat tile widget file)
 
----
-
-## Phase 6: User Story 4 - Group Chat Persistence Bug Fix (Priority: P0) 🐛
-
-- [x] T021 [US4] Fix room UPSERT SQL in `saveMessage()` to preserve `type`, `participants`, `admins` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [x] T022 [US4] Verify `saveRoom()` correctly persists all room fields in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [x] T023 [US4] Verify `ChatSession` is passed with correct `type` through GoRouter in `lib/core/routing/app_router.dart`
-- [x] T024 [US4] Verify `ChatRoomScreen` AppBar conditionally renders Group vs P2P metadata
+**Checkpoint**: Ticks only appear for sent messages. Status scoped to latest message.
 
 ---
 
-## Phase 7: User Story 6 - Message Rendering Fix (Priority: P0) 🐛
+## Phase 24: Infinite Scroll Pagination (FR-018) — Priority: P0
 
-- [x] T025 [US6] [P] Add `system` to `MessageType` enum in `lib/features/chat/domain/entities/message.dart`
-- [x] T026 [US6] [P] Add `system` case to `_mediaPreview()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [x] T027 [US6] Implement `_buildSystemBubble()` widget in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T028 [US6] Add routing logic for `MessageType.system` in `MessageBubbleWidget.build()`
+**Goal**: Load 30 messages initially, lazy-load 30 more on scroll-up (WhatsApp-style infinite scroll).
 
----
+**Independent Test**: Open a chat with 100+ messages. Verify only 30 load initially. Scroll up, verify 30 more load. Repeat until all loaded.
 
-## Phase 8: User Story 5 - Group Info Logic Integration (Priority: P1)
+### Implementation
 
-- [x] T029 [US5] Replace static description with dynamic field from `ChatSession` in `lib/features/chat/presentation/pages/group_info_page.dart`
-- [x] T030 [US5] Replace hardcoded media section with real media query in `lib/features/chat/presentation/pages/group_info_page.dart`
-- [x] T031 [US5] [P] Replace `Colors.*` literals with `AppColors` in `lib/features/chat/presentation/pages/group_info_page.dart`
-- [x] T032 [US5] Wire "Edit" AppBar button to group edit dialog in `lib/features/chat/presentation/pages/group_info_page.dart`
+- [x] T122 [FR-018] Add `{int limit = 30, int offset = 0}` parameters to `getRoomMessages()` — update SQL to `ORDER BY timestamp DESC LIMIT ? OFFSET ?` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T123 [FR-018] Update `watchRoomMessages()` to accept `limit` parameter — initial emission uses `LIMIT 30` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [x] T124 [FR-018] Add `_messageOffset`, `_hasMoreMessages`, `_isLoadingMore` fields to `ChatCubit` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T125 [FR-018] Implement `loadMoreMessages()` method in `ChatCubit` — fetch next 30, prepend to state, increment offset, set `_hasMoreMessages = false` if <30 returned in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [x] T126 [FR-018] Add `ScrollController` listener in `ChatRoomScreen` — trigger `loadMoreMessages()` when `position.extentAfter < 200` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
+- [x] T127 [FR-018] Show `CupertinoActivityIndicator` at top of message list when `_isLoadingMore` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
+- [x] T128 [FR-018] Review and remove hardcoded `LIMIT 20` in `_dispatchRecentChatsUpdate()` if present in `lib/features/chat/data/datasources/chat_local_data_source.dart`
 
----
-
-## Phase 9: User Story 7 - Chat Attachment Actions (Priority: P1)
-
-- [x] T033 [US7] [P] Add `LOCATION`, `AUDIO`, `POLL`, `EVENT` to backend `MessageType` enum in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\message.schema.ts`
-- [x] T034 [US7] [P] Add metadata fields to backend `MessageMetadata` in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\message.schema.ts`
-- [x] T035 [US7] [P] Add `location`, `audio`, `poll`, `event` to Flutter `MessageType` enum in `lib/features/chat/domain/entities/message.dart`
-- [x] T036 [US7] [P] Update `_mediaPreview()` for new types in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [x] T037 [US7] Add `google_maps_flutter`, `geolocator`, `geocoding`, `flutter_dotenv` to `pubspec.yaml`
-- [x] T038 [US7] Create `.env` file with `GOOGLE_MAPS_API_KEY` placeholder
-- [x] T039 [US7] Configure Android/iOS for Maps API key and location permissions
-- [x] T040 [US7] Implement `sendCameraMessage()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T041 [US7] Implement `sendLocationMessage()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T042 [US7] Implement `sendAudioMessage()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T043 [US7] Implement `sendPollMessage()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T044 [US7] Implement `sendEventMessage()` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [x] T045 [US7] Wire `_handleCamera` handler in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T046 [US7] Wire `_handleLocation` handler in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T046b [US7] Implement graceful location permission handling in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T047 [US7] Wire `_handleAudio` handler in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T048 [US7] Wire `_handlePoll` handler in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T049 [US7] Wire `_handleEvent` handler in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T050 [US7] Update `_routeTap` switch in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`
-- [x] T051 [US7] [P] Implement `_buildLocationBubble()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T052 [US7] [P] Implement `_buildAudioBubble()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T053 [US7] [P] Implement `_buildPollBubble()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T054 [US7] [P] Implement `_buildEventBubble()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T055 [US7] Add routing logic for `location`, `audio`, `poll`, `event` in `MessageBubbleWidget.build()`
+**Checkpoint**: Chat loads 30 messages initially. Scrolling up loads more in batches. No data loss.
 
 ---
 
-## Phase 10: User Story 8 - Voice Notes Stability (Priority: P1)
+## Phase 25: Atomic JIT Room Creation (FR-021) — Priority: P1
 
-- [x] T056 [US8] Audit voice note recording lifecycle in `lib/features/chat/presentation/widgets/chat_input_bar.dart`
-- [x] T057 [US8] Implement singleton audio playback manager in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [x] T058 [US8] Add `mounted` checks after all async operations in chat widgets
-- [x] T059 [US8] Verify `AudioWaveforms` controller disposal in `lib/features/chat/presentation/widgets/chat_input_bar.dart`
+**Goal**: First message in a new P2P chat is sent atomically with room creation — no 300ms delay hack.
 
----
-
-## Phase 11: User Story 9 - Static/Mock Data Cleanup (Priority: P2)
-
-- [x] T060 [US9] [P] Delete orphan backup file `lib/features/chat/presentation/pages/chat_screen.dart.bak`
-- [x] T061 [US9] [P] Remove hardcoded media placeholder thumbnails in `group_info_page.dart`
-- [x] T062 [US9] [P] Scan for remaining static data arrays in `lib/features/chat/`
-- [x] T063 [US9] [P] Replace remaining `Colors.*` literals in `attachment_sheet_widget.dart`
-
----
-
-## Phase 12: User Story 10 - Codebase Audit (Priority: P2)
-
-- [x] T064 [US10] [P] Scan for `TODO`, `FIXME`, `HACK`, `XXX` markers in `lib/features/chat/`
-- [x] T065 [US10] [P] Scan for commented-out function bodies or dead code in `lib/features/chat/`
-- [x] T066 [US10] [P] Verify all `StreamSubscription` have matching `.cancel()` in `chat_cubit.dart`
-
----
-
-## Phase 13: Polish & Cross-Cutting Concerns (Original)
-
-- [x] T067 [P] Verify `_mediaPreview()` handles ALL `MessageType` values in `chat_local_data_source.dart`
-- [x] T068 Run full `flutter analyze` — zero warnings/errors
-- [x] T069 Validate quickstart.md — all setup steps accurate
-- [x] T070 Final smoke test — open P2P chat, Group chat, send all message types
-
----
-
-## Phase 14: User Story 11 - Audio Waveform Local Persistence (Priority: P1)
-
-**Goal**: Cache waveform data in SQLite so voice note waveforms render instantly on re-entry without re-extraction.
-
-**Independent Test**: Send a voice note, exit chat, re-enter. Waveform must render instantly from cache.
-
-### Implementation for User Story 11
-
-- [x] T071 [US11] Add `getWaveformCache(String messageId)` and `saveWaveformCache(String messageId, List<double> samples)` methods to `lib/features/chat/data/datasources/chat_local_data_source.dart`. Store waveform samples as JSON in the message `metadata` column under key `waveformSamples`.
-- [x] T072 [US11] Update `_VoiceBubble._preparePlayer()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`: before calling `preparePlayer(shouldExtractWaveform: true)`, check if `metadata['waveformSamples']` exists. If yes, pass cached data to the `PlayerController` and skip native extraction.
-- [x] T073 [US11] After successful first-time waveform extraction in `_VoiceBubble`, call `saveWaveformCache()` to persist the extracted `List<double>` samples to SQLite metadata in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
-
-**Checkpoint**: Waveform renders from cache on second visit — no re-extraction.
-
----
-
-## Phase 15: User Story 12 - Video Message Support (Priority: P1)
-
-**Goal**: Send and receive video messages with thumbnail preview, inline playback, and WhatsApp-style media gallery.
-
-**Independent Test**: Select video from gallery, send. Verify thumbnail renders with play icon. Tap to play full-screen. Swipe between media.
-
-### Implementation for User Story 12
-
-- [x] T074 [US12] [P] Add `VIDEO = 'video'` to backend `MessageType` enum in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\message.schema.ts`. Add `thumbnailUrl` to `MessageMetadata`.
-- [x] T075 [US12] [P] Add `video` to Flutter `MessageType` enum and update `messageTypeFromString()` / `messageTypeToString()` in `lib/features/chat/domain/entities/message.dart`. Update `_mediaPreview()` to return `'🎬 Video'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`.
-- [x] T076 [US12] Add `video_player` and `video_thumbnail` to `pubspec.yaml` and run `flutter pub get`.
-- [x] T077 [US12] Implement `sendVideoMessage(BuildContext context)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — use `ImagePicker().pickVideo()`, generate thumbnail via `video_thumbnail`, upload both via `POST /chat/upload`, emit socket message with `MessageType.video` and metadata `{ duration, mimeType, thumbnailUrl }`.
-- [x] T078 [US12] Add video option to attachment sheet: wire `_handleVideo` handler → `ChatCubit.sendVideoMessage()` in `lib/features/chat/presentation/widgets/attachment_sheet_widget.dart`. Add a "Video" entry to `_attachmentOptions` list.
-- [x] T079 [US12] Implement `_VideoBubble` widget in `lib/features/chat/presentation/widgets/message_bubble_widget.dart` — renders `CachedNetworkImage` thumbnail with centered play-icon overlay. Tap opens full-screen `VideoPlayer`.
-- [x] T080 [US12] Add `video` case routing in `MessageBubbleWidget.build()` to render `_VideoBubble` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
-- [x] T081 [US12] Create `MediaGalleryViewer` widget in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart` — full-screen `PageView` with all media messages (images + videos) from the conversation. Images use `CachedNetworkImage`, videos use `VideoPlayer`. Supports horizontal swipe.
-- [x] T082 [US12] Wire tap on any image/video bubble to open `MediaGalleryViewer` at the tapped item's index in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`.
-
-**Checkpoint**: Video messages send and render with thumbnail + play icon. Media gallery supports swipe.
-
----
-
-## Phase 16: User Story 13 - Resend Failed Messages (Priority: P1)
-
-**Goal**: Display a resend icon on failed messages and allow one-tap retry.
-
-**Independent Test**: Disable network, send message, verify error icon. Re-enable, tap resend, verify delivery.
-
-### Implementation for User Story 13
-
-- [x] T083 [US13] Implement `resendMessage(String clientMessageId)` in `lib/features/chat/presentation/bloc/chat_cubit.dart` — look up the failed message from local state, update status to `pending`, re-emit via socket with the original `clientMessageId`. On failure, revert to `error` status.
-- [x] T084 [US13] In `MessageBubbleWidget`, detect `message.status == MessageStatus.error` and render a resend icon button (circular arrow `Icons.refresh`) positioned to the left of outgoing bubbles in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`. Tap calls `ChatCubit.resendMessage(message.clientMessageId)`.
-- [x] T085 [US13] Update SQLite status to `pending` on resend and to `error` on re-failure in `lib/features/chat/data/datasources/chat_local_data_source.dart` via existing `updateMessageStatus()` method.
-
-**Checkpoint**: 100% of error-status messages show resend icon. Tapping retries successfully.
-
----
-
-## Phase 17: User Story 14 - Block User (Priority: P2)
-
-**Goal**: Full block/unblock user feature with backend REST + socket guard + frontend ChatInfoScreen integration.
-
-**Independent Test**: Open Chat Info, tap "Block user", confirm. Verify messages stop. Unblock, verify resume.
+**Independent Test**: Start a new P2P chat from contacts, send the first message. Verify it arrives instantly without the 300ms delay.
 
 ### Backend Implementation
 
-- [x] T086 [US14] [P] Add `blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }]` field to the User schema in `E:\zeyad\chat-app-backend\src\modules\chat\schemas\` (either in existing user schema or via a new field on the auth user model).
-- [x] T087 [US14] [P] Implement `blockUser(userId, targetId)`, `unblockUser(userId, targetId)`, `getBlockList(userId)`, and `isBlocked(senderId, recipientId)` methods in `E:\zeyad\chat-app-backend\src\modules\chat\chat.service.ts`.
-- [x] T088 [US14] Add REST endpoints: `POST /chat/block/:userId`, `DELETE /chat/block/:userId`, `GET /chat/block-list` in `E:\zeyad\chat-app-backend\src\modules\chat\chat.controller.ts`. All require JWT auth guard.
-- [x] T089 [US14] Add block guard in the `send_message` socket handler in `E:\zeyad\chat-app-backend\src\modules\chat\chat.gateway.ts`: before delivering a message, call `isBlocked(senderId, recipientId)`. If blocked, silently drop the message.
+- [ ] T129 [P] Update `POST /chat/private/resolve` to accept optional `firstMessage` field in request body in backend `chat.controller.ts` / `chat.service.ts`
+- [ ] T130 Implement atomic handler: if `firstMessage` present, create room → join socket → persist message → emit to recipient → return `{ roomId, message }` in backend `chat.service.ts`
 
 ### Frontend Implementation
 
-- [x] T090 [US14] Add `blockUser(String targetUserId)`, `unblockUser(String targetUserId)`, and `isUserBlocked(String targetUserId)` methods to `lib/features/chat/presentation/bloc/chat_cubit.dart`. Call REST endpoints via `ChatRemoteDataSource`.
-- [x] T091 [US14] Add `blockUser()`, `unblockUser()`, `getBlockList()` methods to `lib/features/chat/data/datasources/chat_remote_data_source.dart` using DioClient.
-- [x] T092 [US14] Wire "Block user" tile in `lib/features/chat/presentation/pages/chat_info_screen.dart`: show confirmation dialog, call `ChatCubit.blockUser()`, toggle tile text to "Unblock user" on success.
+- [ ] T131 Update `createPrivateChatRoom()` to accept optional `firstMessage` parameter and parse response for both `roomId` and `message` in `lib/features/chat/data/datasources/chat_remote_data_source.dart`
+- [ ] T132 Remove `Future.delayed(const Duration(milliseconds: 300))` from `_ensureRoom()` and use atomic resolve for first message in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [ ] T133 Update `sendMessage()` — if `roomId` is empty (JIT), call atomic resolve with first message payload. Use response to set roomId and confirm message sent in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
-**Checkpoint**: Blocking prevents message exchange. Unblocking restores it.
-
----
-
-## Phase 18: User Story 15 - Search in Chat Room (Priority: P2)
-
-**Goal**: In-chat message search with results list and scroll-to-message navigation.
-
-**Independent Test**: Open chat, tap search, type keyword. Verify results listed. Tap result, verify scroll + highlight.
-
-### Implementation for User Story 15
-
-- [x] T093 [US15] Add `searchMessages(String roomId, String query)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — SQL `SELECT * FROM messages WHERE roomId = ? AND text LIKE '%' || ? || '%' ORDER BY createdAt DESC LIMIT 50`.
-- [x] T094 [US15] Add `searchMessages(String query)` method to `lib/features/chat/presentation/bloc/chat_cubit.dart` — calls local data source, emits search results via a `ValueNotifier<List<Message>>` or a dedicated state field.
-- [x] T095 [US15] Create `ChatSearchBar` widget in `lib/features/chat/presentation/widgets/chat_search_bar.dart` — animated overlay at top of chat room with a `TextField`, shows results as a scrollable `ListView` of message previews.
-- [x] T096 [US15] Wire search trigger: add search icon to `ChatRoomScreen` AppBar actions. Tapping toggles `ChatSearchBar` visibility in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
-- [x] T097 [US15] Implement scroll-to-message: when user taps a search result, calculate the message index in the full message list, call `ScrollController.jumpTo()` or `Scrollable.ensureVisible()`, and briefly highlight the target message with a fade animation in `lib/features/chat/presentation/pages/chat_room_screen.dart`.
-
-**Checkpoint**: Search returns results <1s. Tapping scrolls to message with highlight.
+**Checkpoint**: First message in new chat arrives without delay. No `Future.delayed` hack.
 
 ---
 
-## Phase 19: User Story 16 - ChatInfoScreen Full Logic (Priority: P1)
+## Phase 26: Message Deletion (FR-022) — Priority: P1
 
-**Goal**: Wire all interactive elements in ChatInfoScreen to real data and actions.
+**Goal**: WhatsApp-style "Delete for Me" (local) and "Delete for Everyone" (socket broadcast, 1-hour limit).
 
-**Depends on**: Phase 17 (Block User), Phase 18 (Search)
+**Independent Test**: Send a message, long-press, delete for everyone within 1 hour. Verify both parties see "This message was deleted". Try after 1 hour — verify option is hidden.
 
-**Independent Test**: Open Chat Info — profile from real data, quick actions work, media shows real content.
+### Schema & Entity
 
-### Implementation for User Story 16
+- [ ] T134 [P] Add `is_deleted INTEGER DEFAULT 0` column to messages schema and `ALTER TABLE` migration in `initDB()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [ ] T135 [P] Add `final bool isDeleted` field (default `false`) to `Message` entity, update `fromMap()`/`toMap()` in `lib/features/chat/domain/entities/message.dart`
 
-- [x] T098 [US16] Wire "Voice call" quick action to `CallCubit.initiateCall(type: voice)` and "Video call" to `CallCubit.initiateCall(type: video)` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [x] T099 [US16] Wire "Search" quick action to navigate back to `ChatRoomScreen` and open `ChatSearchBar` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [x] T100 [US16] Add `getSharedMedia(String roomId)` method to `lib/features/chat/data/datasources/chat_local_data_source.dart` — query messages with `type IN ('image', 'video', 'file')` ordered by `createdAt DESC`.
-- [x] T101 [US16] Replace static media grid in `_buildMediaSection()` with real shared media from `getSharedMedia()` in `lib/features/chat/presentation/pages/chat_info_screen.dart`. Show empty state if no media.
-- [x] T102 [US16] Wire "Block user" tile to `ChatCubit.blockUser()` from Phase 17 with confirmation dialog in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
-- [x] T103 [US16] Wire "Mute notifications" and "Chat lock" toggle state to SharedPreferences-persisted preferences using keys `mute_<roomId>` and `lock_<roomId>` in `lib/features/chat/presentation/pages/chat_info_screen.dart`.
+### Backend
 
-**Checkpoint**: ChatInfoScreen fully functional — all actions wired, real data displayed.
+- [ ] T136 [P] Add `isDeleted: { type: Boolean, default: false }` to message schema in backend `message.schema.ts`
+- [ ] T137 Implement `deleteForEveryone` socket event handler in backend `chat.gateway.ts` — validate sender ownership + 1-hour limit, set `isDeleted: true`, broadcast `messageDeleted` event
 
----
+### Frontend
 
-## Phase 20: User Story 17 - Splash Screen Chat Preload (Priority: P2)
+- [ ] T138 Implement `deleteMessageForMe(String messageId)` with confirmation dialog in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [ ] T139 Implement `deleteMessageForEveryone(String clientMessageId)` — emit socket event, update local SQLite, refresh UI in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [ ] T140 Listen for `messageDeleted` socket event — find message by `clientMessageId`, set `isDeleted = true` in local DB and state in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [ ] T141 Update `MessageBubbleWidget` — if `message.isDeleted`, render "🚫 This message was deleted" in italic grey text in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [ ] T142 Update long-press menu — show "Delete for Me" always, show "Delete for Everyone" only if `isMine && DateTime.now() - message.createdAt < 1 hour` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
 
-**Goal**: Preload chat list during splash so home screen renders immediately without a loading spinner.
-
-**Independent Test**: Launch app. Chat list visible instantly on home screen — no loading spinner.
-
-### Implementation for User Story 17
-
-- [x] T104 [US17] In `SplashScreen`, after `AuthCubit.verifyAuthStatus()` resolves as authenticated, call `ChatCubit.hydrateRooms()` using `context.read<ChatCubit>()` in `lib/features/splash/presentation/pages/splash_screen.dart`.
-- [x] T105 [US17] Use `Future.wait([authFuture, chatLoadFuture])` to parallelize auth verification and chat preload. Navigate to home only after both complete in `lib/features/splash/presentation/pages/splash_screen.dart`.
-- [x] T106 [US17] Remove or gate the loading spinner in the home screen's chat list `BlocBuilder` — if state already has chats, render immediately in `lib/features/chat/presentation/pages/chat_list_screen.dart`.
-
-**Checkpoint**: Chat list visible within 500ms of home screen navigation — no spinner.
+**Checkpoint**: Both delete modes work. Deleted messages show placeholder. Time limit enforced.
 
 ---
 
-## Phase 21: Final Polish & Cross-Cutting (New Features)
+## Phase 27: Voice Waveform Optimization (FR-025) — Priority: P1
 
-**Purpose**: Final validation across all new user stories
+**Goal**: Extract waveform at record time (sender), transmit via socket, receiver renders instantly from cached data — never re-extracts.
 
-- [x] T107 [P] Update `_mediaPreview()` to handle `video` type (`'🎬 Video'`) in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [x] T108 Run full `flutter analyze` — zero errors across all modified files
-- [x] T109 Verify backend `flutter analyze` equivalent (`npm run lint`) passes in `E:\zeyad\chat-app-backend`
-- [x] T110 Final smoke test — send video, resend failed message, block/unblock user, search messages, verify splash preload
+**Independent Test**: Record and send a voice note. On receiver device, verify waveform renders instantly without extraction delay. Exit and re-enter chat — waveform still instant.
+
+### Implementation
+
+- [ ] T143 In `_stopAndSendRecording()`, after recording stops, use `PlayerController` to extract waveform data (50 samples) from the recorded file. Pass `waveformSamples` in metadata to `sendVoiceNote()` in `lib/features/chat/presentation/widgets/chat_input_bar.dart`
+- [ ] T144 Update `sendVoiceNote()` to include `metadata.waveformSamples` in the socket `sendMessage` event payload in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [ ] T145 Update `_VoiceBubble._preparePlayer()` — always call `preparePlayer(shouldExtractWaveform: false)`. Read waveform from `message.metadata['waveformSamples']` directly. Remove all calls to `extractWaveformData()` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+**Checkpoint**: Waveform extraction happens once at recording. Receiver never extracts. Instant rendering.
+
+---
+
+## Phase 28: Poll & Event UI Refactoring (FR-023) — Priority: P2
+
+**Goal**: Refactor Create Poll dialog, Create Event dialog, Poll bubble, and Event bubble to match WhatsApp reference images using `AppColors`.
+
+**Independent Test**: Open Group chat → attachment → Poll. Verify dialog matches `create_poll.jpeg`. Send poll, verify bubble matches `poll_msg.jpeg`. Same for events.
+
+### Implementation
+
+- [ ] T146 [P] Refactor `CreatePollDialog` to match `images_ui/create_poll.jpeg` — dark modal, QUESTION section, OPTIONS with drag-reorder handles, "Allow multiple answers" toggle, Cancel/Send actions, all using `AppColors` in `lib/features/chat/presentation/widgets/create_poll_dialog.dart`
+- [ ] T147 [P] Refactor `CreateEventDialog` to match `images_ui/create_event.jpeg` — event name, description (2048 char limit), start/end date-time pickers, "Include end time" toggle, location field, reminder dropdown, "Allow guests" toggle, Cancel/Send, all using `AppColors` in `lib/features/chat/presentation/widgets/create_event_dialog.dart`
+- [ ] T148 [P] Refactor `_buildPollBubble()` to match `images_ui/poll_msg.jpeg` — question title, "Select one or more" hint, radio/checkbox options with vote counts and progress bars, "View votes" button, all using `AppColors` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [ ] T149 [P] Refactor `_buildEventBubble()` to match `images_ui/event_msg_in_chat.jpeg` — calendar icon, event title, date range, description, "Join call" and "Add to calendar" buttons, all using `AppColors` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+**Checkpoint**: All 4 UIs match reference images with `AppColors` palette.
+
+---
+
+## Phase 29: Shared Media Screen (FR-024) — Priority: P2
+
+**Goal**: Dedicated tabbed media screen (Media/Links/Docs) accessible from ChatInfoScreen with instant loading from SQLite.
+
+**Independent Test**: Open ChatInfoScreen, tap "Media, links and documents". Verify tabbed screen opens with grid/list views. Verify media loads instantly without spinner.
+
+### Data Layer
+
+- [ ] T150 [P] Add `getSharedLinks(String roomId)` method — query messages containing URLs in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [ ] T151 [P] Add `getSharedDocs(String roomId)` method — query messages where `type = 'file'` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [ ] T152 [P] Add `getMediaCount(String roomId)` method — return `{photos: int, videos: int}` counts in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+
+### Presentation Layer
+
+- [ ] T153 Create `SharedMediaScreen` page with `TabBarView` (3 tabs: Media, Links, Docs). Media tab: 4-column `GridView.builder`. Links/Docs tabs: `ListView.builder`. Footer with count summary. "Select" button for multi-select. Styled with `AppColors`, matching `images_ui/media_screen.jpeg` in `lib/features/chat/presentation/pages/shared_media_screen.dart`
+- [ ] T154 Wrap "Media, links and documents" header in `ChatInfoScreen` with `GestureDetector` → navigate to `SharedMediaScreen` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
+
+**Checkpoint**: Tabbed media screen opens from ChatInfoScreen. Media loads instantly from SQLite cache.
+
+---
+
+## Phase 30: Media Bubble Display Refactor (FR-026) — Priority: P2
+
+**Goal**: Image and video chat bubbles match WhatsApp-exact display — overlaid timestamps, video play button + duration, polished full-screen viewer.
+
+**Independent Test**: Send an image. Verify timestamp + ticks overlay ON the image (not below). Send a video. Verify play button centered + duration label visible. Tap to open full-screen viewer with black background.
+
+### Implementation
+
+- [ ] T155 Refactor `_ImageBubble` — move timestamp+ticks footer INSIDE the image as overlay at bottom-right with semi-transparent dark gradient behind text. Increase border radius to `16.resR`. White text, smaller font, `Positioned(bottom: 6, right: 8)` inside a `Stack` in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [ ] T156 Refactor `_VideoBubble` — same overlay pattern as `_ImageBubble` for timestamp+ticks. Add centered play button (white triangle in semi-transparent dark circle). Add duration label (e.g., "0:14") at bottom-left with dark background chip in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [ ] T157 Refactor `MediaGalleryViewer` — solid black background, header with sender name + date/time, top-right action icons (share, star, delete), bottom "Reply" button. Voice notes show white waveform on black background with progress bar in `lib/features/chat/presentation/widgets/media_gallery_viewer.dart`
+
+**Checkpoint**: Media bubbles have overlaid timestamps. Videos show play button + duration. Full-screen viewer is polished.
+
+---
+
+## Phase 31: Final Polish & Cross-Cutting (P2P Focus)
+
+**Purpose**: Final validation across all new P2P features
+
+- [ ] T158 [P] Verify no `Future.delayed` hacks remain in `lib/features/chat/` — run `grep -rn "Future.delayed" lib/features/chat/`
+- [ ] T159 [P] Verify no `ConflictAlgorithm.replace` on messages table — run `grep -rn "ConflictAlgorithm.replace" lib/features/chat/`
+- [ ] T160 [P] Scan for remaining `Colors.*` literals in `lib/features/chat/` — all should use `AppColors`
+- [ ] T161 Run full `flutter analyze` — zero errors across all modified files
+- [ ] T162 Final smoke test — send messages in new P2P chat (atomic JIT), scroll up to load older messages, delete a message for everyone, verify waveform instant render, open shared media screen, verify media bubbles have overlaid timestamps
 
 ---
 
@@ -302,42 +213,43 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 ### Phase Dependencies
 
-- **Phase 1-13** (T001-T070): ✅ COMPLETED in prior sessions
-- **Phase 14** (US11 - Waveform Cache): No dependencies — can start immediately
-- **Phase 15** (US12 - Video Messages): No dependencies — can start immediately
-- **Phase 16** (US13 - Resend Failed): No dependencies — can start immediately
-- **Phase 17** (US14 - Block User): No dependencies — can start immediately
-- **Phase 18** (US15 - Search): No dependencies — can start immediately
-- **Phase 19** (US16 - ChatInfoScreen): Depends on Phase 17 (block) + Phase 18 (search)
-- **Phase 20** (US17 - Splash Preload): No dependencies — can start immediately
-- **Phase 21** (Polish): Depends on ALL previous phases
+- **Phases 1-21** (T001-T110): ✅ COMPLETED in prior sessions
+- **Phase 22** (Idempotency): No dependencies — start immediately
+- **Phase 23** (Scoped Status): Depends on Phase 22 (shares `updateMessageStatus()`)
+- **Phase 24** (Pagination): No dependencies — can start in parallel with Phase 22
+- **Phase 25** (Atomic JIT): No dependencies — can start immediately
+- **Phase 26** (Deletion): Depends on Phase 22 (idempotency guards needed for delete events)
+- **Phase 27** (Waveform): No dependencies — can start immediately
+- **Phase 28** (Poll/Event UI): No dependencies — can start immediately
+- **Phase 29** (Media Screen): No dependencies — can start immediately
+- **Phase 30** (Media Bubbles): No dependencies — can start immediately
+- **Phase 31** (Polish): Depends on ALL previous phases
 
 ### Parallel Opportunities
 
-- **Phase 14 + 15 + 16 + 17 + 18 + 20**: All independent — can run in parallel
-- **T074 + T075**: Backend + Flutter enum changes can run in parallel
-- **T086 + T087**: Backend schema + service can run in parallel
-- **Phase 19**: Must wait for Phase 17 + 18
+- **Phase 22 + 24 + 25 + 27 + 28 + 29 + 30**: All independent — can run in parallel
+- **T134 + T135 + T136**: Schema changes can run in parallel (different files)
+- **T146 + T147 + T148 + T149**: All 4 UI refactors are independent files
+- **T150 + T151 + T152**: All 3 data queries are independent methods
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (New Features)
+### MVP First (P0 Critical)
 
-1. Phase 16: Resend Failed Messages (T083-T085) — quick win, high user impact
-2. Phase 14: Waveform Cache (T071-T073) — stability improvement
-3. Phase 15: Video Messages (T074-T082) — largest new feature
+1. Phase 22: Idempotency (T111-T115) — data integrity fix
+2. Phase 23: Scoped Status (T116-T121) — inbox correctness
+3. Phase 24: Pagination (T122-T128) — memory management
 
 ### Incremental Delivery
 
-1. Resend + Waveform Cache → Stability layer
-2. Video Messages → Multimedia expansion
-3. Block User (backend first, then frontend) → Safety feature
-4. Search in Chat → Discovery feature
-5. ChatInfoScreen Full Logic → Requires Block + Search
-6. Splash Preload → Performance polish
-7. Final Polish → Ship-ready
+1. Idempotency + Scoped Status + Pagination → **Stability layer**
+2. Atomic JIT (T129-T133) → **Race condition elimination**
+3. Deletion (T134-T142) → **User trust feature**
+4. Waveform (T143-T145) → **Performance optimization**
+5. Poll/Event UI + Media Screen + Media Bubbles → **Visual polish**
+6. Final Polish → **Ship-ready**
 
 ---
 
@@ -345,7 +257,6 @@ description: "Task list for Optimize Chat Lifecycle feature"
 
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- Commit after each task or logical group
-- Stop at any checkpoint to validate story independently
-- T001-T070 are all completed from prior sessions — new work starts at T071
+- T001-T110 are all completed from prior sessions — new work starts at T111
+- Backend tasks (T129-T130, T136-T137) require access to `E:\zeyad\chat-app-backend`
+- Commit after each phase checkpoint

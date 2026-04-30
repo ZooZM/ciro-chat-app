@@ -64,6 +64,12 @@ class ChatCubit extends Cubit<ChatState> {
   // Block state is owned by ChatState (ChatBlockUpdated / ChatRoomActive.blockedUserIds).
   // Do NOT add mutable block fields here — emit() is the single source of truth.
 
+  // FR-018: Pagination state for infinite scroll.
+  static const int _pageSize = 30;
+  int _messageOffset = 0;
+  bool _hasMoreMessages = true;
+  bool _isLoadingMore = false;
+
   final _typingUsersController = StreamController<Set<String>>.broadcast();
   Stream<Set<String>> get typingUsersStream => _typingUsersController.stream;
   final Set<String> _currentTypingUsers = {};
@@ -190,6 +196,16 @@ class ChatCubit extends Cubit<ChatState> {
       final clientMsgId = data['clientMessageId'] ?? _uuid.v4();
       final mongoId = data['_id'] ?? data['id'] ?? _uuid.v4();
 
+      // FR-019: Dedup check — skip if this clientMessageId is already in
+      // the current in-memory message list (prevents duplicates on reconnect).
+      if (state is ChatRoomActive) {
+        final msgs = (state as ChatRoomActive).messages;
+        if (msgs.any((m) => m.clientMessageId == clientMsgId)) {
+          debugPrint('[ChatCubit] Dedup: $clientMsgId already in state, skipping.');
+          return;
+        }
+      }
+
       final rawType = data['type'] as String? ?? data['messageType'] as String?;
       final incomingFileUrl = data['fileUrl'] as String?;
 
@@ -258,6 +274,11 @@ class ChatCubit extends Cubit<ChatState> {
   // ── Room lifecycle ──────────────────────────────────────────────────────────
 
   void openRoom(String roomId, {ChatSession? contact, ChatSession? room}) async {
+    // FR-018: Reset pagination state on room open.
+    _messageOffset = 0;
+    _hasMoreMessages = true;
+    _isLoadingMore = false;
+
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
@@ -316,6 +337,43 @@ class ChatCubit extends Cubit<ChatState> {
           (messages) => emit(ChatRoomActive(roomId, messages)),
           onError: (e) => emit(ChatError(e.toString())),
         );
+  }
+
+  // ── FR-018: Infinite scroll pagination ─────────────────────────────────────
+
+  /// Loads the next page of older messages and prepends them to the state.
+  Future<void> loadMoreMessages() async {
+    if (_isLoadingMore || !_hasMoreMessages) return;
+    final roomId = _activeRoomId;
+    if (roomId == null || roomId.isEmpty) return;
+    if (state is! ChatRoomActive) return;
+
+    _isLoadingMore = true;
+    final activeState = state as ChatRoomActive;
+    emit(activeState.copyWith(isLoadingMore: true));
+
+    _messageOffset += _pageSize;
+    final olderMessages = await _localDataSource.getRoomMessages(
+      roomId,
+      limit: _pageSize,
+      offset: _messageOffset,
+    );
+
+    _isLoadingMore = false;
+    if (olderMessages.isEmpty || olderMessages.length < _pageSize) {
+      _hasMoreMessages = false;
+    }
+
+    if (state is ChatRoomActive) {
+      final currentState = state as ChatRoomActive;
+      // Prepend older messages (they come oldest-first from the reversed query).
+      final merged = [...olderMessages, ...currentState.messages];
+      emit(currentState.copyWith(
+        messages: merged,
+        isLoadingMore: false,
+        hasMoreMessages: _hasMoreMessages,
+      ));
+    }
   }
 
   void closeRoom() {
