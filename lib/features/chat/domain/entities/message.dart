@@ -194,10 +194,13 @@ class Message extends Equatable {
   }
   factory Message.fromNetworkMap(Map<String, dynamic> map) {
     Map<String, dynamic>? parsedMeta;
-    final rawMeta = map['metadata'] as String?;
-    if (rawMeta != null && rawMeta.isNotEmpty) {
+    final metaDataField = map['metadata'];
+
+    if (metaDataField is Map) {
+      parsedMeta = Map<String, dynamic>.from(metaDataField);
+    } else if (metaDataField is String && metaDataField.isNotEmpty) {
       try {
-        parsedMeta = jsonDecode(rawMeta) as Map<String, dynamic>;
+        parsedMeta = jsonDecode(metaDataField) as Map<String, dynamic>;
       } catch (_) {
         parsedMeta = null;
       }
