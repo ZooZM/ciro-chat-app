@@ -302,7 +302,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => SharedMediaScreen(roomId: widget.chatData.id),
+                    builder: (_) =>
+                        SharedMediaScreen(roomId: widget.chatData.id),
                   ),
                 );
               },
@@ -559,7 +560,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     return BlocBuilder<ChatCubit, ChatState>(
       buildWhen: (prev, curr) =>
           curr is ChatBlockUpdated ||
-          (curr is ChatRoomActive && prev is ChatRoomActive &&
+          (curr is ChatRoomActive &&
+              prev is ChatRoomActive &&
               curr.blockedUserIds != prev.blockedUserIds),
       builder: (context, state) {
         final cubit = context.read<ChatCubit>();

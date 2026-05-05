@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -46,7 +47,7 @@ class CallOverlay extends StatelessWidget {
           // Use push (not pushReplacement) so the chat route stays in the stack
           // and the user returns to it after the call ends.
           context.push(
-            '/incoming_call',
+            AppRouterName.incomingCall,
             extra: {
               'callerName': state.callerName,
               'callerAvatarUrl': state.callerAvatarUrl,
@@ -57,7 +58,7 @@ class CallOverlay extends StatelessWidget {
         } else if (state is CallOutgoing) {
           // ── Outgoing call → full-screen ────────────────────────────────────
           context.push(
-            '/outgoing_call',
+            AppRouterName.outgoingCall,
             extra: {
               'contactName': state.targetName,
               'avatarUrl': state.targetAvatarUrl,
@@ -72,18 +73,24 @@ class CallOverlay extends StatelessWidget {
               : '??';
 
           if (state.isVideo) {
-            context.pushReplacement('/video_call', extra: {
-              'contactName': state.contactName,
-              'livekitUrl': state.livekitUrl,
-              'livekitToken': state.livekitToken,
-            });
+            context.pushReplacement(
+              AppRouterName.videoCall,
+              extra: {
+                'contactName': state.contactName,
+                'livekitUrl': state.livekitUrl,
+                'livekitToken': state.livekitToken,
+              },
+            );
           } else {
-            context.pushReplacement('/voice_call', extra: {
-              'contactName': state.contactName,
-              'avatarInitials': initials,
-              'livekitUrl': state.livekitUrl,
-              'livekitToken': state.livekitToken,
-            });
+            context.pushReplacement(
+              '/voice_call',
+              extra: {
+                'contactName': state.contactName,
+                'avatarInitials': initials,
+                'livekitUrl': state.livekitUrl,
+                'livekitToken': state.livekitToken,
+              },
+            );
           }
         } else if (state is CallEnded) {
           // ── Call ended — pop the call screen if it is on top ───────────────

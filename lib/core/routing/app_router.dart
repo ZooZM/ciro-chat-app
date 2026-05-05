@@ -25,7 +25,7 @@ import 'go_router_refresh_stream.dart';
 class AppRouterName {
   static const String splash = '/splash';
   static const String auth = '/auth';
-  static const String verify = '/auth/verify';
+  static const String verify = 'verify';
   static const String home = '/home';
   static const String createGroup = '/home/create_group';
   static const String chatRoom = '/chat_room';
@@ -35,6 +35,8 @@ class AppRouterName {
   static const String videoCall = '/video_call';
   static const String outgoingCall = '/outgoing_call';
   static const String voiceCall = '/voice_call';
+  static const String updates = '/updates';
+  static const String video = '/video';
 }
 
 final GoRouter appRouter = GoRouter(
@@ -77,21 +79,21 @@ final GoRouter appRouter = GoRouter(
   },
   routes: [
     GoRoute(
-      path: '/splash',
+      path: AppRouterName.splash,
       builder: (context, state) => BlocProvider.value(
         value: getIt<AuthCubit>(),
         child: const SplashScreen(),
       ),
     ),
     GoRoute(
-      path: '/auth',
+      path: AppRouterName.auth,
       builder: (context, state) => BlocProvider.value(
         value: getIt<AuthCubit>(),
         child: const MobileNumberScreen(),
       ),
       routes: [
         GoRoute(
-          path: 'verify',
+          path: AppRouterName.verify,
           builder: (context, state) {
             final phone = state.extra as String? ?? '';
             return BlocProvider.value(
@@ -103,7 +105,7 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      path: '/video',
+      path: AppRouterName.video,
       builder: (context, state) => Scaffold(
         body: Center(
           child: ElevatedButton(
@@ -114,7 +116,7 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
-      path: '/home',
+      path: AppRouterName.home,
       builder: (context, state) => const ChatListScreen(),
       routes: [
         GoRoute(
@@ -124,7 +126,7 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      path: '/chat_room',
+      path: AppRouterName.chatRoom,
       builder: (context, state) {
         final chat = state.extra as ChatSession;
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
@@ -132,15 +134,15 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/group_chat',
+      path: AppRouterName.groupChat,
       builder: (context, state) => const GroupChatScreen(),
     ),
     GoRoute(
-      path: '/contacts',
+      path: AppRouterName.contacts,
       builder: (context, state) => const ContactsScreen(),
     ),
     GoRoute(
-      path: '/incoming_call',
+      path: AppRouterName.incomingCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return IncomingCallScreen(
@@ -152,7 +154,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/video_call',
+      path: AppRouterName.videoCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return VideoCallScreen(
@@ -163,7 +165,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/outgoing_call',
+      path: AppRouterName.outgoingCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return OutgoingCallScreen(
@@ -173,7 +175,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/voice_call',
+      path: AppRouterName.voiceCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return VoiceCallScreen(
@@ -185,7 +187,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/updates',
+      path: AppRouterName.updates,
       builder: (context, state) => const UpdatesScreen(),
     ),
   ],

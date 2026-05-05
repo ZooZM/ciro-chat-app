@@ -63,8 +63,8 @@ class CallActive extends CallState {
   final bool isVideo;
 
   const CallActive({
-    required this.livekitToken, 
-    required this.livekitUrl, 
+    required this.livekitToken,
+    required this.livekitUrl,
     required this.contactName,
     this.isVideo = true,
   });
@@ -78,10 +78,7 @@ class CallConnecting extends CallState {
   final String contactName;
   final bool isVideo;
 
-  const CallConnecting({
-    required this.contactName,
-    this.isVideo = true,
-  });
+  const CallConnecting({required this.contactName, this.isVideo = true});
 
   @override
   List<Object?> get props => [contactName, isVideo];
@@ -121,7 +118,9 @@ class CallCubit extends Cubit<CallState> {
           callerId: data['callerId'] as String? ?? '',
           callerName: data['callerName'] as String? ?? 'Unknown',
           callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
-          isVideo: data['isVideo'] == true, // Rely on backend, fallback to false if omitted
+          isVideo:
+              data['isVideo'] ==
+              true, // Rely on backend, fallback to false if omitted
         ),
       );
 
@@ -134,9 +133,9 @@ class CallCubit extends Cubit<CallState> {
       _stopRinging();
       final currentState = state;
       String contactName = 'Unknown';
-      
+
       bool isVideo = true;
-      
+
       if (currentState is CallOutgoing) {
         contactName = currentState.targetName;
         isVideo = currentState.isVideo;
@@ -151,7 +150,9 @@ class CallCubit extends Cubit<CallState> {
       emit(
         CallActive(
           livekitToken: data['livekitToken'] as String? ?? '',
-          livekitUrl: data['livekitUrl'] as String? ?? 'wss://ciro-chat-qc2pe2cz.livekit.cloud',
+          livekitUrl:
+              data['livekitUrl'] as String? ??
+              'wss://ciro-chat-qc2pe2cz.livekit.cloud',
           contactName: contactName,
           isVideo: isVideo,
         ),
@@ -185,12 +186,14 @@ class CallCubit extends Cubit<CallState> {
     );
 
     // CRITICAL: Play dialing sound continuously in a LOOP
-    _audioPlayer.play(
-      android: AndroidSounds.ringtone,
-      ios: IosSounds.electronic,
-      looping: true,
-      volume: 0.5,
-    );
+    Future.delayed(Duration.zero, () {
+      _audioPlayer.play(
+        android: AndroidSounds.ringtone,
+        ios: IosSounds.electronic,
+        looping: true,
+        volume: 0.5,
+      );
+    });
   }
 
   /// Receiver taps Accept → emits acceptCall

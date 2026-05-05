@@ -363,10 +363,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           itemBuilder: (context, index) {
                             // FR-018: Last item (top of screen) shows loading indicator.
                             if (index == displayMessages.length) {
-                              if (state is ChatRoomActive && state.isLoadingMore) {
+                              if (state is ChatRoomActive &&
+                                  state.isLoadingMore) {
                                 return const Padding(
                                   padding: EdgeInsets.all(16.0),
-                                  child: Center(child: CupertinoActivityIndicator()),
+                                  child: Center(
+                                    child: CupertinoActivityIndicator(),
+                                  ),
                                 );
                               }
                               return const SizedBox.shrink();
@@ -491,6 +494,7 @@ class ChatRoomIcon extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              SizedBox(height: 4.resH),
               TypingIndicatorWidget(
                 roomId: chatData.id,
                 roomType: chatData.type,

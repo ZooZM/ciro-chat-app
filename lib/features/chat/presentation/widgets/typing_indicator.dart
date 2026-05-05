@@ -37,17 +37,15 @@ class TypingIndicatorWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatCubit, ChatState>(
       // Only rebuild when a TypingUpdate arrives for this specific room.
-      buildWhen: (prev, curr) =>
-          curr is TypingUpdate && curr.roomId == roomId,
+      buildWhen: (prev, curr) => curr is TypingUpdate && curr.roomId == roomId,
       builder: (context, state) {
         // Read the current typing set from the cubit's internal map so the
         // first build (before any TypingUpdate is emitted) shows the correct
         // idle subtitle rather than an empty string.
         final cubit = context.read<ChatCubit>();
-        final typingUsers =
-            state is TypingUpdate && state.roomId == roomId
-                ? state.typingUsers
-                : cubit.typingUsersForRoom(roomId);
+        final typingUsers = state is TypingUpdate && state.roomId == roomId
+            ? state.typingUsers
+            : cubit.typingUsersForRoom(roomId);
 
         if (typingUsers.isNotEmpty) {
           final label = roomType == ChatRoomType.GROUP
