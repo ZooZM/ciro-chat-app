@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/network/socket_service.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +58,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             onPressed: () async {
               await getIt<AuthCubit>().logOut();
               if (mounted) {
-                context.go('/auth');
+                context.go(AppRouterName.auth);
               }
             },
           ),
@@ -69,7 +70,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               child: IconButton(
                 icon: Icon(Icons.add, color: Colors.white, size: 20.resW),
                 onPressed: () {
-                  context.push('/contacts');
+                  context.push(AppRouterName.contacts);
                 },
                 padding: EdgeInsets.zero,
               ),
@@ -275,7 +276,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 .currentUserId,
                             isTyping: isTyping,
                             onTap: () {
-                              context.push('/chat_room', extra: chat);
+                              context.push(AppRouterName.chatRoom, extra: chat);
                             },
                           );
                         },

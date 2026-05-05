@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:equatable/equatable.dart';
 
 enum MessageStatus { pending, sent, delivered, read, error }
@@ -103,6 +104,10 @@ class Message extends Equatable {
 
   /// FR-022: True if this message has been soft-deleted ("This message was deleted").
   final bool isDeleted;
+
+  /// US3: Returns the absolute URL for media files, resolving relative paths
+  /// against the API base URL.
+  String get resolvedFileUrl => UrlUtils.resolveMediaUrl(fileUrl);
 
   const Message({
     required this.id,

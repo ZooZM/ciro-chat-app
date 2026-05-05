@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -16,10 +17,7 @@ class DioClient {
 
   DioClient(this._authLocal, this._dio) {
     _dio.options = BaseOptions(
-      baseUrl: const String.fromEnvironment(
-        'API_URL',
-        defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-      ),
+      baseUrl: AppConstants.apiBaseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {

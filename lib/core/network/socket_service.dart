@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
@@ -69,13 +70,8 @@ class SocketService {
     // (e.g., during mid-session token refresh via DioClient).
     disconnect();
 
-    final url = const String.fromEnvironment(
-      'API_URL',
-      defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-    );
-
     _socket = IO.io(
-      url,
+      AppConstants.apiBaseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -335,14 +331,7 @@ class SocketService {
       final refreshToken = await authLocal.getRefreshToken();
       if (refreshToken != null && refreshToken.isNotEmpty) {
         // Launch isolated network payload identical to DioClient interceptor logic
-        final refreshDio = Dio(
-          BaseOptions(
-            baseUrl: const String.fromEnvironment(
-              'API_URL',
-              defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-            ),
-          ),
-        );
+        final refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
 
         final response = await refreshDio.post(
           '/auth/refresh',

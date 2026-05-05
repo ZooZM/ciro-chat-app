@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../bloc/call_cubit.dart';
@@ -32,7 +33,7 @@ class IncomingCallScreen extends StatelessWidget {
               
           if (state.isVideo) {
             context.pushReplacement(
-              '/video_call',
+              AppRouterName.videoCall,
               extra: {
                 'contactName': state.contactName,
                 'livekitUrl': state.livekitUrl,
@@ -41,7 +42,7 @@ class IncomingCallScreen extends StatelessWidget {
             );
           } else {
             context.pushReplacement(
-              '/voice_call',
+              AppRouterName.voiceCall,
               extra: {
                 'contactName': state.contactName,
                 'avatarInitials': initials,

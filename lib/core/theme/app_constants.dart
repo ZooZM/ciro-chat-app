@@ -5,6 +5,13 @@ import 'app_colors.dart';
 class AppConstants {
   AppConstants._();
 
+  // ── Network ───────────────────────────────────────────────────────────────
+
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+  );
+
   // ── Spacing ───────────────────────────────────────────────────────────────
 
   static const double spacingXs  =  4.0;

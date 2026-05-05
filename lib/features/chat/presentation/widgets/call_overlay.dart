@@ -42,11 +42,14 @@ class CallOverlay extends StatelessWidget {
             curr is CallEnded;
       },
       listener: (context, state) {
+        final navContext = globalNavigatorKey.currentContext;
+        if (navContext == null) return;
+
         if (state is CallIncoming) {
           // ── Incoming call → full-screen ────────────────────────────────────
           // Use push (not pushReplacement) so the chat route stays in the stack
           // and the user returns to it after the call ends.
-          context.push(
+          navContext.push(
             AppRouterName.incomingCall,
             extra: {
               'callerName': state.callerName,
@@ -57,7 +60,7 @@ class CallOverlay extends StatelessWidget {
           );
         } else if (state is CallOutgoing) {
           // ── Outgoing call → full-screen ────────────────────────────────────
-          context.push(
+          navContext.push(
             AppRouterName.outgoingCall,
             extra: {
               'contactName': state.targetName,
@@ -68,12 +71,12 @@ class CallOverlay extends StatelessWidget {
           // ── Call connected → replace call lobby with media room ────────────
           final initials = state.contactName.isNotEmpty
               ? (state.contactName.length >= 2
-                    ? state.contactName.substring(0, 2).toUpperCase()
-                    : state.contactName[0].toUpperCase())
+                  ? state.contactName.substring(0, 2).toUpperCase()
+                  : state.contactName[0].toUpperCase())
               : '??';
 
           if (state.isVideo) {
-            context.pushReplacement(
+            navContext.pushReplacement(
               AppRouterName.videoCall,
               extra: {
                 'contactName': state.contactName,
@@ -82,8 +85,8 @@ class CallOverlay extends StatelessWidget {
               },
             );
           } else {
-            context.pushReplacement(
-              '/voice_call',
+            navContext.pushReplacement(
+              AppRouterName.voiceCall,
               extra: {
                 'contactName': state.contactName,
                 'avatarInitials': initials,
@@ -96,7 +99,7 @@ class CallOverlay extends StatelessWidget {
           // ── Call ended — pop the call screen if it is on top ───────────────
           // context.canPop() prevents crashes if the call ended before any
           // call route was pushed (e.g., rejected before accept UI showed).
-          if (context.canPop()) context.pop();
+          if (navContext.canPop()) navContext.pop();
         }
       },
       child: child,

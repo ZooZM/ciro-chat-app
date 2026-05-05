@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -261,7 +262,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                                 if (context.mounted) {
                                   // Navigate to VideoCallScreen
                                   context.pushReplacement(
-                                    '/video_call',
+                                    AppRouterName.videoCall,
                                     extra: {
                                       'contactName': widget.contactName,
                                       'livekitUrl': widget.livekitUrl,
@@ -298,7 +299,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) context.go('/home');
+                      if (context.mounted) context.go(AppRouterName.home);
                     },
                     icon: const Icon(Icons.phone_missed, color: Colors.white),
                     label: const Text(

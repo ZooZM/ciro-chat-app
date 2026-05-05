@@ -27,9 +27,9 @@
 
 **Purpose**: Create new files and constants that multiple user stories depend on.
 
-- [ ] T001 Create `SocketEvents` constants class with all 24 socket event strings in `lib/core/network/socket_events.dart`
-- [ ] T002 [P] Create `resolveMediaUrl()` utility function in `lib/core/utils/url_utils.dart` — reads base URL from `String.fromEnvironment('API_URL')` with same default as `DioClient`
-- [ ] T003 [P] Add `GlobalKey<NavigatorState> globalNavigatorKey` at top level in `lib/core/routing/app_router.dart` and inject into `GoRouter(navigatorKey: globalNavigatorKey)`
+- [X] T001 Create `SocketEvents` constants class with all 24 socket event strings in `lib/core/network/socket_events.dart`
+- [X] T002 [P] Create `resolveMediaUrl()` utility function in `lib/core/utils/url_utils.dart` — reads base URL from `String.fromEnvironment('API_URL')` with same default as `DioClient`
+- [X] T003 [P] Add `GlobalKey<NavigatorState> globalNavigatorKey` at top level in `lib/core/routing/app_router.dart` and inject into `GoRouter(navigatorKey: globalNavigatorKey)`
 
 **Checkpoint**: Foundation constants and keys are in place. All user stories can now proceed.
 
@@ -43,19 +43,19 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Replace hardcoded route strings in `redirect` block with `AppRouterName.*` constants and remove debug `/video` route in `lib/core/routing/app_router.dart`
-- [ ] T005 [US1] Replace hardcoded `'/voice_call'` with `AppRouterName.voiceCall` in `lib/features/chat/presentation/widgets/call_overlay.dart` and use `globalNavigatorKey.currentContext!` for navigation
-- [ ] T006 [P] [US1] Replace `'/home'` and `'/auth'` with `AppRouterName.*` constants in `lib/features/splash/presentation/pages/splash_screen.dart`
-- [ ] T007 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/video_call/presentation/pages/video_call_screen.dart`
-- [ ] T008 [P] [US1] Replace `'/video_call'` and `'/home'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/voice_call_screen.dart`
-- [ ] T009 [P] [US1] Replace `'/video_call'` and `'/voice_call'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/outgoing_call_screen.dart`
-- [ ] T010 [P] [US1] Replace `'/video_call'` and `'/voice_call'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/incoming_call_screen.dart`
-- [ ] T011 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
-- [ ] T012 [P] [US1] Replace `'/auth'` and `'/chat_room'` with `AppRouterName.*` in `lib/features/chat/presentation/pages/chat_list_screen.dart`
-- [ ] T013 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/group_info_page.dart`
-- [ ] T014 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/create_group_page.dart`
-- [ ] T015 [P] [US1] Replace `'/video_call'` with `AppRouterName.videoCall` in `lib/features/auth/presentation/pages/auth_screen.dart`
-- [ ] T016 [US1] Run `grep -rn "'/home'\|'/auth'\|'/video_call'\|'/voice_call'\|'/chat_room'" lib/` and verify zero hardcoded route strings remain outside `AppRouterName`
+- [X] T004 [US1] Replace hardcoded route strings in `redirect` block with `AppRouterName.*` constants and remove debug `/video` route in `lib/core/routing/app_router.dart`
+- [X] T005 [US1] Replace hardcoded `'/voice_call'` with `AppRouterName.voiceCall` in `lib/features/chat/presentation/widgets/call_overlay.dart` and use `globalNavigatorKey.currentContext!` for navigation
+- [X] T006 [P] [US1] Replace `'/home'` and `'/auth'` with `AppRouterName.*` constants in `lib/features/splash/presentation/pages/splash_screen.dart`
+- [X] T007 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/video_call/presentation/pages/video_call_screen.dart`
+- [X] T008 [P] [US1] Replace `'/video_call'` and `'/home'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/voice_call_screen.dart`
+- [X] T009 [P] [US1] Replace `'/video_call'` and `'/voice_call'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/outgoing_call_screen.dart`
+- [X] T010 [P] [US1] Replace `'/video_call'` and `'/voice_call'` with `AppRouterName.*` in `lib/features/video_call/presentation/pages/incoming_call_screen.dart`
+- [X] T011 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
+- [X] T012 [P] [US1] Replace `'/auth'` and `'/chat_room'` with `AppRouterName.*` in `lib/features/chat/presentation/pages/chat_list_screen.dart`
+- [X] T013 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/group_info_page.dart`
+- [X] T014 [P] [US1] Replace `'/home'` with `AppRouterName.home` in `lib/features/chat/presentation/pages/create_group_page.dart`
+- [X] T015 [P] [US1] Replace `'/video_call'` with `AppRouterName.videoCall` in `lib/features/auth/presentation/pages/auth_screen.dart`
+- [X] T016 [US1] Run `grep -rn "'/home'\|'/auth'\|'/video_call'\|'/voice_call'\|'/chat_room'" lib/` and verify zero hardcoded route strings remain outside `AppRouterName`
 
 **Checkpoint**: All navigation uses `AppRouterName.*` constants. Call initiation from overlays uses `globalNavigatorKey` — zero crashes.
 
@@ -71,9 +71,9 @@
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] Add per-user auto-expire `Timer` map (`_typingExpireTimers`) in `ChatCubit._initServices()` `onUserTyping` handler — start/reset a 5s timer on `isTyping: true`, clear user from set on fire — in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T018 [US2] In `ChatCubit.closeRoom()`, clear `_typingUsersByRoom[_activeRoomId]` and cancel all active typing expire timers for that room in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T019 [US2] Cancel all typing expire timers in `ChatCubit.close()` override to prevent post-dispose timer callbacks in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T017 [US2] Add per-user auto-expire `Timer` map (`_typingExpireTimers`) in `ChatCubit._initServices()` `onUserTyping` handler — start/reset a 5s timer on `isTyping: true`, clear user from set on fire — in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T018 [US2] In `ChatCubit.closeRoom()`, clear `_typingUsersByRoom[_activeRoomId]` and cancel all active typing expire timers for that room in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T019 [US2] Cancel all typing expire timers in `ChatCubit.close()` override to prevent post-dispose timer callbacks in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
 **Checkpoint**: Typing indicators are reliable with a client-side auto-expire safety net.
 
@@ -87,7 +87,7 @@
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] In `ChatCubit._initServices()` `onUserStatusChanged` handler, after calling `_localDataSource.updateUserOnlineStatus()`, check if the changed `userId` matches the active room's participant and emit a `ChatRoomActive` state update with refreshed online status in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T020 [US3] In `ChatCubit._initServices()` `onUserStatusChanged` handler, after calling `_localDataSource.updateUserOnlineStatus()`, check if the changed `userId` matches the active room's participant and emit a `ChatRoomActive` state update with refreshed online status in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
 **Checkpoint**: Presence indicator updates reactively without needing to close/reopen the room.
 
@@ -115,9 +115,9 @@
 
 ### Implementation for User Story 5
 
-- [ ] T021 [US5] Import `socket_events.dart` and replace all hardcoded event strings in `_socket?.on(...)` calls with `SocketEvents.*` constants in `lib/core/network/socket_service.dart`
-- [ ] T022 [US5] Replace all hardcoded event strings in `_socket?.emit(...)` calls with `SocketEvents.*` constants in `lib/core/network/socket_service.dart`
-- [ ] T023 [US5] Run `grep -rn "'messageSent'\|'receiveMessage'\|'typing'\|'joinRoom'" lib/core/network/socket_service.dart` and verify zero hardcoded socket strings remain
+- [X] T021 [US5] Import `socket_events.dart` and replace all hardcoded event strings in `_socket?.on(...)` calls with `SocketEvents.*` constants in `lib/core/network/socket_service.dart`
+- [X] T022 [US5] Replace all hardcoded event strings in `_socket?.emit(...)` calls with `SocketEvents.*` constants in `lib/core/network/socket_service.dart`
+- [X] T023 [US5] Run `grep -rn "'messageSent'\|'receiveMessage'\|'typing'\|'joinRoom'" lib/core/network/socket_service.dart` and verify zero hardcoded socket strings remain
 
 **Checkpoint**: All socket events are centralized. Typo risk eliminated.
 
@@ -131,7 +131,7 @@
 
 ### Implementation for User Story 6
 
-- [ ] T024 [US6] Audit block user call chain from `chat_info_screen.dart` → `ChatCubit.blockUser()` → `ChatRepository.blockUser()` → `ChatRemoteDataSource.blockUser()` and verify `targetUserId` (not phone) is passed at every level. Fix `ChatInfoScreen._blockUser()` if it resolves the wrong identifier from `chatData` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
+- [X] T024 [US6] Audit block user call chain from `chat_info_screen.dart` → `ChatCubit.blockUser()` → `ChatRepository.blockUser()` → `ChatRemoteDataSource.blockUser()` and verify `targetUserId` (not phone) is passed at every level. Fix `ChatInfoScreen._blockUser()` if it resolves the wrong identifier from `chatData` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
 
 **Checkpoint**: Block API is verified to send the correct identifier.
 
@@ -147,7 +147,7 @@
 
 ### Implementation for User Story 7
 
-- [ ] T025 [US7] In `_buildMediaSection()` of `ChatInfoScreen`, import `url_utils.dart` and wrap image URLs with `resolveMediaUrl()` before passing to `CachedNetworkImage` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
+- [X] T025 [US7] In `_buildMediaSection()` of `ChatInfoScreen`, import `url_utils.dart` and wrap image URLs with `resolveMediaUrl()` before passing to `CachedNetworkImage` in `lib/features/chat/presentation/pages/chat_info_screen.dart`
 
 **Checkpoint**: All media images resolve correctly regardless of relative/absolute URL format.
 
@@ -161,10 +161,10 @@
 
 ### Implementation for User Story 8
 
-- [ ] T026 [P] [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` from abstract class in `lib/features/chat/data/datasources/chat_remote_data_source.dart` and remove their empty implementations from `ChatRemoteDataSourceImpl`
-- [ ] T027 [P] [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` from abstract interface in `lib/features/chat/domain/repositories/chat_repository.dart`
-- [ ] T028 [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` overrides from `ChatRepositoryImpl` in `lib/features/chat/data/repositories/chat_repository_impl.dart`
-- [ ] T029 [US8] Run `grep -rn "Future<void> connect\|Future<void> disconnect\|Future<void> sendMessage(String" lib/features/chat/` and verify zero dead method signatures remain
+- [X] T026 [P] [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` from abstract class in `lib/features/chat/data/datasources/chat_remote_data_source.dart` and remove their empty implementations from `ChatRemoteDataSourceImpl`
+- [X] T027 [P] [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` from abstract interface in `lib/features/chat/domain/repositories/chat_repository.dart`
+- [X] T028 [US8] Remove `connect()`, `disconnect()`, `sendMessage(String text)` overrides from `ChatRepositoryImpl` in `lib/features/chat/data/repositories/chat_repository_impl.dart`
+- [X] T029 [US8] Run `grep -rn "Future<void> connect\|Future<void> disconnect\|Future<void> sendMessage(String" lib/features/chat/` and verify zero dead method signatures remain
 
 **Checkpoint**: Data layer is clean. No dead code. Build passes.
 
@@ -178,10 +178,10 @@
 
 ### Implementation for User Story 9
 
-- [ ] T030 [US9] Add `AutomaticKeepAliveClientMixin` to `_VoiceBubbleState` with `wantKeepAlive => true` so voice note state (player, waveform, playback position) survives ListView recycling in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T031 [US9] Decouple waveform rendering from player readiness — in `_VoiceBubbleState.initState()`, synchronously populate `_cachedWaveformData` from `message.metadata['waveformSamples']` and render static waveform bars immediately (no spinner) while `_preparePlayer()` runs in background in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T032 [P] [US9] Add `cacheKey: message.id` to all `CachedNetworkImage` instances in `_ImageBubble` and `_VideoBubble` to stabilize disk cache keying in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
-- [ ] T033 [US9] Add `cacheExtent: 500.0` and explicit `addAutomaticKeepAlives: true` to the `ListView.builder` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
+- [X] T030 [US9] Add `AutomaticKeepAliveClientMixin` to `_VoiceBubbleState` with `wantKeepAlive => true` so voice note state (player, waveform, playback position) survives ListView recycling in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [X] T031 [US9] Decouple waveform rendering from player readiness — in `_VoiceBubbleState.initState()`, synchronously populate `_cachedWaveformData` from `message.metadata['waveformSamples']` and render static waveform bars immediately (no spinner) while `_preparePlayer()` runs in background in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [X] T032 [P] [US9] Add `cacheKey: message.id` to all `CachedNetworkImage` instances in `_ImageBubble` and `_VideoBubble` to stabilize disk cache keying in `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+- [X] T033 [US9] Add `cacheExtent: 500.0` and explicit `addAutomaticKeepAlives: true` to the `ListView.builder` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
 
 **Checkpoint**: Media scrolling is WhatsApp-smooth. No reload flicker. No waveform spinners on scroll-back.
 
@@ -195,10 +195,10 @@
 
 ### Implementation for User Story 10
 
-- [ ] T034 [US10] In `ChatCubit.openRoom()`, remove `emit(ChatLoading())` (line 335). Before subscribing to `watchRoomMessages`, do `await getRoomMessages(roomId)` and immediately `emit(ChatRoomActive(roomId, cachedMessages))` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
-- [ ] T035 [US10] In `ChatRoomScreen` `BlocConsumer`, replace `ChatLoading` → `CircularProgressIndicator` (line 344-348) with an empty state widget (e.g., "Start a conversation…") for empty `ChatRoomActive`. Remove `ChatLoading` from `listenWhen` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
-- [ ] T036 [US10] Optimize `ChatLocalDataSourceImpl.watchRoomMessages()` to emit initial batch synchronously via `StreamController.onListen` callback instead of awaiting the async `getRoomMessages()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
-- [ ] T037 [US10] In `ChatCubit.loadMoreMessages()`, add fallback: if `getRoomMessages` returns fewer than `_pageSize` results, trigger background `fetchRoomMessages(roomId)` API call to fetch deeper history from server — save to SQLite and let stream auto-update in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T034 [US10] In `ChatCubit.openRoom()`, remove `emit(ChatLoading())` (line 335). Before subscribing to `watchRoomMessages`, do `await getRoomMessages(roomId)` and immediately `emit(ChatRoomActive(roomId, cachedMessages))` in `lib/features/chat/presentation/bloc/chat_cubit.dart`
+- [X] T035 [US10] In `ChatRoomScreen` `BlocConsumer`, replace `ChatLoading` → `CircularProgressIndicator` (line 344-348) with an empty state widget (e.g., "Start a conversation…") for empty `ChatRoomActive`. Remove `ChatLoading` from `listenWhen` in `lib/features/chat/presentation/pages/chat_room_screen.dart`
+- [X] T036 [US10] Optimize `ChatLocalDataSourceImpl.watchRoomMessages()` to emit initial batch synchronously via `StreamController.onListen` callback instead of awaiting the async `getRoomMessages()` in `lib/features/chat/data/datasources/chat_local_data_source.dart`
+- [X] T037 [US10] In `ChatCubit.loadMoreMessages()`, add fallback: if `getRoomMessages` returns fewer than `_pageSize` results, trigger background `fetchRoomMessages(roomId)` API call to fetch deeper history from server — save to SQLite and let stream auto-update in `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
 **Checkpoint**: Chat rooms open instantly. Zero loading spinners. Background sync is transparent.
 
@@ -208,9 +208,9 @@
 
 **Purpose**: Final validation across all groups.
 
-- [ ] T038 Run full `flutter build apk --debug` to verify zero compilation errors after all dead code removal and refactoring
-- [ ] T039 Run grep verification suite: hardcoded routes (zero), hardcoded socket events (zero), dead methods (zero), ChatLoading in chat_room_screen (zero), AutomaticKeepAliveClientMixin in message_bubble_widget (present)
-- [ ] T040 Manual smoke test: initiate call → no crash, typing indicator → appears/clears, presence → updates, block user → correct payload, media images → load, voice note scroll → no spinner, room open → instant
+- [X] T038 Run full `flutter build apk --debug` to verify zero compilation errors after all dead code removal and refactoring
+- [X] T039 Run grep verification suite: hardcoded routes (zero), hardcoded socket events (zero), dead methods (zero), ChatLoading in chat_room_screen (zero), AutomaticKeepAliveClientMixin in message_bubble_widget (present)
+- [X] T040 Manual smoke test: initiate call → no crash, typing indicator → appears/clears, presence → updates, block user → correct payload, media images → load, voice note scroll → no spinner, room open → instant
 
 ---
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import '../bloc/call_cubit.dart';
 
 class OutgoingCallScreen extends StatelessWidget {
@@ -24,13 +25,13 @@ class OutgoingCallScreen extends StatelessWidget {
               : 'AK';
               
           if (state.isVideo) {
-            context.pushReplacement('/video_call', extra: {
+            context.pushReplacement(AppRouterName.videoCall, extra: {
               'contactName': state.contactName,
               'livekitUrl': state.livekitUrl,
               'livekitToken': state.livekitToken,
             });
           } else {
-            context.pushReplacement('/voice_call', extra: {
+            context.pushReplacement(AppRouterName.voiceCall, extra: {
               'contactName': state.contactName,
               'avatarInitials': initials,
               'livekitUrl': state.livekitUrl,

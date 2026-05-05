@@ -9,19 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
-const _kBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-);
-
-String _resolveUrl(String? relative) {
-  if (relative == null || relative.isEmpty) return '';
-  if (relative.startsWith('http')) return relative;
-  final base = _kBaseUrl.endsWith('/') ? _kBaseUrl : '$_kBaseUrl/';
-  final path = relative.startsWith('/') ? relative.substring(1) : relative;
-  return '$base$path';
-}
-
 /// FR-024: Tabbed screen showing Media, Links, Docs shared in a chat room.
 /// Opens from ChatInfoScreen → "Media, links and documents" row.
 class SharedMediaScreen extends StatefulWidget {
@@ -155,7 +142,7 @@ class _MediaGrid extends StatelessWidget {
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final msg = messages[index];
-        final url = _resolveUrl(msg.fileUrl);
+        final url = msg.resolvedFileUrl;
         final isVideo = msg.type == MessageType.video;
 
         return GestureDetector(

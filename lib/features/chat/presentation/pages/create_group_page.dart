@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -67,7 +68,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
         );
       } else {
         // Success. The Cubit emits ChatRoomActive but we just go back to home.
-        context.go('/home');
+        context.go(AppRouterName.home);
       }
     }
   }

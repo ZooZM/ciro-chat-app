@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:intl/intl.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import '../bloc/voice_note_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -15,25 +16,6 @@ import '../../domain/entities/message.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
 import 'media_gallery_viewer.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Base URL constant — same default as DioClient to avoid an extra import.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const _kBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-);
-
-String _resolveUrl(String? relativeOrAbsolute) {
-  if (relativeOrAbsolute == null || relativeOrAbsolute.isEmpty) return '';
-  if (relativeOrAbsolute.startsWith('http')) return relativeOrAbsolute;
-  final base = _kBaseUrl.endsWith('/') ? _kBaseUrl : '$_kBaseUrl/';
-  final path = relativeOrAbsolute.startsWith('/')
-      ? relativeOrAbsolute.substring(1)
-      : relativeOrAbsolute;
-  return '$base$path';
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main bubble widget
@@ -417,10 +399,9 @@ class _ImageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
-    final url = _resolveUrl(fileUrl);
+    final url = message.resolvedFileUrl;
     final isUploading = !hasLocal && url.isEmpty;
 
     return ClipRRect(
@@ -545,9 +526,6 @@ class _UploadingPlaceholder extends StatelessWidget {
   }
 }
 
-// We don't need _FullScreenImageViewer anymore since we have MediaGalleryViewer.
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Video bubble
 // ─────────────────────────────────────────────────────────────────────────────
@@ -574,7 +552,7 @@ class _VideoBubble extends StatelessWidget {
         : null;
 
     final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
-    final url = _resolveUrl(thumbUrl);
+    final url = UrlUtils.resolveMediaUrl(thumbUrl);
     final isUploading = !hasLocalThumb && url.isEmpty;
 
     return ClipRRect(
@@ -881,7 +859,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     if (localPath != null && File(localPath).existsSync()) {
       path = localPath;
     } else if (fileUrl != null && fileUrl.isNotEmpty) {
-      path = _resolveUrl(fileUrl);
+      path = widget.message.resolvedFileUrl;
     }
 
     if (path != null) {
@@ -1069,18 +1047,6 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                   ],
                 ),
               ),
-              // SizedBox(width: 8.resW),
-
-              // Avatar placeholder (optional)
-              // CircleAvatar(
-              //   radius: 18.resR,
-              //   backgroundColor: AppColors.divider,
-              //   child: Icon(
-              //     Icons.person,
-              //     color: AppColors.surface,
-              //     size: 20.resW,
-              //   ),
-              // ),
             ],
           ),
           SizedBox(height: 6.resH),

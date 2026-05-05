@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -207,7 +208,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     onPressed: () async {
                       context.read<CallCubit>().endCall();
                       await _room?.disconnect();
-                      if (context.mounted) context.go('/home');
+                      if (context.mounted) context.go(AppRouterName.home);
                     },
                   ),
                   IconButton(

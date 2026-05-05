@@ -81,6 +81,10 @@ class ChatCubit extends Cubit<ChatState> {
   Stream<Map<String, Set<String>>> get allTypingUsersStream =>
       _roomTypingController.stream;
 
+  // US2: Client-side typing debouncing and auto-reset.
+  Timer? _typingTimer;
+  final Map<String, Timer> _incomingTypingTimers = {};
+
   final ValueNotifier<List<Message>> searchResults = ValueNotifier([]);
 
   /// Returns the current typing users for a given room.
@@ -206,7 +210,9 @@ class ChatCubit extends Cubit<ChatState> {
       if (state is ChatRoomActive) {
         final msgs = (state as ChatRoomActive).messages;
         if (msgs.any((m) => m.clientMessageId == clientMsgId)) {
-          debugPrint('[ChatCubit] Dedup: $clientMsgId already in state, skipping.');
+          debugPrint(
+            '[ChatCubit] Dedup: $clientMsgId already in state, skipping.',
+          );
           return;
         }
       }
@@ -278,68 +284,89 @@ class ChatCubit extends Cubit<ChatState> {
 
   // ── Room lifecycle ──────────────────────────────────────────────────────────
 
-  void openRoom(String roomId, {ChatSession? contact, ChatSession? room}) async {
+  void openRoom(
+    String roomId, {
+    ChatSession? contact,
+    ChatSession? room,
+  }) async {
     // FR-018: Reset pagination state on room open.
     _messageOffset = 0;
     _hasMoreMessages = true;
     _isLoadingMore = false;
+
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
-      emit(ChatRoomActive('', const []));
+      emit(const ChatRoomActive('', []));
       return;
     }
-    if (_activeRoomId == roomId) return;
 
-    final currentState = state;
-    if (currentState is ChatRoomActive &&
-        currentState.roomId == roomId &&
-        currentState.messages.isNotEmpty) {
-      _activeRoomId = roomId;
-      _pendingContact = null;
-      _roomStreamSub?.cancel();
-      _localDataSource.resetUnreadCount(roomId);
-      _roomStreamSub = _localDataSource.watchRoomMessages(roomId).listen(
-        (messages) => emit(ChatRoomActive(roomId, messages)),
-        onError: (e) => emit(ChatError(e.toString())),
-      );
-      return;
-    }
-    if (room != null && room.lastMessageId.isNotEmpty) {
-      final messages = await _localDataSource.getRoomMessages(roomId);
-      final localLastMsgId = messages.isNotEmpty ? messages.first.id : null;
-      
-      if (localLastMsgId != room.lastMessageId) {
-        _chatRepository.fetchRoomMessages(roomId).then((res) {
-          res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
-            for (final msg in newMsgs.reversed) {
-              await _localDataSource.saveMessage(msg, incrementUnread: false);
-            }
-          });
-        });
-      }
-    } else {
-      _chatRepository.fetchRoomMessages(roomId).then((res) {
-        res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
-          for (final msg in newMsgs.reversed) {
-            await _localDataSource.saveMessage(msg, incrementUnread: false);
-          }
-        });
-      });
-    }
+    if (_activeRoomId == roomId) return;
 
     _pendingContact = null;
     _activeRoomId = roomId;
     _roomStreamSub?.cancel();
     _localDataSource.resetUnreadCount(roomId);
-    emit(ChatLoading());
 
-    _roomStreamSub = _localDataSource
-        .watchRoomMessages(roomId)
-        .listen(
-          (messages) => emit(ChatRoomActive(roomId, messages)),
-          onError: (e) => emit(ChatError(e.toString())),
+    // ── 1. Local-First: Load from SQLite immediately ──────────────────────────
+    final localMessages = await _localDataSource.getRoomMessages(roomId);
+    if (localMessages.isNotEmpty) {
+      emit(ChatRoomActive(roomId, localMessages));
+    } else {
+      // Only show spinner if we have absolutely nothing locally.
+      emit(ChatLoading());
+    }
+
+    // ── 2. Real-time Subscription ─────────────────────────────────────────────
+    _roomStreamSub = _localDataSource.watchRoomMessages(roomId).listen((
+      messages,
+    ) {
+      if (_activeRoomId == roomId) {
+        emit(ChatRoomActive(roomId, messages));
+      }
+    }, onError: (e) => emit(ChatError(e.toString())));
+
+    // ── 3. Background Sync ────────────────────────────────────────────────────
+    // Compare local tip with server state (if provided) or just fetch.
+    bool needsSync = true;
+    if (room != null &&
+        room.lastMessageId.isNotEmpty &&
+        localMessages.isNotEmpty) {
+      // Find the ID of the newest message in our list.
+      // (getRoomMessages returns them reversed, so first is newest)
+      final localLastMsgId = localMessages.first.id;
+      if (localLastMsgId == room.lastMessageId) {
+        needsSync = false;
+        debugPrint(
+          '[ChatCubit] Room $roomId is already up-to-date (tip matches)',
         );
+      }
+    }
+
+    if (needsSync) {
+      debugPrint('[ChatCubit] Room $roomId background sync started');
+      _chatRepository
+          .fetchRoomMessages(roomId)
+          .then((res) {
+            res.fold(
+              (failure) =>
+                  debugPrint('[ChatCubit] Background sync failed: $failure'),
+              (newMsgs) async {
+                if (newMsgs.isEmpty) return;
+                for (final msg in newMsgs.reversed) {
+                  await _localDataSource.saveMessage(
+                    msg,
+                    incrementUnread: false,
+                  );
+                }
+                debugPrint('[ChatCubit] Background sync complete for $roomId');
+              },
+            );
+          })
+          .catchError((e) {
+            debugPrint('[ChatCubit] Background sync error: $e');
+          });
+    }
   }
 
   // ── FR-018: Infinite scroll pagination ─────────────────────────────────────
@@ -371,11 +398,13 @@ class ChatCubit extends Cubit<ChatState> {
       final currentState = state as ChatRoomActive;
       // Prepend older messages (they come oldest-first from the reversed query).
       final merged = [...olderMessages, ...currentState.messages];
-      emit(currentState.copyWith(
-        messages: merged,
-        isLoadingMore: false,
-        hasMoreMessages: _hasMoreMessages,
-      ));
+      emit(
+        currentState.copyWith(
+          messages: merged,
+          isLoadingMore: false,
+          hasMoreMessages: _hasMoreMessages,
+        ),
+      );
     }
   }
 
@@ -409,8 +438,25 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   void notifyTyping({required bool isTyping}) {
-    if (_activeRoomId != null) {
-      _socketService.emitTyping(_activeRoomId!, isTyping);
+    if (_activeRoomId == null) return;
+
+    if (isTyping) {
+      // 1. Debouncing: Only emit if we weren't already typing.
+      final wasTyping = _typingTimer?.isActive ?? false;
+      if (!wasTyping) {
+        _socketService.emitTyping(_activeRoomId!, true);
+      }
+
+      // 2. (Re)start the 3-second auto-reset timer.
+      _typingTimer?.cancel();
+      _typingTimer = Timer(const Duration(seconds: 3), () {
+        notifyTyping(isTyping: false);
+      });
+    } else {
+      // 3. Explicit stop: Cancel timer and emit stop event.
+      _typingTimer?.cancel();
+      _typingTimer = null;
+      _socketService.emitTyping(_activeRoomId!, false);
     }
   }
 
@@ -1312,10 +1358,14 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> hydrateRooms() async {
     try {
-      final result = await _chatRepository.fetchRooms();
+      // US9: Added 5-second timeout to prevent app hang on slow/unreachable network.
+      final result = await _chatRepository.fetchRooms().timeout(
+        const Duration(seconds: 5),
+      );
+
       await result.fold(
         (failure) {
-          debugPrint('[ChatCubit] Hydration silent fail: $failure');
+          debugPrint('[ChatCubit] Hydration failed (repository): $failure');
         },
         (rooms) async {
           for (final room in rooms) {
@@ -1327,8 +1377,9 @@ class ChatCubit extends Cubit<ChatState> {
         },
       );
     } catch (e) {
-      debugPrint('[ChatCubit] Hydration silent fail: $e');
+      debugPrint('[ChatCubit] Hydration failed or timed out: $e');
     } finally {
+      // Always complete hydration to allow user to see local data.
       isHydrationComplete = true;
       emit(ChatInitial());
     }
@@ -1403,6 +1454,11 @@ class ChatCubit extends Cubit<ChatState> {
   @override
   Future<void> close() {
     _roomStreamSub?.cancel();
+    _typingTimer?.cancel();
+    for (final t in _incomingTypingTimers.values) {
+      t.cancel();
+    }
+    _incomingTypingTimers.clear();
     _typingUsersController.close();
     _roomTypingController.close();
     return super.close();

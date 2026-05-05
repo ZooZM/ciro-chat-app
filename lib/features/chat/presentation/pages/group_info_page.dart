@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
@@ -87,7 +89,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             onPressed: () {
               Navigator.pop(context);
               context.read<ChatCubit>().leaveGroup(currentChatData.id);
-              context.go('/home');
+              context.go(AppRouterName.home);
             },
             child: Text('Leave', style: TextStyle(color: AppColors.error)),
           ),

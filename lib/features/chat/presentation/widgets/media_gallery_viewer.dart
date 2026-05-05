@@ -5,21 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 
-const _kBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-);
-
-String _resolveUrl(String? relativeOrAbsolute) {
-  if (relativeOrAbsolute == null || relativeOrAbsolute.isEmpty) return '';
-  if (relativeOrAbsolute.startsWith('http')) return relativeOrAbsolute;
-  final base = _kBaseUrl.endsWith('/') ? _kBaseUrl : '$_kBaseUrl/';
-  final path = relativeOrAbsolute.startsWith('/')
-      ? relativeOrAbsolute.substring(1)
-      : relativeOrAbsolute;
-  return '$base$path';
-}
-
 class MediaGalleryViewer extends StatefulWidget {
   final List<Message> mediaMessages;
   final int initialIndex;
@@ -83,10 +68,9 @@ class _ImageGalleryItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
-    final url = _resolveUrl(fileUrl);
+    final url = message.resolvedFileUrl;
 
     return Center(
       child: InteractiveViewer(
@@ -121,14 +105,13 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
   Future<void> _initVideo() async {
     final meta = widget.message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = widget.message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
 
     if (hasLocal) {
       _controller = VideoPlayerController.file(File(localPath));
     } else {
-      final url = _resolveUrl(fileUrl);
+      final url = widget.message.resolvedFileUrl;
       if (url.isNotEmpty) {
         _controller = VideoPlayerController.networkUrl(Uri.parse(url));
       }

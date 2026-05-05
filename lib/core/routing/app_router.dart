@@ -36,10 +36,12 @@ class AppRouterName {
   static const String outgoingCall = '/outgoing_call';
   static const String voiceCall = '/voice_call';
   static const String updates = '/updates';
-  static const String video = '/video';
 }
 
+final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
+
 final GoRouter appRouter = GoRouter(
+  navigatorKey: globalNavigatorKey,
   initialLocation: AppRouterName.splash,
   // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
   // Every time AuthCubit emits a new state, the redirect guard below is re-run.
@@ -53,8 +55,9 @@ final GoRouter appRouter = GoRouter(
     final authState = getIt<AuthCubit>().state;
     final location = state.uri.toString();
 
-    final isAuthRoute = location == '/auth' || location.startsWith('/auth/');
-    final isSplash = location == '/splash';
+    final isAuthRoute =
+        location == AppRouterName.auth || location.startsWith('${AppRouterName.auth}/');
+    final isSplash = location == AppRouterName.splash;
 
     // ── RULE 1: Transient states — do NOT redirect ────────────────────────────
     // AuthLoading fires during OTP send, token refresh, and initial boot.
@@ -68,13 +71,13 @@ final GoRouter appRouter = GoRouter(
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
       await context.read<ChatCubit>().hydrateRooms();
-      if (isAuthRoute) return '/home';
+      if (isAuthRoute) return AppRouterName.home;
       return null;
     }
 
     // ── RULE 3: Unauthenticated or AuthError ──────────────────────────────────
     // Redirect to /auth only if not already there.
-    if (!isAuthRoute && !isSplash) return '/auth';
+    if (!isAuthRoute && !isSplash) return AppRouterName.auth;
     return null;
   },
   routes: [
@@ -103,17 +106,6 @@ final GoRouter appRouter = GoRouter(
           },
         ),
       ],
-    ),
-    GoRoute(
-      path: AppRouterName.video,
-      builder: (context, state) => Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () => context.push('/video_call'),
-            child: const Text('Launch Video Call UI'),
-          ),
-        ),
-      ),
     ),
     GoRoute(
       path: AppRouterName.home,

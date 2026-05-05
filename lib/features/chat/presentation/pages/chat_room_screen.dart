@@ -1,3 +1,5 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -196,7 +198,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
             onPressed: () {
               _safeStopAllAudio();
-              context.go('/home');
+              context.go(AppRouterName.home);
             },
           ),
           title: InkWell(
@@ -452,7 +454,9 @@ class ChatRoomIcon extends StatelessWidget {
               radius: 18.resR,
               backgroundColor: AppColors.divider,
               backgroundImage: chatData.avatarUrl.isNotEmpty
-                  ? CachedNetworkImageProvider(chatData.avatarUrl)
+                  ? CachedNetworkImageProvider(
+                      UrlUtils.resolveMediaUrl(chatData.avatarUrl),
+                    )
                   : null,
               child: chatData.avatarUrl.isEmpty
                   ? (chatData.type == ChatRoomType.GROUP

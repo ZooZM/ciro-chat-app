@@ -1,4 +1,5 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -39,9 +40,9 @@ class _SplashScreenState extends State<SplashScreen>
       
       if (isAuth) {
         await context.read<ChatCubit>().hydrateRooms();
-        if (mounted) context.go('/home');
+        if (mounted) context.go(AppRouterName.home);
       } else {
-        if (mounted) context.go('/auth');
+        if (mounted) context.go(AppRouterName.auth);
       }
     });
   }
