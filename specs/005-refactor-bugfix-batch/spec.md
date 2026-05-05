@@ -151,6 +151,8 @@ As a developer, the `ChatRemoteDataSource` and `ChatRepository` abstract interfa
 - **FR-006**: The Block User API request MUST send the target user's unique ID (not phone number) in the request payload/path.
 - **FR-007**: All `CachedNetworkImage` instances displaying media in `chat_info_screen.dart` MUST resolve the full image URL by prepending the server's base URL when the stored path is a relative endpoint.
 - **FR-008**: The dead methods `connect()`, `disconnect()`, and `sendMessage(String text)` MUST be removed from `ChatRemoteDataSource` (abstract), `ChatRemoteDataSourceImpl`, `ChatRepository` (abstract), and `ChatRepositoryImpl`.
+- **FR-009**: Media and audio waveform widgets MUST NOT reload their content when scrolled out of and back into the ListView viewport. Voice note waveforms MUST render instantly from cached/persisted data without showing a loading spinner. Image thumbnails MUST be served from disk cache on scroll-back.
+- **FR-010**: Opening a chat room MUST display messages instantly from local SQLite storage with zero loading state. Remote API synchronization MUST happen silently in the background. New messages from the server MUST seamlessly appear in the UI via the existing reactive stream without any explicit loading indicator.
 
 ### Key Entities
 
@@ -170,6 +172,8 @@ As a developer, the `ChatRemoteDataSource` and `ChatRepository` abstract interfa
 - **SC-006**: The Block User network request payload contains the user ID, confirmed via network inspection.
 - **SC-007**: All media images on the chat info screen load successfully with no broken image placeholders.
 - **SC-008**: Zero dead methods remain in `ChatRemoteDataSource`, `ChatRepository`, and their implementations.
+- **SC-009**: Voice note waveforms render in under 100ms on scroll-back (no spinner). Image bubbles display from cache with zero network requests on scroll-back. Message list scrolls at 60fps with 50+ mixed-media messages.
+- **SC-010**: Opening a chat room with cached messages shows content in under 50ms with zero `CircularProgressIndicator` visible. Offline room opens display all locally-cached messages.
 
 ## Assumptions
 
