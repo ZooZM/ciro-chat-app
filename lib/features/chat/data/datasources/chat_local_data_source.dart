@@ -44,6 +44,7 @@ abstract class ChatLocalDataSource {
   Future<void> upsertContacts(List<ChatSession> contacts);
   Future<void> resetUnreadCount(String roomId);
   void closeRoomStream(String roomId);
+  void setRoomDisplayLimit(String roomId, int limit); // T006 — BN-03
   Future<void> clearAllData();
 
   /// Returns all messages with [MessageStatus.pending], oldest-first.
@@ -147,6 +148,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       StreamController<List<ChatSession>>.broadcast();
   final StreamController<List<ChatSession>> _contactsController =
       StreamController<List<ChatSession>>.broadcast();
+  // T005 — BN-03: tracks the highest message count shown per room so that
+  // _dispatchUpdateForRoom never narrows a paginated-out list back to 30.
+  final Map<String, int> _roomDisplayLimits = {};
 
   // ── Schema helpers ──────────────────────────────────────────────────────────
 
@@ -207,6 +211,14 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     )
   ''';
 
+  // T002 — BN-01: Secondary indexes for all hot query paths.
+  static const _indexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_msg_room_ts    ON messages(room_id, timestamp DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_msg_client_id  ON messages(client_message_id)',
+    'CREATE INDEX IF NOT EXISTS idx_msg_status     ON messages(status)',
+    'CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phoneNumber)',
+  ];
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -217,12 +229,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 11,
+      version: 12, // T001 — BN-01: bumped 11→12 to apply secondary indexes
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
         await db.execute(_statusesSchema);
+        // T003 — BN-01: create all indexes on fresh install
+        for (final stmt in _indexStatements) {
+          await db.execute(stmt);
+        }
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 8) {
@@ -269,6 +285,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             );
           } catch (e) {
             debugPrint('Migration v11 error: $e');
+          }
+        }
+        // T004 — BN-01: add secondary indexes to existing installs
+        if (oldVersion < 12) {
+          for (final stmt in _indexStatements) {
+            try {
+              await db.execute(stmt);
+            } catch (e) {
+              debugPrint('Migration v12 index error: $e');
+            }
           }
         }
       },
@@ -604,9 +630,19 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     return _roomStreamControllers[roomId]!.stream;
   }
 
+  // T006 — BN-03: called by ChatCubit after loadMoreMessages to record the
+  // expanded window so _dispatchUpdateForRoom never shrinks it back to 30.
+  @override
+  void setRoomDisplayLimit(String roomId, int limit) {
+    _roomDisplayLimits[roomId] = limit;
+  }
+
+  // T007 — BN-03: use stored HWM so a new incoming message or status update
+  // doesn't reset a paginated list back to the default 30-item window.
   Future<void> _dispatchUpdateForRoom(String roomId) async {
     if (_roomStreamControllers.containsKey(roomId)) {
-      final messages = await getRoomMessages(roomId);
+      final limit = _roomDisplayLimits[roomId] ?? 30;
+      final messages = await getRoomMessages(roomId, limit: limit);
       _roomStreamControllers[roomId]!.add(messages);
     }
   }
@@ -875,6 +911,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       _roomStreamControllers[roomId]?.close();
       _roomStreamControllers.remove(roomId);
     }
+    _roomDisplayLimits.remove(roomId); // T008 — BN-03: clear HWM on room close
   }
 
   // ── clearAllData ────────────────────────────────────────────────────────────
