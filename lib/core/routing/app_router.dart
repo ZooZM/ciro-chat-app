@@ -1,6 +1,9 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/status_creation_screen.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
@@ -11,6 +14,7 @@ import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_scre
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
@@ -187,6 +191,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/updates',
       builder: (context, state) => const UpdatesScreen(),
+    ),
+    GoRoute(
+      path: '/status_creation',
+      builder: (context, state) {
+        final mode = state.extra as StatusContentType? ?? StatusContentType.text;
+        return StatusCreationScreen(initialMode: mode);
+      },
+    ),
+    GoRoute(
+      path: '/story_viewer',
+      builder: (context, state) {
+        final status = state.extra as StatusEntity;
+        return StoryViewerScreen(status: status);
+      },
     ),
   ],
 );

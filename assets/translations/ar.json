@@ -1,0 +1,32 @@
+{
+  "status": {
+    "add_status": "إضافة حالة",
+    "write_status": "اكتب حالة",
+    "text": "نص",
+    "music": "موسيقى",
+    "voice": "صوت",
+    "ai_image": "صورة بالذكاء الاصطناعي",
+    "video": "فيديو",
+    "image": "صورة",
+    "camera": "كاميرا",
+    "recently_used": "مستخدم حديثاً",
+    "done": "تم",
+    "reply": "رد",
+    "public": "عام",
+    "public_desc": "كل جهات الاتصال",
+    "private": "خاص",
+    "private_desc": "تحديد جهات اتصال",
+    "show_on_map": "عرض على الخريطة",
+    "create_any_image": "إنشاء أي صورة",
+    "create_image_for": "إنشاء صورة لـ....",
+    "search": "بحث",
+    "suggestions": "اقتراحات",
+    "mood": "الحالة المزاجية",
+    "type": "النوع",
+    "video_too_long": "يجب أن يكون الفيديو 30 ثانية أو أقل",
+    "no_songs_available": "لا توجد أغاني متاحة",
+    "generation_failed": "فشل إنشاء الصورة. حاول مرة أخرى.",
+    "upload_failed": "فشل الرفع. سيتم إعادة المحاولة تلقائياً.",
+    "recording_max": "تم الوصول للحد الأقصى لمدة التسجيل"
+  }
+}

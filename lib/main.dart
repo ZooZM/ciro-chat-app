@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'core/di/injection.dart';
 import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
@@ -14,13 +15,22 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  await EasyLocalization.ensureInitialized();
+  
   Bloc.observer = const AppBlocObserver();
   await configureDependencies();
 
   // Link Network failure fallback strictly after router & DI initialization
   globalOnUnauthorizedRedirect = () => appRouter.go(AppRouterName.auth);
 
-  runApp(const MainApp());
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      child: const MainApp(),
+    ),
+  );
 }
 
 class MainApp extends StatelessWidget {
@@ -45,6 +55,9 @@ class MainApp extends StatelessWidget {
           child: CallOverlay(
             child: MaterialApp.router(
               title: 'Ciro Chat App',
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
               theme: ThemeData.dark(useMaterial3: true),
               routerConfig: appRouter,
               debugShowCheckedModeBanner: false,

@@ -168,7 +168,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       timestamp    INTEGER,
       expires_at   INTEGER,
       is_viewed    INTEGER DEFAULT 0,
-      is_mine      INTEGER DEFAULT 0
+      is_mine      INTEGER DEFAULT 0,
+      content_type TEXT DEFAULT 'image',
+      text_content TEXT,
+      media_url    TEXT,
+      background_color TEXT,
+      font_style   TEXT,
+      music_track_id TEXT,
+      caption      TEXT,
+      privacy      TEXT DEFAULT 'public'
     )
   ''';
 
@@ -182,7 +190,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -219,6 +227,20 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             );
           } catch (e) {
             debugPrint('Migration v10 error: $e');
+          }
+        }
+        if (oldVersion < 11) {
+          try {
+            await db.execute("ALTER TABLE statuses ADD COLUMN content_type TEXT DEFAULT 'image'");
+            await db.execute("ALTER TABLE statuses ADD COLUMN text_content TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN media_url TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN background_color TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN font_style TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN music_track_id TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN caption TEXT");
+            await db.execute("ALTER TABLE statuses ADD COLUMN privacy TEXT DEFAULT 'public'");
+          } catch (e) {
+            debugPrint('Migration v11 error: $e');
           }
         }
       },

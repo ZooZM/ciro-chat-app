@@ -5,7 +5,21 @@ import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_tile.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_search_bar.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
+import 'dart:io';
+import 'package:ciro_chat_app/features/status/presentation/widgets/add_status_bottom_sheet.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/music_selector_sheet.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/ai_image_generator_sheet.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
+import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/music_cubit.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/status_creation_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:video_player/video_player.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class UpdatesScreen extends StatefulWidget {
   const UpdatesScreen({super.key});
@@ -59,6 +73,104 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       isMine: false,
     ),
   ];
+
+  void _showAddStatusBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddStatusBottomSheet(
+        onCameraTap: () async {
+          Navigator.pop(context);
+          final status = await Permission.camera.request();
+          if (status.isGranted) {
+            final picker = ImagePicker();
+            final xfile = await picker.pickImage(source: ImageSource.camera);
+            if (xfile != null && mounted) {
+              // TODO: pass media to StatusCreationScreen via extra or cubit
+              context.push('/status_creation', extra: StatusContentType.image);
+            }
+          }
+        },
+        onGalleryItemTap: (file, isVideo) async {
+          Navigator.pop(context);
+          if (isVideo) {
+            final controller = VideoPlayerController.file(File(file.path));
+            await controller.initialize();
+            if (controller.value.duration.inSeconds > 30) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('status.video_too_long'.tr())),
+                );
+              }
+              controller.dispose();
+              return;
+            }
+            controller.dispose();
+            if (mounted) {
+              context.push('/status_creation', extra: StatusContentType.video);
+            }
+          } else {
+            if (mounted) {
+              context.push('/status_creation', extra: StatusContentType.image);
+            }
+          }
+        },
+        onCategoryTap: (mode) {
+          Navigator.pop(context);
+          context.push('/status_creation', extra: mode);
+        },
+        onMusicTap: () {
+          Navigator.pop(context);
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => BlocProvider.value(
+              value: getIt<MusicCubit>(),
+              child: MusicSelectorSheet(
+                onTrackSelected: (track) {
+                  Navigator.pop(ctx);
+                  final cubit = getIt<StatusCreationCubit>();
+                  cubit.initDraft(StatusContentType.text); // defaults to text for music
+                  cubit.attachMusicTrack(track.id);
+                  context.push('/status_creation', extra: StatusContentType.text);
+                },
+              ),
+            ),
+          );
+        },
+        onAITap: () {
+          Navigator.pop(context);
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => AIImageGeneratorSheet(
+              onGenerate: (prompt) async {
+                final cubit = getIt<StatusCreationCubit>();
+                final resultOrError = await cubit.statusRepository.generateAIImage(prompt);
+                return resultOrError.fold(
+                  (l) => throw Exception(l.message),
+                  (r) => r,
+                );
+              },
+              onImageSelected: (imageUrl) {
+                Navigator.pop(ctx);
+                final cubit = getIt<StatusCreationCubit>();
+                cubit.initDraft(StatusContentType.image);
+                cubit.attachAIImage(imageUrl);
+                context.push('/status_creation', extra: StatusContentType.image);
+              },
+              onVoicePromptTapped: () {
+                // TODO: Voice to text logic
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,13 +258,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                       'Tap to add status update',
                       style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
                     ),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const StoryViewerScreen(),
-                        ),
-                      );
-                    },
+                    onTap: _showAddStatusBottomSheet,
                   ),
                 ),
                 if (filteredRecent.isNotEmpty)
@@ -176,7 +282,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         return StatusTile(
                           status: status,
                           onTap: () {
-                            // Prototype view status action
+                            context.push('/story_viewer', extra: status);
                           },
                         );
                       },
@@ -204,7 +310,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         return StatusTile(
                           status: status,
                           onTap: () {
-                            // Prototype viewed action
+                            context.push('/story_viewer', extra: status);
                           },
                         );
                       },
@@ -231,7 +337,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           FloatingActionButton.small(
             heroTag: 'pencil_fab',
             onPressed: () {
-              // Prototype text status
+              _showAddStatusBottomSheet();
             },
             backgroundColor: Colors.grey[200],
             child: Icon(Icons.edit, color: AppColors.textPrimary),

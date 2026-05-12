@@ -18,7 +18,8 @@ class DioClient {
     _dio.options = BaseOptions(
       baseUrl: const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+        // defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
+        defaultValue: 'https://vella-niftier-gertrude.ngrok-free.dev',
       ),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),

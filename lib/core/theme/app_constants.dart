@@ -58,6 +58,14 @@ class AppConstants {
   static const Duration durationNormal = Duration(milliseconds: 300);
   static const Duration durationSlow   = Duration(milliseconds: 500);
 
+  // ── Status Feature ────────────────────────────────────────────────────────
+
+  static const double statusColorSwatchSize = 40.0;
+  static const double waveformHeight = 50.0;
+  static const double toolbarIconSize = 28.0;
+  static const Duration statusMaxVideoDuration = Duration(seconds: 30);
+  static const Duration statusMaxVoiceDuration = Duration(seconds: 30);
+
   // ── Button Styles ─────────────────────────────────────────────────────────
 
   /// Primary pill-shaped green button with subtle shadow

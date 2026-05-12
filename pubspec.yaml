@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   dio: ^5.9.2
+  easy_localization: ^3.0.7
   equatable: ^2.0.8
   flutter:
     sdk: flutter
@@ -70,6 +71,7 @@ flutter:
   assets:
     - assets/icons/
     - assets/logo.png
+    - assets/translations/
 
 dependency_overrides:
   connectivity_plus: ^6.1.1

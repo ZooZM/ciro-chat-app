@@ -1,0 +1,32 @@
+{
+  "status": {
+    "add_status": "Add Status",
+    "write_status": "Write Status",
+    "text": "Text",
+    "music": "Music",
+    "voice": "Voice",
+    "ai_image": "AI Image",
+    "video": "Video",
+    "image": "Image",
+    "camera": "Camera",
+    "recently_used": "Recently used",
+    "done": "Done",
+    "reply": "Reply",
+    "public": "Public",
+    "public_desc": "All contacts",
+    "private": "Private",
+    "private_desc": "Select contacts",
+    "show_on_map": "Show on Map",
+    "create_any_image": "Create any image",
+    "create_image_for": "Create image for....",
+    "search": "Search",
+    "suggestions": "Suggestions",
+    "mood": "Mood",
+    "type": "Type",
+    "video_too_long": "Video must be 30 seconds or less",
+    "no_songs_available": "No songs available",
+    "generation_failed": "Image generation failed. Try again.",
+    "upload_failed": "Upload failed. Will retry automatically.",
+    "recording_max": "Maximum recording duration reached"
+  }
+}
