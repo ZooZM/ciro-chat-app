@@ -33,13 +33,13 @@ US5 depends on nothing in M0/M1 but must ship after M1 is reviewed.
 **Story goal**: All 4 secondary indexes present after fresh install and upgrade.  
 **Independent test**: `SELECT name FROM sqlite_master WHERE type='index'` returns 4 rows.
 
-- [ ] T001 [US1] Bump `openDatabase` version `11 → 12` in `lib/features/chat/data/datasources/chat_local_data_source.dart:220` · BN-01 · Effort S · depends_on: —
+- [x] T001 [US1] Bump `openDatabase` version `11 → 12` in `lib/features/chat/data/datasources/chat_local_data_source.dart:220` · BN-01 · Effort S · depends_on: —
 
-- [ ] T002 [US1] Add `static const _indexStatements = [...]` constant with 4 `CREATE INDEX IF NOT EXISTS` statements after `_statusesSchema` declaration in `lib/features/chat/data/datasources/chat_local_data_source.dart:208` · BN-01 · Effort S · depends_on: —
+- [x] T002 [US1] Add `static const _indexStatements = [...]` constant with 4 `CREATE INDEX IF NOT EXISTS` statements after `_statusesSchema` declaration in `lib/features/chat/data/datasources/chat_local_data_source.dart:208` · BN-01 · Effort S · depends_on: —
 
-- [ ] T003 [US1] Apply `_indexStatements` in `onCreate` callback by adding a `for` loop after the 4 `db.execute` table-creation calls in `lib/features/chat/data/datasources/chat_local_data_source.dart:221–226` · BN-01 · Effort S · depends_on: T002
+- [x] T003 [US1] Apply `_indexStatements` in `onCreate` callback by adding a `for` loop after the 4 `db.execute` table-creation calls in `lib/features/chat/data/datasources/chat_local_data_source.dart:221–226` · BN-01 · Effort S · depends_on: T002
 
-- [ ] T004 [US1] Add `if (oldVersion < 12)` guard in `onUpgrade` with try/catch `CREATE INDEX` loop after the `< 11` block in `lib/features/chat/data/datasources/chat_local_data_source.dart:265–273` · BN-01 · Effort S · depends_on: T002
+- [x] T004 [US1] Add `if (oldVersion < 12)` guard in `onUpgrade` with try/catch `CREATE INDEX` loop after the `< 11` block in `lib/features/chat/data/datasources/chat_local_data_source.dart:265–273` · BN-01 · Effort S · depends_on: T002
 
 ---
 
@@ -48,17 +48,17 @@ US5 depends on nothing in M0/M1 but must ship after M1 is reviewed.
 **Story goal**: Messages loaded via `loadMoreMessages` remain visible after any new incoming message or status update.  
 **Independent test**: After loading 60 messages and receiving a new message, `ChatRoomActive.messages.length >= 60`.
 
-- [ ] T005 [US2] Add `final Map<String, int> _roomDisplayLimits = {}` field to `ChatLocalDataSourceImpl` after `_contactsController` declaration in `lib/features/chat/data/datasources/chat_local_data_source.dart:149` · BN-03 · Effort S · depends_on: —
+- [x] T005 [US2] Add `final Map<String, int> _roomDisplayLimits = {}` field to `ChatLocalDataSourceImpl` after `_contactsController` declaration in `lib/features/chat/data/datasources/chat_local_data_source.dart:149` · BN-03 · Effort S · depends_on: —
 
-- [ ] T006 [US2] Add public `void setRoomDisplayLimit(String roomId, int limit)` method that writes to `_roomDisplayLimits` after the `watchRoomMessages` method in `lib/features/chat/data/datasources/chat_local_data_source.dart:605` · BN-03 · Effort S · depends_on: T005
+- [x] T006 [US2] Add public `void setRoomDisplayLimit(String roomId, int limit)` method that writes to `_roomDisplayLimits` after the `watchRoomMessages` method in `lib/features/chat/data/datasources/chat_local_data_source.dart:605` · BN-03 · Effort S · depends_on: T005
 
-- [ ] T007 [US2] Update `_dispatchUpdateForRoom(String roomId)` at `lib/features/chat/data/datasources/chat_local_data_source.dart:607` to read `_roomDisplayLimits[roomId] ?? 30` as the limit argument to `getRoomMessages` instead of relying on the default · BN-03 · Effort S · depends_on: T005
+- [x] T007 [US2] Update `_dispatchUpdateForRoom(String roomId)` at `lib/features/chat/data/datasources/chat_local_data_source.dart:607` to read `_roomDisplayLimits[roomId] ?? 30` as the limit argument to `getRoomMessages` instead of relying on the default · BN-03 · Effort S · depends_on: T005
 
-- [ ] T008 [US2] Locate `closeRoomStream` method in `lib/features/chat/data/datasources/chat_local_data_source.dart` and add `_roomDisplayLimits.remove(roomId)` so the HWM is cleared when a room is closed · BN-03 · Effort S · depends_on: T005
+- [x] T008 [US2] Locate `closeRoomStream` method in `lib/features/chat/data/datasources/chat_local_data_source.dart` and add `_roomDisplayLimits.remove(roomId)` so the HWM is cleared when a room is closed · BN-03 · Effort S · depends_on: T005
 
-- [ ] T009 [US2] In `ChatCubit.loadMoreMessages()` at `lib/features/chat/presentation/bloc/chat_cubit.dart:385–408`, after the merged-state `emit`, call `_localDataSource.setRoomDisplayLimit(roomId, _messageOffset + _pageSize)` to record the new high-water-mark · BN-03 · Effort S · depends_on: T006
+- [x] T009 [US2] In `ChatCubit.loadMoreMessages()` at `lib/features/chat/presentation/bloc/chat_cubit.dart:385–408`, after the merged-state `emit`, call `_localDataSource.setRoomDisplayLimit(roomId, _messageOffset + _pageSize)` to record the new high-water-mark · BN-03 · Effort S · depends_on: T006
 
-- [ ] T010 [US2] Verify `_messageOffset` is reset to `0` at the start of `openRoom` in `lib/features/chat/presentation/bloc/chat_cubit.dart`; add `_messageOffset = 0;` if missing, to prevent stale offset from a previous visit to the same room · BN-03 · Effort S · depends_on: —
+- [x] T010 [US2] Verify `_messageOffset` is reset to `0` at the start of `openRoom` in `lib/features/chat/presentation/bloc/chat_cubit.dart`; add `_messageOffset = 0;` if missing, to prevent stale offset from a previous visit to the same room · BN-03 · Effort S · depends_on: —
 
 ---
 

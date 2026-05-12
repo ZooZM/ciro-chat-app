@@ -305,7 +305,7 @@ graph TB
 
 ## 4. Bottleneck Findings
 
-### BN-01 · NO SQLite Indexes — P0
+### BN-01 · NO SQLite Indexes — P0 ✅ Resolved in M0
 
 **Severity**: P0  
 **File**: [chat_local_data_source.dart:153-166](lib/features/chat/data/datasources/chat_local_data_source.dart#L153-L166)
@@ -357,7 +357,7 @@ await _dispatchRecentChatsUpdate();
 
 ---
 
-### BN-03 · Pagination State Lost on Incoming Message — P0 (Bug)
+### BN-03 · Pagination State Lost on Incoming Message — P0 (Bug) ✅ Resolved in M0
 
 **Severity**: P0  
 **File**: [chat_local_data_source.dart:607-612](lib/features/chat/data/datasources/chat_local_data_source.dart#L607-L612)
