@@ -398,6 +398,9 @@ class ChatCubit extends Cubit<ChatState> {
       final currentState = state as ChatRoomActive;
       // Prepend older messages (they come oldest-first from the reversed query).
       final merged = [...olderMessages, ...currentState.messages];
+      // T009 — BN-03: record expanded window so _dispatchUpdateForRoom never
+      // narrows the list back to 30 when a new message or status update arrives.
+      _localDataSource.setRoomDisplayLimit(roomId, merged.length);
       emit(
         currentState.copyWith(
           messages: merged,
