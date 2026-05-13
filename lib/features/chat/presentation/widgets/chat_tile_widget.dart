@@ -115,7 +115,7 @@ class ChatTileWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            DateFormat('h:mm a').format(chat.timestamp),
+            DateFormat('h:mm a').format(chat.timestamp.toLocal()),
             style: AppTypography.caption.copyWith(
               color: chat.unreadCount > 0
                   ? Colors.black

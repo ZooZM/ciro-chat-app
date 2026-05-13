@@ -30,6 +30,7 @@ dependencies:
   pinput: ^6.0.2
   flutter_screenutil: ^5.9.3
   cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.4.1
   badges: ^3.2.0
   sqflite: ^2.4.2
   path: ^1.9.1

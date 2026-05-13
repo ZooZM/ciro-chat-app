@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,6 +15,10 @@ class PushNotificationService {
   final DioClient _dioClient;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+  StreamSubscription<RemoteMessage>? _notificationTapSub;
 
   PushNotificationService(this._dioClient);
 
@@ -32,12 +37,34 @@ class PushNotificationService {
     final token = await messaging.getToken();
     if (token != null) await _registerToken(token);
 
-    messaging.onTokenRefresh.listen(_registerToken);
-
-    FirebaseMessaging.onMessage.listen(handleForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(handleNotificationTap);
+    _tokenRefreshSub = messaging.onTokenRefresh.listen(_registerToken);
+    _foregroundSub = FirebaseMessaging.onMessage.listen(handleForegroundMessage);
+    _notificationTapSub = FirebaseMessaging.onMessageOpenedApp.listen(handleNotificationTap);
 
     await handleInitialNotification();
+  }
+
+  Future<void> dispose() async {
+    await _tokenRefreshSub?.cancel();
+    await _foregroundSub?.cancel();
+    await _notificationTapSub?.cancel();
+    _tokenRefreshSub = null;
+    _foregroundSub = null;
+    _notificationTapSub = null;
+
+    try {
+      await _dioClient.dio.delete('/auth/device-token');
+    } on DioException catch (e) {
+      debugPrint('[Push] Token unregister failed: $e');
+    }
+
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (e) {
+      debugPrint('[Push] FCM token delete failed: $e');
+    }
+
+    await _localNotifications.cancelAll();
   }
 
   Future<void> _initLocalNotifications() async {

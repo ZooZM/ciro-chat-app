@@ -157,13 +157,12 @@ class SocketService {
     // Inbound typing indicator
     _socket?.on('userTyping', (data) {
       debugPrint('[SocketService] userTyping: $data');
-      if (data != null && data is Map<String, dynamic>) {
-        final roomId = data['chatRoomId']?.toString() ?? '';
-        final userId = data['userId']?.toString() ?? '';
-        final phoneNumber = data['phoneNumber']?.toString() ?? '';
-        final isTyping = data['isTyping'] == true;
-        onUserTyping?.call(roomId, userId, phoneNumber, isTyping);
-      }
+      if (data == null || data is! Map) return;
+      final roomId = data['chatRoomId']?.toString() ?? '';
+      final userId = data['userId']?.toString() ?? '';
+      final phoneNumber = data['phoneNumber']?.toString() ?? '';
+      final isTyping = data['isTyping'] == true;
+      onUserTyping?.call(roomId, userId, phoneNumber, isTyping);
     });
 
     // ── Call signaling events ─────────────────────────────────────────────

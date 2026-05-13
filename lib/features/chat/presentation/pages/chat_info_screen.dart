@@ -360,7 +360,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                   itemBuilder: (context, index) {
                     final msg = mediaMsgs[index];
                     final isVideo = msg.type == MessageType.video;
-                    final url = msg.fileUrl ?? '';
+                    final url = msg.resolvedFileUrl;
 
                     return ClipRRect(
                       borderRadius: BorderRadius.circular(

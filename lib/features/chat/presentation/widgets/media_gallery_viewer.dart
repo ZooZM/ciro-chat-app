@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 
@@ -113,7 +114,8 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
     } else {
       final url = widget.message.resolvedFileUrl;
       if (url.isNotEmpty) {
-        _controller = VideoPlayerController.networkUrl(Uri.parse(url));
+        final fileInfo = await DefaultCacheManager().getSingleFile(url);
+        _controller = VideoPlayerController.file(fileInfo);
       }
     }
 

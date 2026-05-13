@@ -428,7 +428,8 @@ class ChatCubit extends Cubit<ChatState> {
     final idsToMark = <String>[];
     for (final msg in messages) {
       if (msg.senderId != currentUserId &&
-          msg.status == MessageStatus.delivered) {
+          (msg.status == MessageStatus.delivered ||
+              msg.status == MessageStatus.sent)) {
         idsToMark.add(msg.clientMessageId);
         await _localDataSource.updateMessageStatus(msg.id, MessageStatus.read);
       }

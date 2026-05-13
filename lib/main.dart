@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/di/injection.dart';
+import 'core/network/socket_service.dart';
 import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
 import 'core/network/dio_client.dart';
+import 'features/auth/data/datasources/auth_local_data_source.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/chat/presentation/widgets/call_overlay.dart';
 import 'features/status/presentation/bloc/status_cubit.dart';
@@ -36,8 +38,38 @@ void main() async {
   runApp(const MainApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
+
+  @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final socket = getIt<SocketService>();
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      socket.disconnect();
+    } else if (state == AppLifecycleState.resumed && !socket.isConnected) {
+      getIt<AuthLocalDataSource>().getAccessToken().then((token) {
+        if (token != null && token.isNotEmpty) socket.connect(token);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -95,8 +95,9 @@ class AuthCubit extends Cubit<AuthState> {
       getIt<ChatCubit>().reset();
       getIt<CallCubit>().reset();
 
-      // 2. Disconnect Network
+      // 2. Disconnect Network & unregister push
       getIt<SocketService>().disconnect();
+      await getIt<PushNotificationService>().dispose();
 
       // 3. Nuke Local Database
       await getIt<ChatLocalDataSource>().clearAllData();
