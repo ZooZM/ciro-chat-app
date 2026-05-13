@@ -53,6 +53,10 @@ abstract class ChatLocalDataSource {
   /// Returns all messages stuck in [pending] OR [sent] state, oldest-first.
   Future<List<Message>> getStuckMessages();
 
+  /// Returns the timestamp of the most-recent message stored for [roomId],
+  /// or null if the room has no messages locally. Used by offline recovery (BN-06).
+  Future<DateTime?> getLastMessageTimestamp(String roomId);
+
   /// Returns the current [MessageStatus] of a single message by its ID.
   Future<MessageStatus?> getMessageStatus(String messageId);
 
@@ -675,6 +679,22 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp ASC',
     );
     return maps.map((e) => Message.fromMap(e)).toList();
+  }
+
+  // ── getLastMessageTimestamp ─────────────────────────────────────────────────
+
+  @override
+  Future<DateTime?> getLastMessageTimestamp(String roomId) async {
+    final db = _db;
+    if (db == null) return null;
+    final rows = await db.rawQuery(
+      'SELECT MAX(timestamp) AS ts FROM messages WHERE room_id = ?',
+      [roomId],
+    );
+    if (rows.isEmpty) return null;
+    final raw = rows.first['ts'];
+    if (raw == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(raw as int, isUtc: true);
   }
 
   // ── getMessageStatus ────────────────────────────────────────────────────────

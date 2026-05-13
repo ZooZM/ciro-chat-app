@@ -154,10 +154,11 @@ class ChatCubit extends Cubit<ChatState> {
 
     _socketService.onReconnected = () {
       debugPrint(
-        '[ChatCubit] Socket reconnected — triggering REST status sync + pending replay',
+        '[ChatCubit] Socket reconnected — triggering REST status sync + pending replay + missed-message recovery',
       );
       syncStatusesFromRest().ignore();
       syncPendingMessages().ignore();
+      _syncMissedMessages().ignore();
     };
 
     // FR-022: Recipient receives a "delete for everyone" notification.
@@ -1225,6 +1226,39 @@ class ChatCubit extends Cubit<ChatState> {
       );
     } catch (e) {
       debugPrint('[ChatCubit] REST sync failed: $e');
+    }
+  }
+
+  // ── Offline message recovery ─────────────────────────────────────────────────
+
+  Future<void> _syncMissedMessages() async {
+    try {
+      final result = await _chatRepository.fetchRooms();
+      await result.fold(
+        (failure) {
+          debugPrint('[ChatCubit] Missed-message sync: fetchRooms failed: $failure');
+        },
+        (rooms) async {
+          for (final room in rooms) {
+            final localTs = await _localDataSource.getLastMessageTimestamp(room.id);
+            final serverTs = room.timestamp;
+            if (localTs != null && !serverTs.isAfter(localTs)) continue;
+
+            final msgResult = await _chatRepository.fetchRoomMessages(room.id);
+            msgResult.fold(
+              (f) => debugPrint('[ChatCubit] Missed-message fetch failed for ${room.id}: $f'),
+              (msgs) async {
+                for (final msg in msgs.reversed) {
+                  await _localDataSource.saveMessage(msg, incrementUnread: true);
+                }
+                debugPrint('[ChatCubit] Recovered ${msgs.length} message(s) for ${room.id}');
+              },
+            );
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[ChatCubit] Missed-message sync error: $e');
     }
   }
 
