@@ -101,29 +101,29 @@ US5 depends on nothing in M0/M1 but must ship after M1 is reviewed.
 
 #### Flutter tasks
 
-- [ ] T018 [US5] Add `firebase_messaging: ^15.0.0` and `flutter_local_notifications: ^18.0.0` under `dependencies` in `pubspec.yaml` and run `flutter pub get` · BN-05 · Effort S · depends_on: —
+- [x] T018 [US5] Add `firebase_messaging: ^15.0.0` and `flutter_local_notifications: ^18.0.0` under `dependencies` in `pubspec.yaml` and run `flutter pub get` · BN-05 · Effort S · depends_on: —
 
-- [ ] T019 [US5] Create `lib/core/services/push_notification_service.dart` with: `init()` (request permission, get token, call `_registerToken`, subscribe to `onTokenRefresh`), `_registerToken(token)` (POST to `/auth/device-token` via DioClient), `handleForegroundMessage(RemoteMessage)` (show local notification via `flutter_local_notifications`), `handleNotificationTap(RemoteMessage)` (extract `roomId`, navigate via GoRouter) · BN-05 · Effort M · depends_on: T018
+- [x] T019 [US5] Create `lib/core/services/push_notification_service.dart` with: `init()` (request permission, get token, call `_registerToken`, subscribe to `onTokenRefresh`), `_registerToken(token)` (POST to `/auth/device-token` via DioClient), `handleForegroundMessage(RemoteMessage)` (show local notification via `flutter_local_notifications`), `handleNotificationTap(RemoteMessage)` (extract `roomId`, navigate via GoRouter) · BN-05 · Effort M · depends_on: T018
 
-- [ ] T020 [P] [US5] Add top-level `@pragma('vm:entry-point') Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message)` function in `lib/main.dart` and register it via `FirebaseMessaging.onBackgroundMessage` before `runApp` · BN-05 · Effort S · depends_on: T019
+- [x] T020 [P] [US5] Add top-level `@pragma('vm:entry-point') Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message)` function in `lib/main.dart` and register it via `FirebaseMessaging.onBackgroundMessage` before `runApp` · BN-05 · Effort S · depends_on: T019
 
-- [ ] T021 [P] [US5] Call `await getIt<PushNotificationService>().init()` in `lib/features/auth/presentation/bloc/auth_cubit.dart` after successful `checkAuthStatus()` and `verifyOtp()` login paths · BN-05 · Effort S · depends_on: T019
+- [x] T021 [P] [US5] Call `await getIt<PushNotificationService>().init()` in `lib/features/auth/presentation/bloc/auth_cubit.dart` after successful `checkAuthStatus()` and `verifyOtp()` login paths · BN-05 · Effort S · depends_on: T019
 
-- [ ] T022 [P] [US5] Add notification deep-link handler in `lib/core/routing/app_router.dart`: on app launch from terminated state via `FirebaseMessaging.instance.getInitialMessage()`, extract `roomId` from notification payload and navigate to `ChatRoomScreen` · BN-05 · Effort S · depends_on: T019
+- [x] T022 [P] [US5] Add notification deep-link handler in `lib/core/routing/app_router.dart`: on app launch from terminated state via `FirebaseMessaging.instance.getInitialMessage()`, extract `roomId` from notification payload and navigate to `ChatRoomScreen` · BN-05 · Effort S · depends_on: T019
 
 #### Backend tasks
 
-- [ ] T023 [P] [US5] Create `src/modules/notifications/device-token.schema.ts` defining a Mongoose schema `{ userId: ObjectId, token: String, platform: 'fcm'|'apns', updatedAt: Date }` with a compound unique index on `{ userId, token }` · BN-05 · Effort S · depends_on: —
+- [x] T023 [P] [US5] Create `src/modules/notifications/device-token.schema.ts` defining a Mongoose schema `{ userId: ObjectId, token: String, platform: 'fcm'|'apns', updatedAt: Date }` with a compound unique index on `{ userId, token }` · BN-05 · Effort S · depends_on: —
 
-- [ ] T024 [P] [US5] Create `src/modules/notifications/device-tokens.repository.ts` with `upsertToken(userId, token, platform)` (findOneAndUpdate with upsert) and `getTokens(userId)` methods · BN-05 · Effort S · depends_on: T023
+- [x] T024 [P] [US5] Create `src/modules/notifications/device-tokens.repository.ts` with `upsertToken(userId, token, platform)` (findOneAndUpdate with upsert) and `getTokens(userId)` methods · BN-05 · Effort S · depends_on: T023
 
-- [ ] T025 [P] [US5] Create `src/modules/notifications/push.service.ts` with `onModuleInit()` (initialise `firebase-admin` from `FIREBASE_SERVICE_ACCOUNT` env JSON), `sendPush(deviceToken, payload)` (calls `admin.messaging().send()`), `notifyOfflineUser(userId, message)` (looks up tokens via `DeviceTokensRepository`, calls `sendPush` for each) · BN-05 · Effort M · depends_on: T024
+- [x] T025 [P] [US5] Create `src/modules/notifications/push.service.ts` with `onModuleInit()` (initialise `firebase-admin` from `FIREBASE_SERVICE_ACCOUNT` env JSON), `sendPush(deviceToken, payload)` (calls `admin.messaging().send()`), `notifyOfflineUser(userId, message)` (looks up tokens via `DeviceTokensRepository`, calls `sendPush` for each) · BN-05 · Effort M · depends_on: T024
 
-- [ ] T026 [US5] Create `src/modules/notifications/notifications.module.ts` importing `MongooseModule` for `DeviceToken`, providing `PushService` and `DeviceTokensRepository`, exporting `PushService` · BN-05 · Effort S · depends_on: T023, T024, T025
+- [x] T026 [US5] Create `src/modules/notifications/notifications.module.ts` importing `MongooseModule` for `DeviceToken`, providing `PushService` and `DeviceTokensRepository`, exporting `PushService` · BN-05 · Effort S · depends_on: T023, T024, T025
 
-- [ ] T027 [P] [US5] Add `POST /auth/device-token` endpoint to `src/modules/auth/auth.controller.ts` (or wherever auth routes live): `@UseGuards(JwtAuthGuard)` protected, calls `deviceTokensRepository.upsertToken(req.user.userId, dto.token, dto.platform)` · BN-05 · Effort S · depends_on: T024
+- [x] T027 [P] [US5] Add `POST /auth/device-token` endpoint to `src/modules/auth/auth.controller.ts` (or wherever auth routes live): `@UseGuards(JwtAuthGuard)` protected, calls `deviceTokensRepository.upsertToken(req.user.userId, dto.token, dto.platform)` · BN-05 · Effort S · depends_on: T024
 
-- [ ] T028 [US5] Inject `PushService` into `ChatGateway` (`chat.gateway.ts`) and in `handleSendMessage` after broadcasting `newMessage`, iterate over room participant IDs; for each participant not in `activeSockets` call `pushService.notifyOfflineUser(participantId, savedMessage)` · BN-05 · Effort M · depends_on: T025, T026
+- [x] T028 [US5] Inject `PushService` into `ChatGateway` (`chat.gateway.ts`) and in `handleSendMessage` after broadcasting `newMessage`, iterate over room participant IDs; for each participant not in `activeSockets` call `pushService.notifyOfflineUser(participantId, savedMessage)` · BN-05 · Effort M · depends_on: T025, T026
 
 ---
 

@@ -387,7 +387,7 @@ The flow is: `optimistic bubble shown → await uploadFile() → then emit socke
 
 ---
 
-### BN-05 · No Push Notifications — P0 (Missing Feature)
+### BN-05 · No Push Notifications — P0 (Missing Feature) ✅ Resolved in M2
 
 **Severity**: P0  
 **File**: `pubspec.yaml` (no `firebase_messaging` / APNs plugin)
