@@ -69,13 +69,13 @@ US5 depends on nothing in M0/M1 but must ship after M1 is reviewed.
 **Story goal**: All messages sent while the user was offline appear within 3 s of reconnection.  
 **Independent test**: Manual — User A sends 3 messages to offline User B; User B reconnects; all 3 messages appear in ≤ 3 s; zero duplicates.
 
-- [ ] T011 [US3] Add abstract method `Future<DateTime?> getLastMessageTimestamp(String roomId)` to the `ChatLocalDataSource` interface (wherever the abstract class / interface is declared) · BN-06 · Effort S · depends_on: —
+- [x] T011 [US3] Add abstract method `Future<DateTime?> getLastMessageTimestamp(String roomId)` to the `ChatLocalDataSource` interface (wherever the abstract class / interface is declared) · BN-06 · Effort S · depends_on: —
 
-- [ ] T012 [US3] Implement `getLastMessageTimestamp(String roomId)` in `ChatLocalDataSourceImpl` using `rawQuery('SELECT MAX(timestamp) as ts FROM messages WHERE room_id = ?', [roomId])` in `lib/features/chat/data/datasources/chat_local_data_source.dart` (add after `getStuckMessages` around line 641) · BN-06 · Effort S · depends_on: T011
+- [x] T012 [US3] Implement `getLastMessageTimestamp(String roomId)` in `ChatLocalDataSourceImpl` using `rawQuery('SELECT MAX(timestamp) as ts FROM messages WHERE room_id = ?', [roomId])` in `lib/features/chat/data/datasources/chat_local_data_source.dart` (add after `getStuckMessages` around line 641) · BN-06 · Effort S · depends_on: T011
 
-- [ ] T013 [P] [US3] Add private `Future<void> _syncMissedMessages()` method to `ChatCubit` in `lib/features/chat/presentation/bloc/chat_cubit.dart` (near `syncStatusesFromRest` around line 1179): fetch server rooms via `_chatRepository.fetchRooms()`, compare each room's `timestamp` (server `lastMessage.createdAt`) against `getLastMessageTimestamp`, and for rooms where server is newer call `_chatRepository.fetchRoomMessages(roomId)` then `_localDataSource.saveMessage(msg)` for each result · BN-06 · Effort M · depends_on: T012
+- [x] T013 [P] [US3] Add private `Future<void> _syncMissedMessages()` method to `ChatCubit` in `lib/features/chat/presentation/bloc/chat_cubit.dart` (near `syncStatusesFromRest` around line 1179): fetch server rooms via `_chatRepository.fetchRooms()`, compare each room's `timestamp` (server `lastMessage.createdAt`) against `getLastMessageTimestamp`, and for rooms where server is newer call `_chatRepository.fetchRoomMessages(roomId)` then `_localDataSource.saveMessage(msg)` for each result · BN-06 · Effort M · depends_on: T012
 
-- [ ] T014 [US3] Wire `_syncMissedMessages().ignore()` into the `onReconnected` lambda in `lib/features/chat/presentation/bloc/chat_cubit.dart:155–161` alongside the existing `syncStatusesFromRest` and `syncPendingMessages` calls · BN-06 · Effort S · depends_on: T013
+- [x] T014 [US3] Wire `_syncMissedMessages().ignore()` into the `onReconnected` lambda in `lib/features/chat/presentation/bloc/chat_cubit.dart:155–161` alongside the existing `syncStatusesFromRest` and `syncPendingMessages` calls · BN-06 · Effort S · depends_on: T013
 
 ---
 
@@ -84,11 +84,11 @@ US5 depends on nothing in M0/M1 but must ship after M1 is reviewed.
 **Story goal**: A sender can delete their own message for all participants; non-senders and expired messages are rejected silently.  
 **Independent test**: Emit `deleteForEveryone` → assert `messageDeleted` received by recipient socket AND `isDeleted: true` in MongoDB.
 
-- [ ] T015 [P] [US4] Create new file `chat.config.ts` alongside `chat.module.ts` in the NestJS chat module directory, exporting `CHAT_CONFIG = { DELETE_WINDOW_MINUTES: 60 }` · BN-20 · Effort S · depends_on: —
+- [x] T015 [P] [US4] Create new file `chat.config.ts` alongside `chat.module.ts` in the NestJS chat module directory, exporting `CHAT_CONFIG = { DELETE_WINDOW_MINUTES: 60 }` · BN-20 · Effort S · depends_on: —
 
-- [ ] T016 [P] [US4] Add `async softDelete(clientMessageId: string, requesterId: string, windowMinutes: number): Promise<MessageDocument | null>` method to `MessagesRepository` in `messages.repository.ts` after the `markRead` method (after line 46): use `findOneAndUpdate` with conditions `{ clientMessageId, senderId: ObjectId(requesterId), createdAt: { $gte: cutoff }, isDeleted: false }` and update `{ $set: { isDeleted: true, content: '' } }` · BN-20 · Effort S · depends_on: —
+- [x] T016 [P] [US4] Add `async softDelete(clientMessageId: string, requesterId: string, windowMinutes: number): Promise<MessageDocument | null>` method to `MessagesRepository` in `messages.repository.ts` after the `markRead` method (after line 46): use `findOneAndUpdate` with conditions `{ clientMessageId, senderId: ObjectId(requesterId), createdAt: { $gte: cutoff }, isDeleted: false }` and update `{ $set: { isDeleted: true, content: '' } }` · BN-20 · Effort S · depends_on: —
 
-- [ ] T017 [US4] Add `@SubscribeMessage('deleteForEveryone')` handler `handleDeleteForEveryone(client, payload: { clientMessageId: string })` to `ChatGateway` in `chat.gateway.ts` after the `handleMarkRead` handler (after line 241): call `messagesRepository.softDelete(payload.clientMessageId, client.data.userId, CHAT_CONFIG.DELETE_WINDOW_MINUTES)`, then emit `this.server.to(roomId).emit('messageDeleted', { clientMessageId })` if result is non-null · BN-20 · Effort S · depends_on: T015, T016
+- [x] T017 [US4] Add `@SubscribeMessage('deleteForEveryone')` handler `handleDeleteForEveryone(client, payload: { clientMessageId: string })` to `ChatGateway` in `chat.gateway.ts` after the `handleMarkRead` handler (after line 241): call `messagesRepository.softDelete(payload.clientMessageId, client.data.userId, CHAT_CONFIG.DELETE_WINDOW_MINUTES)`, then emit `this.server.to(roomId).emit('messageDeleted', { clientMessageId })` if result is non-null · BN-20 · Effort S · depends_on: T015, T016
 
 ---
 

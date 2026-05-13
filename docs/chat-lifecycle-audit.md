@@ -359,6 +359,8 @@ await _dispatchRecentChatsUpdate();
 
 ### BN-03 · Pagination State Lost on Incoming Message — P0 (Bug) ✅ Resolved in M0
 
+
+
 **Severity**: P0  
 **File**: [chat_local_data_source.dart:607-612](lib/features/chat/data/datasources/chat_local_data_source.dart#L607-L612)
 
@@ -396,7 +398,7 @@ Offline users receive zero notification of incoming messages. This is not a perf
 
 ---
 
-### BN-06 · No Reconnect Sync for New Messages — P1
+### BN-06 · No Reconnect Sync for New Messages — P1 ✅ Resolved in M1
 
 **Severity**: P1  
 **File**: [chat_cubit.dart:155-161](lib/features/chat/presentation/bloc/chat_cubit.dart#L155-L161), [chat_cubit.dart:1179-1226](lib/features/chat/presentation/bloc/chat_cubit.dart#L1179-L1226)
@@ -574,7 +576,7 @@ No Flutter changes required — `socket_service.dart:184–190` already handles 
 
 ---
 
-### BN-20 · FR-022 Delete-For-Everyone is Client-Only — P0
+### BN-20 · FR-022 Delete-For-Everyone is Client-Only — P0 ✅ Resolved in M1
 
 **Severity**: P0  
 **File**: [socket_service.dart:199–207](lib/core/network/socket_service.dart#L199-L207) (Flutter ready) · [chat.gateway.ts](../../../../../../../Volumes/Zeyad/Documents/work/Node\ js/chat-app-backend/src/modules/chat/chat.gateway.ts) (no handler exists)
