@@ -19,6 +19,7 @@ import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
 import '../di/injection.dart';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
@@ -39,6 +40,19 @@ class AppRouterName {
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Checks if the app was launched by tapping a push notification (terminated state).
+/// If so, navigates directly to the referenced chat room.
+Future<void> handleInitialNotification() async {
+  final message = await FirebaseMessaging.instance.getInitialMessage();
+  if (message == null) return;
+  final roomId = message.data['roomId'] as String?;
+  if (roomId == null) return;
+  final room = await getIt<ChatCubit>().getRoomById(roomId);
+  if (room != null) {
+    appRouter.push(AppRouterName.chatRoom, extra: room);
+  }
+}
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalNavigatorKey,

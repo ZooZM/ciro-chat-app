@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,11 +13,18 @@ import 'features/video_call/presentation/bloc/call_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // No UI work here — Firebase handles the notification display.
+}
+
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   Bloc.observer = const AppBlocObserver();
   await configureDependencies();
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Link Network failure fallback strictly after router & DI initialization
   globalOnUnauthorizedRedirect = () => appRouter.go(AppRouterName.auth);

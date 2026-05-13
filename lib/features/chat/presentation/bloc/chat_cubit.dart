@@ -1422,6 +1422,11 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  // ── getRoomById ──────────────────────────────────────────────────────────────
+
+  Future<ChatSession?> getRoomById(String roomId) =>
+      _localDataSource.getRoomById(roomId);
+
   // ── reset ────────────────────────────────────────────────────────────────────
 
   void reset() {

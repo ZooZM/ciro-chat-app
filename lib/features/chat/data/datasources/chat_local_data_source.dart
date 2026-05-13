@@ -57,6 +57,9 @@ abstract class ChatLocalDataSource {
   /// or null if the room has no messages locally. Used by offline recovery (BN-06).
   Future<DateTime?> getLastMessageTimestamp(String roomId);
 
+  /// Returns a locally-cached [ChatSession] by its ID, or null if not found.
+  Future<ChatSession?> getRoomById(String roomId);
+
   /// Returns the current [MessageStatus] of a single message by its ID.
   Future<MessageStatus?> getMessageStatus(String messageId);
 
@@ -695,6 +698,22 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final raw = rows.first['ts'];
     if (raw == null) return null;
     return DateTime.fromMillisecondsSinceEpoch(raw as int, isUtc: true);
+  }
+
+  // ── getRoomById ─────────────────────────────────────────────────────────────
+
+  @override
+  Future<ChatSession?> getRoomById(String roomId) async {
+    final db = _db;
+    if (db == null) return null;
+    final rows = await db.query(
+      'rooms',
+      where: 'id = ?',
+      whereArgs: [roomId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return ChatSession.fromMap(rows.first);
   }
 
   // ── getMessageStatus ────────────────────────────────────────────────────────

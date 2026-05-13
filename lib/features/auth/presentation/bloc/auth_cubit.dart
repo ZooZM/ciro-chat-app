@@ -12,6 +12,7 @@ import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
 import '../../../../core/network/socket_service.dart';
 import '../../../../core/di/injection.dart';
+import '../../../../core/services/push_notification_service.dart';
 
 part 'auth_state.dart';
 
@@ -41,6 +42,7 @@ class AuthCubit extends Cubit<AuthState> {
           debugPrint('[AuthCubit] Socket connected on app start');
 
           getIt<ChatCubit>().silentSyncContacts().ignore();
+          getIt<PushNotificationService>().init().ignore();
         }
         emit(const Authenticated());
         return true;
@@ -79,6 +81,7 @@ class AuthCubit extends Cubit<AuthState> {
         getIt<SocketService>().connect(freshToken);
         debugPrint('[AuthCubit] Socket connected after OTP verification');
         getIt<ChatCubit>().silentSyncContacts().ignore();
+        getIt<PushNotificationService>().init().ignore();
       }
 
       emit(Authenticated(userData: response));
