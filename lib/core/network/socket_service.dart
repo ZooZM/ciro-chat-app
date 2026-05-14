@@ -5,6 +5,7 @@ import 'package:injectable/injectable.dart';
 import 'package:dio/dio.dart';
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
 
 @lazySingleton
 class SocketService {
@@ -114,49 +115,52 @@ class SocketService {
     });
 
     // ── Chat events ───────────────────────────────────────────────────────
+    // NOTE: socket.io-client (Dart) delivers event payloads as Map<dynamic,dynamic>,
+    // NOT Map<String,dynamic>. Never use `data as Map<String,dynamic>` or
+    // `data is Map<String,dynamic>` — both fail silently at runtime.
+    // Always guard with `data is! Map`, then use Map<String,dynamic>.from(data as Map).
 
     // SERVER confirmed storage: pending → sent (1 grey tick)
     _socket?.on('messageSent', (data) {
-      final map = data as Map<String, dynamic>;
-      final id = map['clientMessageId'] as String?;
-      final createdAtStr = map['createdAt'] as String?;
-      final createdAt = createdAtStr != null
-          ? DateTime.tryParse(createdAtStr)
-          : null;
-      if (id != null) onMessageSent?.call(id, createdAt);
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final id = map['clientMessageId']?.toString();
+      final createdAtStr = map['createdAt']?.toString();
+      final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+      if (id != null && id.isNotEmpty) onMessageSent?.call(id, createdAt);
     });
 
     // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
     _socket?.on('messageDelivered', (data) {
       debugPrint('[SocketService] Message delivered: $data');
-      final ids =
-          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null)
-        onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final ids = map['clientMessageIds'] as List<dynamic>?;
+      if (ids != null) onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
     });
 
     // RECIPIENT read the message: delivered → read (2 blue ticks)
     _socket?.on('messageRead', (data) {
       debugPrint('[SocketService] Message read: $data');
-
-      final ids =
-          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null)
-        onMessageRead?.call(ids.map((e) => e.toString()).toList());
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final ids = map['clientMessageIds'] as List<dynamic>?;
+      if (ids != null) onMessageRead?.call(ids.map((e) => e.toString()).toList());
     });
 
     // Inbound message from another user.
     _socket?.on('receiveMessage', (data) {
-      onNewMessage?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onNewMessage?.call(Map<String, dynamic>.from(data));
     });
     // Legacy name — keep both until backend is fully migrated.
     _socket?.on('newMessage', (data) {
-      onNewMessage?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onNewMessage?.call(Map<String, dynamic>.from(data));
     });
 
     // Inbound typing indicator
     _socket?.on('userTyping', (data) {
-      debugPrint('[SocketService] userTyping: $data');
       if (data == null || data is! Map) return;
       final roomId = data['chatRoomId']?.toString() ?? '';
       final userId = data['userId']?.toString() ?? '';
@@ -168,41 +172,42 @@ class SocketService {
     // ── Call signaling events ─────────────────────────────────────────────
     _socket?.on('incomingCall', (data) {
       debugPrint('[CALL] incomingCall: $data');
-      onIncomingCall?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onIncomingCall?.call(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('callAccepted', (data) {
       debugPrint('[CALL] callAccepted: $data');
-      onCallAccepted?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onCallAccepted?.call(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('callRejected', (data) {
       debugPrint('[CALL] callRejected: $data');
-      onCallRejected?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onCallRejected?.call(Map<String, dynamic>.from(data));
     });
+
     _socket?.on('userStatus', (data) {
-      if (data != null && data is Map<String, dynamic>) {
-        final userId = data['userId']?.toString() ?? '';
-        final isOnline = data['isOnline'] == true;
-        onUserStatusChanged?.call(userId, isOnline);
-      }
+      if (data == null || data is! Map) return;
+      final userId = data['userId']?.toString() ?? '';
+      final isOnline = data['isOnline'] == true;
+      if (userId.isNotEmpty) onUserStatusChanged?.call(userId, isOnline);
     });
 
     // ── Status events ─────────────────────────────────────────────────────
     _socket?.on('statusReceived', (data) {
       debugPrint('[STATUS] statusReceived: $data');
-      onStatusReceived?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onStatusReceived?.call(Map<String, dynamic>.from(data));
     });
 
     // ── FR-022: Message deletion ──────────────────────────────────────────
     _socket?.on('messageDeleted', (data) {
       debugPrint('[DELETE] messageDeleted: $data');
-      if (data is Map<String, dynamic>) {
-        final clientMsgId = data['clientMessageId']?.toString() ?? '';
-        if (clientMsgId.isNotEmpty) {
-          onMessageDeleted?.call(clientMsgId);
-        }
-      }
+      if (data == null || data is! Map) return;
+      final clientMsgId = data['clientMessageId']?.toString() ?? '';
+      if (clientMsgId.isNotEmpty) onMessageDeleted?.call(clientMsgId);
     });
   }
 
@@ -358,6 +363,7 @@ class SocketService {
     } catch (e) {
       debugPrint('[SocketService] Socket Token Refresh Failed: $e');
       await authLocal.deleteTokens();
+      globalOnUnauthorizedRedirect?.call();
     } finally {
       _isRefreshing = false;
     }

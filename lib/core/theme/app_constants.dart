@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'app_colors.dart';
 
 /// Design-token constants for layout, spacing, radius, elevation, and button styles.
@@ -7,10 +8,12 @@ class AppConstants {
 
   // ── Network ───────────────────────────────────────────────────────────────
 
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_URL',
-    defaultValue: 'https://vella-niftier-gertrude.ngrok-free.dev',
-  );
+  static String get apiBaseUrl =>
+      dotenv.maybeGet('API_URL') ??
+      const String.fromEnvironment(
+        'API_URL',
+        defaultValue: 'https://vella-niftier-gertrude.ngrok-free.dev',
+      );
 
   // ── Spacing ───────────────────────────────────────────────────────────────
 

@@ -270,7 +270,7 @@ class ChatCubit extends Cubit<ChatState> {
           messageIds: [incoming.clientMessageId],
         );
         await _localDataSource.updateMessageStatus(
-          incoming.id,
+          incoming.clientMessageId,
           MessageStatus.read,
         );
       }

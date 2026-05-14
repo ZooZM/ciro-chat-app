@@ -154,7 +154,7 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
   @override
   Widget build(BuildContext context) {
     if (!_isInitialized || _controller == null) {
-      return const Center(child: CircularProgressIndicator());
+      return _ThumbnailPlaceholder(message: widget.message, showSpinner: true);
     }
 
     return Center(
@@ -184,6 +184,39 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ThumbnailPlaceholder extends StatelessWidget {
+  final Message message;
+  final bool showSpinner;
+
+  const _ThumbnailPlaceholder({required this.message, this.showSpinner = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = message.metadata ?? {};
+    final localThumb = meta['localThumbPath'] as String?;
+    final thumbUrl = meta['thumbnailUrl'] as String?;
+    final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
+    final hasRemoteThumb = thumbUrl != null && thumbUrl.isNotEmpty;
+
+    Widget background;
+    if (hasLocalThumb) {
+      background = Image.file(File(localThumb), fit: BoxFit.contain);
+    } else if (hasRemoteThumb) {
+      background = CachedNetworkImage(imageUrl: thumbUrl, fit: BoxFit.contain);
+    } else {
+      background = const ColoredBox(color: Colors.black);
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox.expand(child: background),
+        if (showSpinner) const CircularProgressIndicator(color: Colors.white),
+      ],
     );
   }
 }
