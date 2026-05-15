@@ -85,7 +85,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           providers: [
             BlocProvider<ChatCubit>(create: (_) => getIt<ChatCubit>()),
             BlocProvider<CallCubit>(create: (_) => getIt<CallCubit>()),
-            BlocProvider<CallRecordingCubit>(create: (_) => getIt<CallRecordingCubit>()),
+            BlocProvider<CallRecordingCubit>(
+              create: (_) => getIt<CallRecordingCubit>(),
+            ),
             BlocProvider<StatusCubit>(
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
             ),

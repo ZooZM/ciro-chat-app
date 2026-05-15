@@ -33,7 +33,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   void _connectFromCubitState() {
     final s = context.read<CallCubit>().state;
     if (s is CallActive && s.isGroupCall) {
-      _connectToRoom(s.livekitUrl, s.livekitToken);
+      _connectToRoom(s.livekitUrl, s.livekitToken, isVideo: s.isVideo);
     } else {
       setState(() {
         _error = 'No active group call state found.';
@@ -42,16 +42,23 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     }
   }
 
-  Future<void> _connectToRoom(String url, String token) async {
+  Future<void> _connectToRoom(String url, String token, {bool isVideo = true}) async {
     try {
       _room = Room();
       _room!.addListener(_onRoomUpdate);
       await _room!.connect(url, token);
-      await _room!.localParticipant?.setCameraEnabled(true);
+      await _room!.localParticipant?.setCameraEnabled(isVideo);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
-      if (mounted) setState(() => _isConnecting = false);
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _isCameraDisabled = !isVideo;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _isConnecting = false; });
+      if (mounted) {
+        setState(() { _error = e.toString(); _isConnecting = false; });
+      }
     }
   }
 
@@ -60,16 +67,23 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   Future<void> _endCall() async {
-    final nav = Navigator.of(context);
     final recCubit = context.read<CallRecordingCubit>();
     final callCubit = context.read<CallCubit>();
+    final router = GoRouter.of(context);
+    final canPop = context.canPop();
     // T078: auto-stop recording when call ends
     if (recCubit.state is RecordingActive) {
       await recCubit.stop();
     }
     callCubit.leaveGroupCall();
     await _room?.disconnect();
-    if (mounted) nav.pop();
+    if (mounted) {
+      if (canPop) {
+        router.pop();
+      } else {
+        router.go('/home');
+      }
+    }
   }
 
   @override
@@ -84,9 +98,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
         if (state is CallIdle || state is CallEnded) {
-          final nav = Navigator.of(context);
+          final router = GoRouter.of(context);
+          final canPop = context.canPop();
           _room?.disconnect().then((_) {
-            if (mounted) nav.pop();
+            if (mounted) {
+              if (canPop) {
+                router.pop();
+              } else {
+                router.go('/home');
+              }
+            }
           });
         }
       },

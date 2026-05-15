@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Result object returned after a bulk permission request
@@ -28,8 +29,15 @@ class PermissionService {
   /// Request all required permissions in bulk.
   /// Returns a [PermissionRequestResult] detailing what was granted/denied.
   Future<PermissionRequestResult> requestAll() async {
-    // Request all permissions at once
-    final statuses = await _requiredPermissions.request();
+    Map<Permission, PermissionStatus> statuses;
+    try {
+      statuses = await _requiredPermissions.request();
+    } on PlatformException {
+      // permission_handler_android 13+ can throw if the Activity binding
+      // isn't ready yet (e.g. immediately after a hot restart). Retry once.
+      await Future.delayed(const Duration(milliseconds: 300));
+      statuses = await _requiredPermissions.request();
+    }
 
     final permanentlyDenied = <Permission>[];
     final denied = <Permission>[];

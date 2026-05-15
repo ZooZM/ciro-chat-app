@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 
 class MediaGalleryViewer extends StatefulWidget {
   final List<Message> mediaMessages;
@@ -206,7 +207,7 @@ class _ThumbnailPlaceholder extends StatelessWidget {
     if (hasLocalThumb) {
       background = Image.file(File(localThumb), fit: BoxFit.contain);
     } else if (hasRemoteThumb) {
-      background = CachedNetworkImage(imageUrl: thumbUrl, fit: BoxFit.contain);
+      background = CachedNetworkImage(imageUrl: UrlUtils.resolveMediaUrl(thumbUrl), fit: BoxFit.contain);
     } else {
       background = const ColoredBox(color: Colors.black);
     }
