@@ -39,7 +39,12 @@ abstract class ChatRemoteDataSource {
     String roomId,
     String participantId,
   );
-  Future<Either<Failure, void>> leaveGroup(String roomId);
+  Future<Either<Failure, String?>> leaveGroup(String roomId);
+  Future<Either<Failure, void>> updateGroup(
+    String roomId, {
+    String? name,
+    String? avatarUrl,
+  });
 
   // Block User API endpoints
   Future<Either<Failure, void>> blockUser(String targetUserId);
@@ -185,14 +190,38 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }
 
   @override
-  Future<Either<Failure, void>> leaveGroup(String roomId) async {
+  Future<Either<Failure, String?>> leaveGroup(String roomId) async {
     try {
       final response = await _dio.post('/chat/group/$roomId/leave');
       if (response.statusCode == 200) {
-        return const Right(null);
+        final newAdmin = response.data['newAdmin'] as String?;
+        return Right(newAdmin);
       }
       return Left(
         ServerFailure(response.data['message'] ?? 'Failed to leave group'),
+      );
+    } on DioException catch (e) {
+      return Left(ServerFailure.fromDioException(e));
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> updateGroup(
+    String roomId, {
+    String? name,
+    String? avatarUrl,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (name != null && name.trim().isNotEmpty) body['name'] = name.trim();
+      if (avatarUrl != null) body['avatarUrl'] = avatarUrl;
+
+      final response = await _dio.patch('/chat/group/$roomId', data: body);
+      if (response.statusCode == 200) return const Right(null);
+      return Left(
+        ServerFailure(response.data['message'] ?? 'Failed to update group'),
       );
     } on DioException catch (e) {
       return Left(ServerFailure.fromDioException(e));
@@ -341,7 +370,11 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final response = await _dio.post(
         '/chat/upload',
         data: formData,
-        options: Options(headers: {'Content-Type': 'multipart/form-data'}),
+        options: Options(
+          headers: {'Content-Type': 'multipart/form-data'},
+          sendTimeout: const Duration(minutes: 10),
+          receiveTimeout: const Duration(minutes: 5),
+        ),
       );
       final raw = response.data;
       final payload = (raw is Map && raw.containsKey('data'))

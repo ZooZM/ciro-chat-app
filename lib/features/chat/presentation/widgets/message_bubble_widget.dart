@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import '../bloc/voice_note_controller.dart';
@@ -39,6 +40,30 @@ class MessageBubbleWidget extends StatelessWidget {
   /// must be transparent and have no padding so the media fills edge-to-edge.
   bool get _isMediaBubble =>
       message.type == MessageType.image || message.type == MessageType.video;
+
+  /// Group-chat sender label: if the phone is saved in local contacts, show
+  /// the saved name; otherwise show `+phone ~ServerName` (or just `+phone` /
+  /// `ServerName` / `senderId` depending on what we have).
+  Future<String> _resolveGroupSenderLabel(BuildContext context) async {
+    final phone = message.senderPhone;
+    if (phone.isNotEmpty) {
+      final contactName = await context.read<ChatCubit>().getLocalContactName(phone);
+      if (contactName.isNotEmpty && contactName != phone) return contactName;
+      if (message.senderName.isNotEmpty) return '$phone ~${message.senderName}';
+      return phone;
+    }
+    if (message.senderName.isNotEmpty) return message.senderName;
+    return message.senderId;
+  }
+
+  String _fallbackSenderLabel() {
+    if (message.senderPhone.isNotEmpty) {
+      return message.senderName.isNotEmpty
+          ? '${message.senderPhone} ~${message.senderName}'
+          : message.senderPhone;
+    }
+    return message.senderName.isNotEmpty ? message.senderName : message.senderId;
+  }
 
   Color get _bgColor =>
       _isMediaBubble ? Colors.transparent : (_isMine ? AppColors.primaryLight : AppColors.surface);
@@ -160,12 +185,10 @@ class MessageBubbleWidget extends StatelessWidget {
                 top: 8.resH,
               ),
               child: FutureBuilder<String>(
-                future: context.read<ChatCubit>().getLocalContactName(
-                  message.senderId,
-                ),
+                future: _resolveGroupSenderLabel(context),
                 builder: (context, snapshot) {
                   return Text(
-                    snapshot.data ?? message.senderId,
+                    snapshot.data ?? _fallbackSenderLabel(),
                     style: AppTypography.caption.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.bold,
@@ -553,7 +576,10 @@ class _VideoBubble extends StatelessWidget {
 
     final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
     final url = UrlUtils.resolveMediaUrl(thumbUrl);
-    final isUploading = !hasLocalThumb && url.isEmpty;
+    // Only show uploading state if we have no local thumb AND no CDN URL AND no fileUrl.
+    // A video with a fileUrl but no thumbnail is still watchable — show a play tile.
+    final hasFileUrl = message.fileUrl != null && message.fileUrl!.isNotEmpty;
+    final isUploading = !hasLocalThumb && url.isEmpty && !hasFileUrl;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16.resR),
@@ -567,21 +593,24 @@ class _VideoBubble extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Thumbnail
-                    hasLocalThumb
-                        ? Image.file(File(localThumb), fit: BoxFit.cover)
-                        : CachedNetworkImage(
-                            imageUrl: url,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => _UploadingPlaceholder(),
-                            errorWidget: (_, __, ___) => Container(
-                              color: AppColors.surfaceVariant,
-                              child: const Icon(
-                                Icons.broken_image_outlined,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
+                    // Thumbnail — local first, CDN next, plain dark fallback
+                    if (hasLocalThumb)
+                      Image.file(File(localThumb), fit: BoxFit.cover)
+                    else if (url.isNotEmpty)
+                      CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _UploadingPlaceholder(),
+                        errorWidget: (_, __, ___) => Container(
+                          color: AppColors.surfaceVariant,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: AppColors.textSecondary,
                           ),
+                        ),
+                      )
+                    else
+                      Container(color: const Color(0xFF1A1A2E)),
                     // Dark gradient overlay
                     Positioned(
                       bottom: 0,
@@ -1201,10 +1230,22 @@ class _LocationBubble extends StatelessWidget {
     required this.footer,
   });
 
+  Future<void> _openMaps(double lat, double lng) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final address = meta['address'] as String? ?? 'Shared Location';
+    final lat = (meta['latitude'] as num?)?.toDouble();
+    final lng = (meta['longitude'] as num?)?.toDouble();
+    final hasCoords = lat != null && lng != null;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
@@ -1213,14 +1254,18 @@ class _LocationBubble extends StatelessWidget {
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 150.resH,
-            width: 250.resW,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(12.resR),
-            ),
-            child: Center(
+          GestureDetector(
+            onTap: hasCoords ? () => _openMaps(lat, lng) : null,
+            child: Container(
+              height: 150.resH,
+              width: 250.resW,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12.resR),
+                border: hasCoords
+                    ? Border.all(color: AppColors.primary.withValues(alpha: 0.3))
+                    : null,
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1237,6 +1282,16 @@ class _LocationBubble extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (hasCoords) ...[
+                    SizedBox(height: 6.resH),
+                    Text(
+                      'Tap to open in Maps',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

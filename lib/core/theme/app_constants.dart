@@ -15,6 +15,13 @@ class AppConstants {
         defaultValue: 'https://vella-niftier-gertrude.ngrok-free.dev',
       );
 
+  static String get liveKitWsUrl =>
+      dotenv.maybeGet('LIVEKIT_WS_URL') ??
+      const String.fromEnvironment(
+        'LIVEKIT_WS_URL',
+        defaultValue: 'wss://ciro-chat-qc2pe2cz.livekit.cloud',
+      );
+
   // ── Spacing ───────────────────────────────────────────────────────────────
 
   static const double spacingXs = 4.0;

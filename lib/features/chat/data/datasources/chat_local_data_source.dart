@@ -94,6 +94,10 @@ abstract class ChatLocalDataSource {
   Future<Map<String, int>> getMediaCount(String roomId);
 
   Future<void> updateUserOnlineStatus(String userId, bool isOnline);
+
+  /// Exposes the underlying SQLite [Database] instance for use by other
+  /// datasources that share the same DB file (e.g., RecordingsLocalDataSource).
+  Database? get database;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,8 +115,8 @@ String _mediaPreview(MessageType type) {
       return '🎵 Audio';
     case MessageType.contact:
       return '👤 Contact';
-    case MessageType.system:
-      return 'ℹ️ System';
+    // case MessageType.system:
+    //   return 'ℹ️ System';
     case MessageType.location:
       return '📍 Location';
     case MessageType.poll:
@@ -122,6 +126,8 @@ String _mediaPreview(MessageType type) {
     case MessageType.video:
       return '🎬 Video';
     case MessageType.text:
+      return '';
+    default:
       return '';
   }
 }
@@ -149,6 +155,9 @@ int _statusRank(MessageStatus status) {
 class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Database? _db;
 
+  @override
+  Database? get database => _db;
+
   final Map<String, StreamController<List<Message>>> _roomStreamControllers =
       {};
   final StreamController<List<ChatSession>> _recentChatsController =
@@ -167,6 +176,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       client_message_id TEXT,
       room_id           TEXT,
       sender_id         TEXT,
+      sender_phone      TEXT DEFAULT '',
+      sender_name       TEXT DEFAULT '',
       text              TEXT,
       timestamp         INTEGER,
       status            TEXT,
@@ -226,6 +237,25 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     'CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phoneNumber)',
   ];
 
+  static const _recordingsSchema = '''
+    CREATE TABLE IF NOT EXISTS recordings (
+      id              TEXT PRIMARY KEY,
+      call_room_id    TEXT NOT NULL,
+      call_room_name  TEXT NOT NULL,
+      file_path       TEXT NOT NULL,
+      duration_ms     INTEGER NOT NULL DEFAULT 0,
+      has_video       INTEGER NOT NULL DEFAULT 0,
+      size_bytes      INTEGER NOT NULL DEFAULT 0,
+      created_at      INTEGER NOT NULL,
+      display_name    TEXT NOT NULL
+    )
+  ''';
+
+  static const _recordingsIndexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_call_room  ON recordings(call_room_id)',
+  ];
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -236,14 +266,17 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 12, // T001 — BN-01: bumped 11→12 to apply secondary indexes
+      version: 15, // v15: add sender_name to messages
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
         await db.execute(_statusesSchema);
-        // T003 — BN-01: create all indexes on fresh install
+        await db.execute(_recordingsSchema);
         for (final stmt in _indexStatements) {
+          await db.execute(stmt);
+        }
+        for (final stmt in _recordingsIndexStatements) {
           await db.execute(stmt);
         }
       },
@@ -302,6 +335,34 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             } catch (e) {
               debugPrint('Migration v12 index error: $e');
             }
+          }
+        }
+        if (oldVersion < 13) {
+          try {
+            await db.execute(_recordingsSchema);
+            for (final stmt in _recordingsIndexStatements) {
+              await db.execute(stmt);
+            }
+          } catch (e) {
+            debugPrint('Migration v13 error: $e');
+          }
+        }
+        if (oldVersion < 14) {
+          try {
+            await db.execute(
+              "ALTER TABLE messages ADD COLUMN sender_phone TEXT DEFAULT ''",
+            );
+          } catch (e) {
+            debugPrint('Migration v14 error: $e');
+          }
+        }
+        if (oldVersion < 15) {
+          try {
+            await db.execute(
+              "ALTER TABLE messages ADD COLUMN sender_name TEXT DEFAULT ''",
+            );
+          } catch (e) {
+            debugPrint('Migration v15 error: $e');
           }
         }
       },
@@ -579,7 +640,9 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         : '';
 
     // Only update room status if this IS the latest message (or no tracking yet).
-    if (roomLastMsgId.isEmpty || roomLastMsgId == dbId || roomLastMsgId == messageId) {
+    if (roomLastMsgId.isEmpty ||
+        roomLastMsgId == dbId ||
+        roomLastMsgId == messageId) {
       final roomUpdateData = <String, dynamic>{
         'lastMessageStatus': status.name,
       };
@@ -1096,14 +1159,16 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Future<Map<String, int>> getMediaCount(String roomId) async {
     final db = _db;
     if (db == null) return {'photos': 0, 'videos': 0};
-    final photoCount = Sqflite.firstIntValue(
+    final photoCount =
+        Sqflite.firstIntValue(
           await db.rawQuery(
             "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
             [roomId, MessageType.image.name],
           ),
         ) ??
         0;
-    final videoCount = Sqflite.firstIntValue(
+    final videoCount =
+        Sqflite.firstIntValue(
           await db.rawQuery(
             "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
             [roomId, MessageType.video.name],

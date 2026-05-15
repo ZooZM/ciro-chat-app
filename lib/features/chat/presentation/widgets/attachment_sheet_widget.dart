@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
@@ -173,22 +174,98 @@ class AttachmentSheetWidget extends StatelessWidget {
   }
 
   Future<void> _handleLocation(BuildContext context) async {
-    Navigator.pop(context);
+    // Capture all context-dependent objects before any await to avoid
+    // BuildContext-across-async-gap lint warnings.
+    final chatCubit = context.read<ChatCubit>();
+    final navigator = Navigator.of(context);
 
-    if (!context.mounted) return;
-    final result = await LocationService.getCurrentLocation(context);
-
-    if (result.isSuccess && context.mounted) {
-      await context.read<ChatCubit>().sendLocationMessage(
-        result.latitude!,
-        result.longitude!,
-        result.address!,
-      );
-    } else if (!result.isSuccess && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.errorMessage ?? 'Location unavailable')),
-      );
+    // Phase 1: resolve permission while sheet is still in the tree so dialogs work.
+    final permStatus = await Permission.location.request();
+    if (!permStatus.isGranted) {
+      if (permStatus.isPermanentlyDenied && context.mounted) {
+        final open = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Location Permission Required'),
+            content: const Text(
+              'Location permission is permanently denied. Please enable it in app settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+        if (open == true) await openAppSettings();
+      }
+      navigator.pop();
+      return;
     }
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (context.mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Location Services Disabled'),
+            content: const Text('Please enable GPS to share your location.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await Geolocator.openLocationSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+      }
+      navigator.pop();
+      return;
+    }
+
+    // Phase 2: permission + GPS confirmed — close the sheet, then fetch position.
+    navigator.pop();
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      String address = 'Unknown Location';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          final parts = <String>[
+            if (p.street != null && p.street!.isNotEmpty) p.street!,
+            if (p.locality != null && p.locality!.isNotEmpty) p.locality!,
+            if (p.country != null && p.country!.isNotEmpty) p.country!,
+          ];
+          if (parts.isNotEmpty) address = parts.join(', ');
+        }
+      } catch (_) {}
+
+      chatCubit.sendLocationMessage(position.latitude, position.longitude, address);
+    } catch (_) {}
   }
 
   Future<void> _handleAudio(BuildContext context) async {

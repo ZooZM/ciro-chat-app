@@ -72,6 +72,40 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  void _showGroupCallSheet(BuildContext context) {
+    final callCubit = context.read<CallCubit>();
+    final roomId = widget.chatData.id;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.phone_outlined),
+              title: const Text('Voice Call'),
+              onTap: () {
+                Navigator.pop(context);
+                callCubit.startGroupCall(chatRoomId: roomId, isVideo: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Video Call'),
+              onTap: () {
+                Navigator.pop(context);
+                callCubit.startGroupCall(chatRoomId: roomId, isVideo: true);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAttachmentSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -259,6 +293,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 },
               ),
             ],
+            if (widget.chatData.type == ChatRoomType.GROUP)
+              IconButton(
+                icon: Icon(
+                  Icons.call_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () => _showGroupCallSheet(context),
+              ),
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.more_vert,

@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:injectable/injectable.dart';
 
+import '../../../../../core/theme/app_constants.dart';
 import '../../domain/repositories/video_call_repository.dart';
 
 part 'video_call_state.dart';
@@ -14,8 +15,7 @@ class VideoCallCubit extends Cubit<VideoCallState> {
   VideoCallCubit(this._repository) : super(const VideoCallInitial());
 
   Future<void> joinRoom(String roomId) async {
-    // Hardcoded LIVEKIT_WS_URL mapped to backend's valid instance
-    const liveKitWsUrl = 'wss://ciro-chat-qc2pe2cz.livekit.cloud';
+    final liveKitWsUrl = AppConstants.liveKitWsUrl;
     emit(const VideoCallConnecting());
     try {
       final room = await _repository.joinRoomByApi(roomId, liveKitWsUrl);

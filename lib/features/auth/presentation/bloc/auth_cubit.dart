@@ -13,6 +13,7 @@ import '../../data/datasources/auth_local_data_source.dart';
 
 import '../../../chat/presentation/bloc/chat_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
+import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
 import '../../../../core/network/socket_service.dart';
 import '../../../../core/di/injection.dart';
@@ -149,7 +150,9 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> logOut() async {
     emit(const AuthLoading());
     try {
-      // 1. Reset UI & Streams first
+      // 1. Reset UI & Streams first — stop recording before DB is wiped
+      final recCubit = getIt<CallRecordingCubit>();
+      if (recCubit.state is RecordingActive) await recCubit.stop();
       getIt<ChatCubit>().reset();
       getIt<CallCubit>().reset();
 

@@ -32,7 +32,12 @@ abstract class ChatRepository {
     String roomId,
     String participantId,
   );
-  Future<Either<Failure, void>> leaveGroup(String roomId);
+  Future<Either<Failure, String?>> leaveGroup(String roomId);
+  Future<Either<Failure, void>> updateGroup(
+    String roomId, {
+    String? name,
+    String? avatarUrl,
+  });
 
   // Block User API endpoints
   Future<Either<Failure, void>> blockUser(String targetUserId);

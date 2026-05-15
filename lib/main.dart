@@ -15,6 +15,7 @@ import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/chat/presentation/widgets/call_overlay.dart';
 import 'features/status/presentation/bloc/status_cubit.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
+import 'features/call_recording/presentation/bloc/call_recording_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
@@ -84,6 +85,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           providers: [
             BlocProvider<ChatCubit>(create: (_) => getIt<ChatCubit>()),
             BlocProvider<CallCubit>(create: (_) => getIt<CallCubit>()),
+            BlocProvider<CallRecordingCubit>(create: (_) => getIt<CallRecordingCubit>()),
             BlocProvider<StatusCubit>(
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
             ),

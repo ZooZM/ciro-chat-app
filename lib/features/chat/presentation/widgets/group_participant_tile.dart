@@ -39,7 +39,8 @@ class GroupParticipantTile extends StatelessWidget {
       title: FutureBuilder<String>(
         future: context.read<ChatCubit>().getLocalContactName(phoneNumber),
         builder: (context, snapshot) {
-          final displayName = snapshot.data ?? phoneNumber;
+          final saved = snapshot.data ?? '';
+          final displayName = saved.isNotEmpty ? saved : phoneNumber;
           return Text(
             isMe ? '$displayName (You)' : displayName,
             style: AppTypography.subtitle1.copyWith(

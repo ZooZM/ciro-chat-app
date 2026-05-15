@@ -9,9 +9,17 @@ class SocketEvents {
   static const String incomingCall = 'incomingCall';
   static const String callAccepted = 'callAccepted';
   static const String callRejected = 'callRejected';
+  static const String callError = 'callError';
+  static const String callEnded = 'callEnded';
   static const String userStatus = 'userStatus';
   static const String statusReceived = 'statusReceived';
   static const String messageDeleted = 'messageDeleted';
+
+  // Group call — server → client
+  static const String incomingGroupCall = 'incomingGroupCall';
+  static const String groupCallParticipantJoined = 'groupCallParticipantJoined';
+  static const String groupCallParticipantLeft = 'groupCallParticipantLeft';
+  static const String groupCallRecordingStateChanged = 'groupCallRecordingStateChanged';
 
   // Emit events
   static const String joinRoom = 'joinRoom';
@@ -26,4 +34,10 @@ class SocketEvents {
   static const String uploadStatus = 'uploadStatus';
   static const String statusViewed = 'statusViewed';
   static const String deleteForEveryone = 'deleteForEveryone';
+
+  // Group call — client → server
+  static const String requestGroupCall = 'requestGroupCall';
+  static const String acceptGroupCall = 'acceptGroupCall';
+  static const String declineGroupCall = 'declineGroupCall';
+  static const String leaveGroupCall = 'leaveGroupCall';
 }

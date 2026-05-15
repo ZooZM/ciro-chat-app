@@ -83,6 +83,12 @@ class Message extends Equatable {
   final String clientMessageId;
   final String roomId;
   final String senderId;
+  /// Phone number of the sender — used to resolve the display name in group chats.
+  final String senderPhone;
+  /// Registered display name of the sender (from User.name on the backend).
+  /// Used as the fallback label in group bubbles when the phone is not in the
+  /// local contacts ("+phone ~SenderName").
+  final String senderName;
   final String text;
   final DateTime timestamp;
   final MessageStatus status;
@@ -114,6 +120,8 @@ class Message extends Equatable {
     required this.clientMessageId,
     required this.roomId,
     required this.senderId,
+    this.senderPhone = '',
+    this.senderName = '',
     required this.text,
     required this.timestamp,
     this.status = MessageStatus.pending,
@@ -128,6 +136,8 @@ class Message extends Equatable {
     String? clientMessageId,
     String? roomId,
     String? senderId,
+    String? senderPhone,
+    String? senderName,
     String? text,
     DateTime? timestamp,
     MessageStatus? status,
@@ -141,6 +151,8 @@ class Message extends Equatable {
       clientMessageId: clientMessageId ?? this.clientMessageId,
       roomId: roomId ?? this.roomId,
       senderId: senderId ?? this.senderId,
+      senderPhone: senderPhone ?? this.senderPhone,
+      senderName: senderName ?? this.senderName,
       text: text ?? this.text,
       timestamp: timestamp ?? this.timestamp,
       status: status ?? this.status,
@@ -157,6 +169,8 @@ class Message extends Equatable {
       'client_message_id': clientMessageId,
       'room_id': roomId,
       'sender_id': senderId,
+      'sender_phone': senderPhone,
+      'sender_name': senderName,
       'text': text,
       'timestamp': timestamp.millisecondsSinceEpoch,
       'status': status.name,
@@ -183,6 +197,8 @@ class Message extends Equatable {
       clientMessageId: map['client_message_id'] ?? map['id'] ?? '',
       roomId: map['room_id'] ?? '',
       senderId: map['sender_id'] ?? '',
+      senderPhone: map['sender_phone'] as String? ?? '',
+      senderName: map['sender_name'] as String? ?? '',
       text: map['text'] ?? '',
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
       status: MessageStatus.values.firstWhere(
@@ -210,12 +226,26 @@ class Message extends Equatable {
         parsedMeta = null;
       }
     }
-    Map<String, dynamic> sender = map['senderId'];
+    final rawSender = map['senderId'];
+    final String senderId;
+    final String senderPhone;
+    final String senderName;
+    if (rawSender is Map) {
+      senderId = (rawSender['_id'] ?? '').toString();
+      senderPhone = (rawSender['phoneNumber'] ?? '').toString();
+      senderName = (rawSender['name'] ?? '').toString();
+    } else {
+      senderId = (rawSender ?? '').toString();
+      senderPhone = (map['senderPhone'] ?? '').toString();
+      senderName = (map['senderName'] ?? '').toString();
+    }
     return Message(
       id: map['_id'] ?? '',
       clientMessageId: map['clientMessageId'] ?? map['id'] ?? '',
       roomId: map['chatRoomId'] ?? '',
-      senderId: sender['_id'] ?? '',
+      senderId: senderId,
+      senderPhone: senderPhone,
+      senderName: senderName,
       text: map['content'] ?? '',
       timestamp: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
       status: MessageStatus.values.firstWhere(
@@ -235,6 +265,8 @@ class Message extends Equatable {
     clientMessageId,
     roomId,
     senderId,
+    senderPhone,
+    senderName,
     text,
     timestamp,
     status,

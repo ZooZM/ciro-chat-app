@@ -31,6 +31,7 @@ class _ChatInputBarState extends State<ChatInputBar> {
   bool _isTextEmpty = true;
   bool _isRecording = false;
   bool _isRecordingLocked = false;
+  bool _isSendingVoiceNote = false;
   int _recordDuration = 0;
   Timer? _timer;
 
@@ -141,24 +142,25 @@ class _ChatInputBarState extends State<ChatInputBar> {
   }
 
   Future<void> _stopAndSendRecording() async {
-    if (!_isRecording) return;
+    if (!_isRecording || _isSendingVoiceNote) return;
+    _isSendingVoiceNote = true;
     _timer?.cancel();
     try {
       final path = await _recorderController.stop();
       final duration = _recordDuration;
-      setState(() {
-        _isRecording = false;
-        _isRecordingLocked = false;
-        _recordDuration = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _isRecordingLocked = false;
+          _recordDuration = 0;
+        });
+      }
 
       if (path != null && File(path).existsSync()) {
         if (duration > 0) {
-          // T143: Extract waveform at record-time (sender side) so receiver
-          // never needs to re-extract (FR-025).
           List<double> waveformSamples = [];
+          final tmpController = PlayerController();
           try {
-            final tmpController = PlayerController();
             await tmpController.preparePlayer(
               path: path,
               shouldExtractWaveform: true,
@@ -168,6 +170,8 @@ class _ChatInputBarState extends State<ChatInputBar> {
                 .extractWaveformData(path: path, noOfSamples: 50);
           } catch (e) {
             debugPrint('[ChatInputBar] Waveform extraction failed: $e');
+          } finally {
+            tmpController.dispose();
           }
 
           if (mounted) {
@@ -179,18 +183,24 @@ class _ChatInputBarState extends State<ChatInputBar> {
             );
           }
         } else {
-          File(path).deleteSync(); // Too short
+          File(path).deleteSync();
         }
       }
     } catch (e) {
       debugPrint('[ChatInputBar] Stop recording failed: $e');
-      setState(() {
-        _isRecording = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _isRecordingLocked = false;
+        });
+      }
+    } finally {
+      _isSendingVoiceNote = false;
     }
   }
 
   void _onSendText() {
+    if (_isRecording || _isRecordingLocked) return;
     final text = _msgController.text.trim();
     if (text.isNotEmpty) {
       widget.onSendText(text);

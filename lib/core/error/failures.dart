@@ -57,12 +57,14 @@ class ServerFailure extends Failure {
     if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
       String? message;
       if (responseData is Map<String, dynamic>) {
-        if (responseData.containsKey('message')) {
-          message = responseData['message'];
-        } else if (responseData.containsKey('error') &&
-            responseData['error'] is Map &&
-            responseData['error'].containsKey('message')) {
-          message = responseData['error']['message'];
+        final dynamic raw = responseData['message'] ??
+            (responseData['error'] is Map
+                ? responseData['error']['message']
+                : null);
+        if (raw is String) {
+          message = raw;
+        } else if (raw is List) {
+          message = raw.map((e) => e.toString()).join('\n');
         }
       }
       return ServerFailure(message ?? 'Unknown error');

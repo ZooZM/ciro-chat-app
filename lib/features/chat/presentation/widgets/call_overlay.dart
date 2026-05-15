@@ -47,17 +47,27 @@ class CallOverlay extends StatelessWidget {
 
         if (state is CallIncoming) {
           // ── Incoming call → full-screen ────────────────────────────────────
-          // Use push (not pushReplacement) so the chat route stays in the stack
-          // and the user returns to it after the call ends.
-          navContext.push(
-            AppRouterName.incomingCall,
-            extra: {
-              'callerName': state.callerName,
-              'callerAvatarUrl': state.callerAvatarUrl,
-              'callerId': state.callerId,
-              'isVideo': state.isVideo,
-            },
-          );
+          if (state.isGroupCall) {
+            navContext.push(
+              AppRouterName.incomingGroupCall,
+              extra: {
+                'chatRoomId': state.chatRoomId,
+                'callerName': state.callerName,
+                'groupName': state.groupName,
+                'isVideo': state.isVideo,
+              },
+            );
+          } else {
+            navContext.push(
+              AppRouterName.incomingCall,
+              extra: {
+                'callerName': state.callerName,
+                'callerAvatarUrl': state.callerAvatarUrl,
+                'callerId': state.callerId,
+                'isVideo': state.isVideo,
+              },
+            );
+          }
         } else if (state is CallOutgoing) {
           // ── Outgoing call → full-screen ────────────────────────────────────
           navContext.push(
@@ -69,6 +79,11 @@ class CallOverlay extends StatelessWidget {
           );
         } else if (state is CallActive) {
           // ── Call connected → replace call lobby with media room ────────────
+          if (state.isGroupCall) {
+            navContext.pushReplacement('/group_call/${state.chatRoomId}');
+            return;
+          }
+
           final initials = state.contactName.isNotEmpty
               ? (state.contactName.length >= 2
                   ? state.contactName.substring(0, 2).toUpperCase()

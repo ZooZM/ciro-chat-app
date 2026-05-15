@@ -28,7 +28,12 @@ class SocketService {
   void Function(List<String> clientMessageIds)? onMessageDelivered;
 
   /// Fired when RECIPIENT read our message. delivered → read (2 blue ticks)
-  void Function(List<String> clientMessageIds)? onMessageRead;
+  /// [readByCount] and [participantCount] are present for GROUP rooms only.
+  void Function(
+    List<String> clientMessageIds, {
+    int? readByCount,
+    int? participantCount,
+  })? onMessageRead;
 
   /// Fired when WE receive a new message from another user.
   void Function(Map<String, dynamic> data)? onNewMessage;
@@ -49,6 +54,19 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
+
+  /// Fired when an admin updates the group name or avatar via PATCH /chat/group/:roomId.
+  void Function(Map<String, dynamic> data)? onChatRoomUpdated;
+
+  /// Fired when the current user is added to a brand-new chat room (e.g.
+  /// someone else created a group and included them). Payload: `{ room: {...} }`.
+  void Function(Map<String, dynamic> data)? onNewChatRoom;
+
+  // ── Group call callbacks (set by CallCubit) ───────────────────────────────
+  void Function(Map<String, dynamic> data)? onIncomingGroupCall;
+  void Function(Map<String, dynamic> data)? onGroupCallParticipantJoined;
+  void Function(Map<String, dynamic> data)? onGroupCallParticipantLeft;
+  void Function(Map<String, dynamic> data)? onGroupCallRecordingStateChanged;
 
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
@@ -145,7 +163,15 @@ class SocketService {
       if (data == null || data is! Map) return;
       final map = Map<String, dynamic>.from(data);
       final ids = map['clientMessageIds'] as List<dynamic>?;
-      if (ids != null) onMessageRead?.call(ids.map((e) => e.toString()).toList());
+      if (ids != null) {
+        final readByCount = map['readByCount'] as int?;
+        final participantCount = map['participantCount'] as int?;
+        onMessageRead?.call(
+          ids.map((e) => e.toString()).toList(),
+          readByCount: readByCount,
+          participantCount: participantCount,
+        );
+      }
     });
 
     // Inbound message from another user.
@@ -209,6 +235,48 @@ class SocketService {
       final clientMsgId = data['clientMessageId']?.toString() ?? '';
       if (clientMsgId.isNotEmpty) onMessageDeleted?.call(clientMsgId);
     });
+
+    // ── Group call signaling events ───────────────────────────────────────
+    _socket?.on('incomingGroupCall', (data) {
+      debugPrint('[GROUP CALL] incomingGroupCall: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onIncomingGroupCall?.call(map);
+    });
+
+    _socket?.on('groupCallParticipantJoined', (data) {
+      debugPrint('[GROUP CALL] participantJoined: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallParticipantJoined?.call(map);
+    });
+
+    _socket?.on('groupCallParticipantLeft', (data) {
+      debugPrint('[GROUP CALL] participantLeft: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallParticipantLeft?.call(map);
+    });
+
+    _socket?.on('groupCallRecordingStateChanged', (data) {
+      debugPrint('[GROUP CALL] recordingStateChanged: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallRecordingStateChanged?.call(map);
+    });
+
+    // ── Group/room metadata updates ───────────────────────────────────────────
+    _socket?.on('chatRoomUpdated', (data) {
+      debugPrint('[SocketService] chatRoomUpdated: $data');
+      if (data == null || data is! Map) return;
+      onChatRoomUpdated?.call(Map<String, dynamic>.from(data));
+    });
+
+    _socket?.on('newChatRoom', (data) {
+      debugPrint('[SocketService] newChatRoom: $data');
+      if (data == null || data is! Map) return;
+      onNewChatRoom?.call(Map<String, dynamic>.from(data));
+    });
   }
 
   // ── Chat emitters ─────────────────────────────────────────────────────────
@@ -243,8 +311,9 @@ class SocketService {
         'type': type,
       };
       if (fileUrl != null && fileUrl.isNotEmpty) payload['fileUrl'] = fileUrl;
-      if (metadata != null && metadata.isNotEmpty)
+      if (metadata != null && metadata.isNotEmpty) {
         payload['metadata'] = metadata;
+      }
 
       _socket!.emit('sendMessage', payload);
     } else {
@@ -297,6 +366,39 @@ class SocketService {
   /// Either side ends the active call
   void endCall() {
     _socket?.emit('endCall', {});
+  }
+
+  // ── Group call emitters ───────────────────────────────────────────────────
+
+  /// Caller initiates a group call — backend fans out `incomingGroupCall` to room members.
+  void requestGroupCall({required String chatRoomId, required bool isVideo}) {
+    _socket?.emit('requestGroupCall', {'chatRoomId': chatRoomId, 'isVideo': isVideo});
+  }
+
+  /// Invited member accepts the group call — backend issues a LiveKit token.
+  void acceptGroupCall({required String chatRoomId}) {
+    _socket?.emit('acceptGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Member declines the invitation — no broadcast to others.
+  void declineGroupCall({required String chatRoomId}) {
+    _socket?.emit('declineGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Participant leaves an active group call.
+  void leaveGroupCall({required String chatRoomId}) {
+    _socket?.emit('leaveGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Notifies all participants that this client started or stopped local recording.
+  void emitGroupCallRecordingStateChanged({
+    required String chatRoomId,
+    required bool isRecording,
+  }) {
+    _socket?.emit('groupCallRecordingStateChanged', {
+      'chatRoomId': chatRoomId,
+      'isRecording': isRecording,
+    });
   }
 
   // ── Status emitters ─────────────────────────────────────────────────────

@@ -22,6 +22,14 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/call_recording/data/datasources/recordings_local_data_source.dart'
+    as _i750;
+import '../../features/call_recording/data/repositories/recordings_repository_impl.dart'
+    as _i771;
+import '../../features/call_recording/domain/repositories/recordings_repository.dart'
+    as _i59;
+import '../../features/call_recording/presentation/bloc/call_recording_cubit.dart'
+    as _i189;
 import '../../features/chat/data/datasources/chat_local_data_source.dart'
     as _i94;
 import '../../features/chat/data/datasources/chat_remote_data_source.dart'
@@ -122,6 +130,9 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i5.VideoCallRemoteDataSource>(),
       ),
     );
+    gh.lazySingleton<_i750.RecordingsLocalDataSource>(
+      () => _i750.RecordingsLocalDataSourceImpl(gh<_i94.ChatLocalDataSource>()),
+    );
     gh.factory<_i420.PaymentCubit>(
       () => _i420.PaymentCubit(gh<_i639.PaymentRepository>()),
     );
@@ -129,6 +140,16 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i153.AuthRepositoryImpl(
         gh<_i107.AuthRemoteDataSource>(),
         gh<_i852.AuthLocalDataSource>(),
+      ),
+    );
+    gh.lazySingleton<_i59.RecordingsRepository>(
+      () =>
+          _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
+    );
+    gh.lazySingleton<_i189.CallRecordingCubit>(
+      () => _i189.CallRecordingCubit(
+        gh<_i59.RecordingsRepository>(),
+        gh<_i917.SocketService>(),
       ),
     );
     gh.factory<_i804.VideoCallCubit>(

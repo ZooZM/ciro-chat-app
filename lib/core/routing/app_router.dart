@@ -17,6 +17,9 @@ import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
+import '../../features/video_call/presentation/pages/group_call_screen.dart';
+import '../../features/video_call/presentation/pages/incoming_group_call_screen.dart';
+import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -37,6 +40,9 @@ class AppRouterName {
   static const String outgoingCall = '/outgoing_call';
   static const String voiceCall = '/voice_call';
   static const String updates = '/updates';
+  static const String groupCall = '/group_call/:roomId';
+  static const String incomingGroupCall = '/incoming_group_call';
+  static const String recordings = '/recordings';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
@@ -141,7 +147,11 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRouterName.groupChat,
-      builder: (context, state) => const GroupChatScreen(),
+      builder: (context, state) {
+        final chat = state.extra as ChatSession?;
+        if (chat != null) return ChatRoomScreen(chatData: chat);
+        return const GroupChatScreen();
+      },
     ),
     GoRoute(
       path: AppRouterName.contacts,
@@ -195,6 +205,29 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.updates,
       builder: (context, state) => const UpdatesScreen(),
+    ),
+    GoRoute(
+      path: '/group_call/:roomId',
+      builder: (context, state) {
+        final roomId = state.pathParameters['roomId'] ?? '';
+        return GroupCallScreen(roomId: roomId);
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.incomingGroupCall,
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return IncomingGroupCallScreen(
+          chatRoomId: data['chatRoomId'] as String? ?? '',
+          callerName: data['callerName'] as String? ?? 'Unknown',
+          groupName: data['groupName'] as String? ?? '',
+          isVideo: data['isVideo'] == true,
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.recordings,
+      builder: (context, state) => const RecordingsListPage(),
     ),
   ],
 );
