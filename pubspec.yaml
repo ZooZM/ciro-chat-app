@@ -82,3 +82,5 @@ flutter:
 dependency_overrides:
   connectivity_plus: ^6.1.1
   device_info_plus: '10.1.2'
+  flutter_screen_recording:
+    path: packages/flutter_screen_recording
