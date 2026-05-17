@@ -52,4 +52,31 @@ class RecordingsRepositoryImpl implements RecordingsRepository {
       return Left(ServerFailure(e.toString()));
     }
   }
+
+  @override
+  Future<Either<Failure, void>> updateGalleryPath(
+    String id,
+    String galleryPath,
+  ) async {
+    try {
+      await _dataSource.updateGalleryPath(id, galleryPath);
+      return const Right(null);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> updateShareStatus(
+    String id,
+    ShareStatus status, {
+    String? sharedMessageId,
+  }) async {
+    try {
+      await _dataSource.updateShareStatus(id, status, sharedMessageId: sharedMessageId);
+      return const Right(null);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
+    }
+  }
 }

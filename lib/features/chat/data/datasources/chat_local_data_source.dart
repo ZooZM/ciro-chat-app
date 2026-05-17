@@ -239,21 +239,25 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
   static const _recordingsSchema = '''
     CREATE TABLE IF NOT EXISTS recordings (
-      id              TEXT PRIMARY KEY,
-      call_room_id    TEXT NOT NULL,
-      call_room_name  TEXT NOT NULL,
-      file_path       TEXT NOT NULL,
-      duration_ms     INTEGER NOT NULL DEFAULT 0,
-      has_video       INTEGER NOT NULL DEFAULT 0,
-      size_bytes      INTEGER NOT NULL DEFAULT 0,
-      created_at      INTEGER NOT NULL,
-      display_name    TEXT NOT NULL
+      id                TEXT PRIMARY KEY,
+      call_room_id      TEXT NOT NULL,
+      call_room_name    TEXT NOT NULL,
+      file_path         TEXT NOT NULL,
+      gallery_path      TEXT,
+      duration_ms       INTEGER NOT NULL DEFAULT 0,
+      has_video         INTEGER NOT NULL DEFAULT 0,
+      size_bytes        INTEGER NOT NULL DEFAULT 0,
+      created_at        INTEGER NOT NULL,
+      display_name      TEXT NOT NULL,
+      share_status      TEXT NOT NULL DEFAULT 'idle',
+      shared_message_id TEXT
     )
   ''';
 
   static const _recordingsIndexStatements = [
-    'CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at DESC)',
-    'CREATE INDEX IF NOT EXISTS idx_recordings_call_room  ON recordings(call_room_id)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_created_at  ON recordings(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_call_room   ON recordings(call_room_id)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_share_status ON recordings(share_status)',
   ];
 
   // ── DB lifecycle ────────────────────────────────────────────────────────────
@@ -266,7 +270,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 15, // v15: add sender_name to messages
+      version: 16, // v16: add gallery_path, share_status, shared_message_id to recordings
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -363,6 +367,19 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             );
           } catch (e) {
             debugPrint('Migration v15 error: $e');
+          }
+        }
+        // v16: add share-pipeline columns to recordings (FR-035, data-model.md §3)
+        if (oldVersion < 16) {
+          try {
+            await db.execute("ALTER TABLE recordings ADD COLUMN gallery_path TEXT");
+            await db.execute("ALTER TABLE recordings ADD COLUMN share_status TEXT NOT NULL DEFAULT 'idle'");
+            await db.execute("ALTER TABLE recordings ADD COLUMN shared_message_id TEXT");
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_recordings_share_status ON recordings(share_status)',
+            );
+          } catch (e) {
+            debugPrint('Migration v16 error: $e');
           }
         }
       },

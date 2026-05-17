@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:injectable/injectable.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
+import '../../domain/entities/recording.dart';
 import '../models/recording_model.dart';
 
 abstract class RecordingsLocalDataSource {
@@ -10,6 +11,8 @@ abstract class RecordingsLocalDataSource {
   Future<List<RecordingModel>> list();
   Future<void> delete(String id);
   Future<void> rename(String id, String newName);
+  Future<void> updateGalleryPath(String id, String galleryPath);
+  Future<void> updateShareStatus(String id, ShareStatus status, {String? sharedMessageId});
 }
 
 @LazySingleton(as: RecordingsLocalDataSource)
@@ -40,14 +43,13 @@ class RecordingsLocalDataSourceImpl implements RecordingsLocalDataSource {
       orderBy: 'created_at DESC',
     );
 
-    // FR-035: orphan recovery — filter out rows whose file no longer exists
+    // Orphan recovery — filter out rows whose file no longer exists.
     final valid = <RecordingModel>[];
     for (final row in rows) {
       final model = RecordingModel.fromMap(row);
       if (File(model.filePath).existsSync()) {
         valid.add(model);
       } else {
-        // Prune stale row silently
         await _db.delete('recordings', where: 'id = ?', whereArgs: [model.id]);
       }
     }
@@ -79,5 +81,26 @@ class RecordingsLocalDataSourceImpl implements RecordingsLocalDataSource {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  @override
+  Future<void> updateGalleryPath(String id, String galleryPath) async {
+    await _db.update(
+      'recordings',
+      {'gallery_path': galleryPath},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  @override
+  Future<void> updateShareStatus(
+    String id,
+    ShareStatus status, {
+    String? sharedMessageId,
+  }) async {
+    final values = <String, dynamic>{'share_status': status.name};
+    if (sharedMessageId != null) values['shared_message_id'] = sharedMessageId;
+    await _db.update('recordings', values, where: 'id = ?', whereArgs: [id]);
   }
 }

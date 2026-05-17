@@ -67,6 +67,9 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onGroupCallParticipantJoined;
   void Function(Map<String, dynamic> data)? onGroupCallParticipantLeft;
   void Function(Map<String, dynamic> data)? onGroupCallRecordingStateChanged;
+  // FR-038: active-call state for Join Call pill (also replayed on reconnect)
+  void Function(Map<String, dynamic> data)? onGroupCallActive;
+  void Function(Map<String, dynamic> data)? onGroupCallEnded;
 
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
@@ -265,6 +268,20 @@ class SocketService {
       onGroupCallRecordingStateChanged?.call(map);
     });
 
+    // FR-038: broadcast on call start + replayed on socket reconnect
+    _socket?.on('groupCallActive', (data) {
+      debugPrint('[GROUP CALL] groupCallActive: $data');
+      if (data == null || data is! Map) return;
+      onGroupCallActive?.call(Map<String, dynamic>.from(data));
+    });
+
+    // FR-038: broadcast when last participant leaves
+    _socket?.on('groupCallEnded', (data) {
+      debugPrint('[GROUP CALL] groupCallEnded: $data');
+      if (data == null || data is! Map) return;
+      onGroupCallEnded?.call(Map<String, dynamic>.from(data));
+    });
+
     // ── Group/room metadata updates ───────────────────────────────────────────
     _socket?.on('chatRoomUpdated', (data) {
       debugPrint('[SocketService] chatRoomUpdated: $data');
@@ -391,13 +408,16 @@ class SocketService {
   }
 
   /// Notifies all participants that this client started or stopped local recording.
+  /// [hasVideo] indicates whether this is a video recording (MP4) or audio only (M4A).
   void emitGroupCallRecordingStateChanged({
     required String chatRoomId,
     required bool isRecording,
+    bool hasVideo = false,
   }) {
     _socket?.emit('groupCallRecordingStateChanged', {
       'chatRoomId': chatRoomId,
       'isRecording': isRecording,
+      'hasVideo': hasVideo,
     });
   }
 

@@ -4,12 +4,13 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/network/socket_service.dart';
+import '../../../chat/domain/repositories/chat_repository.dart';
+import '../../data/datasources/gallery_saver_service.dart';
+import '../../data/datasources/recording_capture_service.dart';
 import '../../domain/entities/recording.dart';
 import '../../domain/repositories/recordings_repository.dart';
 
@@ -28,11 +29,16 @@ class RecordingIdle extends CallRecordingState {
 class RecordingActive extends CallRecordingState {
   final DateTime startedAt;
   final String callRoomId;
+  final bool hasVideo;
 
-  const RecordingActive({required this.startedAt, required this.callRoomId});
+  const RecordingActive({
+    required this.startedAt,
+    required this.callRoomId,
+    required this.hasVideo,
+  });
 
   @override
-  List<Object?> get props => [startedAt, callRoomId];
+  List<Object?> get props => [startedAt, callRoomId, hasVideo];
 }
 
 class RecordingStopping extends CallRecordingState {
@@ -42,6 +48,14 @@ class RecordingStopping extends CallRecordingState {
 class RecordingSaved extends CallRecordingState {
   final Recording recording;
   const RecordingSaved(this.recording);
+
+  @override
+  List<Object?> get props => [recording];
+}
+
+class RecordingSharing extends CallRecordingState {
+  final Recording recording;
+  const RecordingSharing(this.recording);
 
   @override
   List<Object?> get props => [recording];
@@ -61,15 +75,23 @@ class RecordingFailure extends CallRecordingState {
 class CallRecordingCubit extends Cubit<CallRecordingState> {
   final RecordingsRepository _repository;
   final SocketService _socketService;
-  final AudioRecorder _recorder;
+  final RecordingCaptureService _captureService;
+  final GallerySaverService _gallerySaver;
+  final ChatRepository _chatRepository;
 
-  CallRecordingCubit(this._repository, this._socketService)
-      : _recorder = AudioRecorder(),
-        super(const RecordingIdle());
+  CallRecordingCubit(
+    this._repository,
+    this._socketService,
+    this._captureService,
+    this._gallerySaver,
+    this._chatRepository,
+  ) : super(const RecordingIdle());
 
+  /// FR-032a: starts a recording with format auto-selected from [hasVideo].
   Future<void> start({
     required String callRoomId,
     required String callRoomName,
+    bool hasVideo = false,
   }) async {
     if (state is RecordingActive) return;
 
@@ -80,27 +102,30 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
     }
 
     try {
-      final docsDir = await getApplicationDocumentsDirectory();
-      final recDir = Directory('${docsDir.path}/recordings');
-      if (!recDir.existsSync()) recDir.createSync(recursive: true);
-
-      final filePath = '${recDir.path}/${const Uuid().v4()}.m4a';
-      await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000),
-        path: filePath,
-      );
+      final filePath = await _captureService.start(hasVideo: hasVideo);
+      if (filePath == null) {
+        emit(const RecordingFailure('Failed to start recording'));
+        return;
+      }
 
       _socketService.emitGroupCallRecordingStateChanged(
         chatRoomId: callRoomId,
         isRecording: true,
+        hasVideo: hasVideo,
       );
 
-      emit(RecordingActive(startedAt: DateTime.now(), callRoomId: callRoomId));
+      emit(RecordingActive(
+        startedAt: DateTime.now(),
+        callRoomId: callRoomId,
+        hasVideo: hasVideo,
+      ));
     } catch (e) {
       emit(RecordingFailure(e.toString()));
     }
   }
 
+  /// FR-035: stops recording, saves to gallery, uploads, and shares as a
+  /// group chat message to all call participants.
   Future<void> stop({String callRoomName = ''}) async {
     final s = state;
     if (s is! RecordingActive) return;
@@ -108,7 +133,7 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
     emit(const RecordingStopping());
 
     try {
-      final filePath = await _recorder.stop();
+      final filePath = await _captureService.stop();
       if (filePath == null) {
         emit(const RecordingFailure('Recording file not found after stop'));
         return;
@@ -116,8 +141,7 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
 
       final file = File(filePath);
       final sizeBytes = file.existsSync() ? file.lengthSync() : 0;
-      final durationMs =
-          DateTime.now().difference(s.startedAt).inMilliseconds;
+      final durationMs = DateTime.now().difference(s.startedAt).inMilliseconds;
       final now = DateTime.now();
       final displayName =
           '${callRoomName.isNotEmpty ? callRoomName : 'Group Call'} — '
@@ -130,26 +154,104 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
         callRoomName: callRoomName,
         filePath: filePath,
         durationMs: durationMs,
-        hasVideo: false,
+        hasVideo: s.hasVideo,
         sizeBytes: sizeBytes,
         createdAt: now,
         displayName: displayName,
+        shareStatus: ShareStatus.idle,
       );
 
       _socketService.emitGroupCallRecordingStateChanged(
         chatRoomId: s.callRoomId,
         isRecording: false,
+        hasVideo: s.hasVideo,
       );
 
-      final result = await _repository.save(recording);
-      result.fold(
-        (failure) => emit(RecordingFailure(failure.message)),
-        (_) => emit(RecordingSaved(recording)),
+      final saveResult = await _repository.save(recording);
+      final saved = saveResult.fold(
+        (f) {
+          emit(RecordingFailure(f.message));
+          return null;
+        },
+        (_) => recording,
       );
+      if (saved == null) return;
+
+      emit(RecordingSaved(saved));
+
+      // FR-035 pipeline: gallery save → upload → share (non-blocking for UI)
+      _runSharePipeline(saved).ignore();
     } catch (e) {
       debugPrint('[CallRecordingCubit] stop error: $e');
       emit(RecordingFailure(e.toString()));
     }
+  }
+
+  /// FR-035: gallery → upload → group chat message pipeline.
+  Future<void> _runSharePipeline(Recording recording) async {
+    // 1. Save to gallery / Downloads
+    await _gallerySaver.requestPermission();
+    final galleryPath = await _gallerySaver.save(
+      recording.filePath,
+      hasVideo: recording.hasVideo,
+    );
+    if (galleryPath != null) {
+      await _repository.updateGalleryPath(recording.id, galleryPath);
+    }
+
+    // 2. Mark as uploading
+    await _repository.updateShareStatus(recording.id, ShareStatus.uploading);
+
+    // 3. Upload file to CDN
+    final uploadResult = await _chatRepository.uploadFile(File(recording.filePath));
+    await uploadResult.fold(
+      (failure) async {
+        debugPrint('[CallRecordingCubit] upload failed: ${failure.message}');
+        await _repository.updateShareStatus(recording.id, ShareStatus.failed);
+      },
+      (serverMeta) async {
+        final fileUrl = serverMeta['fileUrl'] as String? ?? '';
+        if (fileUrl.isEmpty) {
+          await _repository.updateShareStatus(recording.id, ShareStatus.failed);
+          return;
+        }
+
+        // 4. Send as a group chat message — socket sendMessage to room
+        final msgId = const Uuid().v4();
+        final msgType = recording.hasVideo ? 'video' : 'audio';
+        final msgText = recording.hasVideo
+            ? '🎬 Call Recording — ${recording.displayName}'
+            : '🎙️ Call Recording — ${recording.displayName}';
+
+        _socketService.sendMessage(
+          roomId: recording.callRoomId,
+          messageId: msgId,
+          text: msgText,
+          type: msgType,
+          fileUrl: fileUrl,
+          metadata: {
+            'mimeType': recording.hasVideo ? 'video/mp4' : 'audio/m4a',
+            'fileName': recording.displayName,
+            'fileSize': recording.sizeBytes,
+            'durationMs': recording.durationMs,
+            'isCallRecording': true,
+          },
+        );
+
+        await _repository.updateShareStatus(
+          recording.id,
+          ShareStatus.shared,
+          sharedMessageId: msgId,
+        );
+        debugPrint('[CallRecordingCubit] Recording shared as message $msgId');
+      },
+    );
+  }
+
+  /// T106: Retry the share pipeline for a recording that previously failed.
+  Future<void> retryShare(Recording recording) async {
+    if (recording.shareStatus != ShareStatus.failed) return;
+    await _runSharePipeline(recording);
   }
 
   Future<List<Recording>> listRecordings() async {
@@ -170,9 +272,9 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
   @override
   Future<void> close() async {
     if (state is RecordingActive) {
-      await _recorder.stop();
+      await _captureService.stop();
     }
-    await _recorder.dispose();
+    await _captureService.dispose();
     return super.close();
   }
 }

@@ -1,6 +1,10 @@
 # Socket Contract: Group Chat + Group Calls + Recording
 
-**Phase 1 output** | Generated: 2026-05-14
+**Phase 1 output** | Generated: 2026-05-14 | Revised: 2026-05-16
+
+> **Revision (2026-05-16)**: Added `groupCallActive` and `groupCallEnded` events for the
+> "Join Call" AppBar action (FR-038). Added `currentRecorders` to the `acceptGroupCall`
+> response so late joiners see the REC banner immediately.
 
 All handlers MUST use the Constitution §IV-A safe-cast pattern:
 ```dart
@@ -88,10 +92,11 @@ Invited member accepts the call. Backend issues a LiveKit token and broadcasts `
   "currentParticipants": [
     { "userId": "...", "phoneNumber": "+201...", "displayName": "Ali", "isVideo": true },
     ...
-  ]
+  ],
+  "currentRecorders": ["<userId1>", "<userId2>"]      // NEW (RD-5) — empty array if nobody is recording
 }
 ```
-Delivered via the existing `callAccepted` event name (extended schema for groups — distinguishable by `currentParticipants` array presence).
+Delivered via the existing `callAccepted` event name (extended schema for groups — distinguishable by `currentParticipants` array presence). `currentRecorders` lets the joining client render the REC banner immediately without waiting for the next state-change event (closes FR-033 late-joiner gap).
 
 **Server response** (to others on the call):
 ```jsonc
@@ -203,11 +208,46 @@ Broadcast to all participants when any participant starts or stops local recordi
   "chatRoomId": "664f...",
   "recorderUserId": "...",
   "recorderName": "Ali",
-  "isRecording": true            // true=started, false=stopped
+  "isRecording": true,           // true=started, false=stopped
+  "hasVideo": true               // NEW (FR-032a) — true for video recording, false for audio
 }
 ```
 
-Flutter handles this by updating `CallActive.recordingState` and showing/hiding the universal REC indicator banner (FR-033/034). The event carries no media — recording media never leaves the recorder's device (INV-6).
+Flutter handles this by updating `CallActive.activeRecorders` (a set keyed by `recorderUserId`) and showing/hiding the universal REC indicator banner (FR-033/034). The event carries no media — recording media is shared via the standard chat-message pipeline, not via this event (INV-6 revised).
+
+---
+
+#### `groupCallActive` (NEW — for FR-038)
+
+Broadcast to every member of `chatRoomId` (including the caller) when a group call starts in that room, AND replayed to a user on socket connect for every room they belong to with an active call.
+
+```jsonc
+{
+  "chatRoomId": "664f...",
+  "callerId": "<userId>",
+  "callerName": "Ali",
+  "isVideo": true,
+  "participantCount": 1,
+  "startedAt": "2026-05-16T14:23:11Z"
+}
+```
+
+Flutter `ChatCubit` adds `chatRoomId` to `_activeCallRoomIds`. The `GroupChatScreen` AppBar listens to this set and renders the "Join Call" pill while it contains the room id.
+
+---
+
+#### `groupCallEnded` (NEW — for FR-038)
+
+Broadcast to every member of `chatRoomId` when a group call ends (last participant left, or any other terminal condition).
+
+```jsonc
+{
+  "chatRoomId": "664f...",
+  "reason": "last-participant" | "abandoned" | "server-restart"
+}
+```
+
+Flutter `ChatCubit` removes `chatRoomId` from `_activeCallRoomIds`. The "Join Call" pill disappears within the SC-008 5-second budget.
 
 ---
 
@@ -219,10 +259,12 @@ Flutter handles this by updating `CallActive.recordingState` and showing/hiding 
 | Client → Server | `acceptGroupCall` | Join an active group call |
 | Client → Server | `declineGroupCall` | Decline invitation (no broadcast) |
 | Client → Server | `leaveGroupCall` | Leave an active group call |
-| Client → Server | `groupCallRecordingStateChanged` | Notify others that this client started/stopped local recording |
+| Client → Server | `groupCallRecordingStateChanged` | Notify others that this client started/stopped recording (now includes `hasVideo`) |
 | Server → Client | `incomingGroupCall` | Group call invitation fanned out |
 | Server → Client | `groupCallParticipantJoined` | Someone joined an active call |
 | Server → Client | `groupCallParticipantLeft` | Someone left an active call |
 | Server → Client | `groupCallRecordingStateChanged` | Echoed to all participants when any client toggles recording |
+| Server → Client | `groupCallActive` (NEW) | A call is active in this room — drives Join Call AppBar (FR-038); replayed on socket connect |
+| Server → Client | `groupCallEnded` (NEW) | The call in this room has ended — removes Join Call AppBar |
 
 All event-name strings MUST be declared as constants in `lib/core/network/socket_events.dart` — no scattered literals.

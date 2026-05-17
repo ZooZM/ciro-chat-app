@@ -90,7 +90,7 @@ A group member can open a group info screen to see the full member list, the gro
 
 ### User Story 5 - Admin Succession and Group Exit (Priority: P3)
 
-A group member (admin or not) wants to leave the group. Non-admin members can leave freely. The admin must either designate a new admin before leaving or accept that [NEEDS CLARIFICATION: admin succession policy — "system auto-promotes the longest-standing member" vs "admin must manually pick a replacement before leaving"].
+A group member (admin or not) wants to leave the group. Non-admin members can leave freely. When the admin leaves, the system automatically promotes the member with the earliest join date (longest-standing member) to Admin before completing the departure — no manual selection is required.
 
 **Why this priority**: Edge-case lifecycle management; group chat is fully functional without this.
 
@@ -106,11 +106,11 @@ A group member (admin or not) wants to leave the group. Non-admin members can le
 
 ### User Story 6 - Group Voice and Video Calls (Priority: P2)
 
-A group member wants to start a voice or video call with all other members of the group. They tap a call action in the group header, choose voice or video, and the call initiates — all other group members receive an incoming-call invitation and can join. Multiple members can be on the call simultaneously.
+A group member wants to start a voice or video call with all other members of the group. They tap a call action in the group header, choose voice or video, and the call initiates — all other group members receive an incoming-call invitation and can join. Multiple members can be on the call simultaneously. A "Join Call" banner is visible in the group chat screen only while a call is in progress so members can join at any time.
 
 **Why this priority**: Group calls extend the group experience to real-time conversation but are independent of core messaging. Messaging must work first.
 
-**Independent Test**: Initiate a group video call from a 3-member group; two other members can accept and the three can see/hear each other in the same session.
+**Independent Test**: Initiate a group video call from a 3-member group; two other members can accept and the three can see/hear each other in the same session. Open the group chat screen while the call is ongoing and confirm the "Join Call" button is visible in the header.
 
 **Acceptance Scenarios**:
 
@@ -120,6 +120,10 @@ A group member wants to start a voice or video call with all other members of th
 4. **Given** members are in an active group call, **When** a new member joins, **Then** the existing participants see/hear the new member without dropping the call.
 5. **Given** members are in an active group call, **When** any member leaves the call, **Then** other members remain connected; when only one remains, the call ends.
 6. **Given** a group has more than the supported maximum call participants, **When** an additional member tries to join, **Then** they receive a clear "Call is full" message and are not added.
+7. **Given** a group call is actively in progress, **When** a group member opens the group chat screen, **Then** a prominent "Join Call" button is visible in the screen header; **When** no call is in progress, the button is not visible.
+8. **Given** a participant starts recording during a voice call, **When** the recording completes, **Then** the saved file is in audio-only format (M4A/AAC) and is sent as a media message in the group chat that all group members can access and download.
+9. **Given** a participant starts recording during a video call, **When** the recording completes, **Then** the saved file is in video format (MP4/MOV) and is sent as a media message in the group chat that all group members can access and download.
+10. **Given** a recording is shared to the group chat, **When** the recorder's device saves the file, **Then** the file is also stored in the device gallery (for video recordings) or Downloads folder (for voice recordings) on the recorder's device for direct access outside the app.
 
 ---
 
@@ -131,6 +135,10 @@ A group member wants to start a voice or video call with all other members of th
 - What if a user is added to a group while offline? → They receive the group and its full message history when they come back online.
 - What if all members leave a group? → The group is automatically dissolved and removed for any remaining member.
 - Minimum group size: a group with only 1 member (after others leave) should be dissolved or the last member should be allowed to leave.
+- What if recording upload to group chat fails after the call? → The file is still saved to the device gallery/Downloads. The system MUST retry the group-chat send; if all retries fail, the user is notified and can manually share the file from their gallery/recordings list.
+- What if the device runs out of storage during recording? → Recording MUST stop automatically with a clear notification; the partial file (if valid) is saved and shared; if the partial file is too short (< 3 s), it is discarded and the user is notified.
+- What if a participant's call type (video vs voice) differs from the recording format? → Recording format is determined by the local call stream — if the device is in a voice-only call, the recording is audio even if other participants have video enabled.
+- What if the "Join Call" state is stale (call ended while user had the chat screen open)? → The Join Call button MUST disappear within 5 seconds of the call ending (driven by a socket event); tapping a stale button before the update shows a "Call has ended" toast.
 
 ## Requirements *(mandatory)*
 
@@ -189,14 +197,16 @@ A group member wants to start a voice or video call with all other members of th
 - **FR-030**: The group MUST appear in the removed/left member's conversations list with a visible indicator (e.g., "You are no longer a participant") and MUST NOT allow sending new messages, initiating calls, or receiving new messages.
 - **FR-031**: A removed/left member MUST NOT receive any new socket events, push notifications, or backend message updates for that group.
 
-**Group Call Recording (Local-Only)**
+**Group Call Recording**
 
-- **FR-032**: Any participant in an active group call MUST be able to start a **local** recording from their own device.
+- **FR-032**: Any participant in an active group call MUST be able to start a recording from their own device.
+- **FR-032a**: The recording format MUST automatically match the call type — a video call produces a video recording (MP4 or MOV); a voice-only call produces an audio-only recording (M4A or AAC). The participant MUST NOT need to manually select a format.
 - **FR-033**: When a participant starts recording, a clear, persistent visual indicator (e.g., a red "REC" badge or banner) MUST be displayed to **all** participants on the call so everyone is aware recording is in progress.
 - **FR-034**: When a participant stops recording (or the call ends), the visual indicator MUST disappear immediately for all participants.
-- **FR-035**: The recorded media MUST be stored only on the recorder's device; the system MUST NOT upload, replicate, or share the recording to the backend or other participants automatically.
-- **FR-036**: The recorder MUST be able to access, play back, rename, or delete their own recordings from a recordings list within the app.
-- **FR-037**: Recording start/stop events MUST be logged locally on the recorder's device for the recorder's own reference, but MUST NOT be persisted in the group's chat history.
+- **FR-035**: When a recording is stopped (or the call ends while recording), the recorder's device MUST automatically: (a) save the file to the device gallery (Photos app on iOS, Gallery on Android) for video recordings, or to the Downloads / Files folder for voice recordings; AND (b) send the recording as a media message in the group's chat thread so that all current group members can access and download it. The system MUST NOT require the recorder to manually share the file.
+- **FR-036**: All current group members MUST be able to access recordings shared via group chat messages — they can view, download, and save recordings from within the chat. The recorder MUST additionally be able to manage (play back, rename, delete) their own recordings from a dedicated recordings list within the app.
+- **FR-037**: Recording start/stop events MUST be logged locally on the recorder's device for the recorder's own reference, but MUST NOT be persisted in the group's chat history as system messages. (The recording file itself sent as a media message per FR-035 is not a "recording event".)
+- **FR-038**: A "Join Call" action MUST be displayed in the group chat screen header (AppBar) if and only if a group call is actively in progress for that group at the time the screen is viewed. When no call is active, the action MUST NOT be visible. Tapping it joins the ongoing call.
 
 ### Key Entities
 
@@ -215,6 +225,8 @@ A group member wants to start a voice or video call with all other members of th
 - **SC-004**: Removing a member from a group takes effect immediately; the removed member loses access within 5 seconds on their device.
 - **SC-005**: 100% of 1-to-1 chat scenarios that worked before this feature ships continue to pass without any regression.
 - **SC-006**: Group info changes (name, photo) propagate to all active group members' screens within 3 seconds.
+- **SC-007**: A completed call recording appears as a media message in the group chat and is accessible to all group members within 30 seconds of the recording being stopped.
+- **SC-008**: The "Join Call" button appears in (or disappears from) the group chat screen within 5 seconds of a call starting or ending.
 
 ## Assumptions
 
@@ -228,5 +240,8 @@ A group member wants to start a voice or video call with all other members of th
 - Notifications for group messages follow the same notification infrastructure as 1-to-1 messages; the group name appears as the conversation name in the notification.
 - Group calls require an SFU media server (e.g., LiveKit, Janus, Mediasoup, or similar) to be deployed and operated as part of the backend infrastructure. The current 1-to-1 peer-to-peer WebRTC stack will continue to handle 1-to-1 calls; group calls go through the SFU.
 - TURN server availability is assumed for NAT traversal across both 1-to-1 (existing) and group (new) call topologies.
-- Local call recording uses device-side capture only (e.g., screen-capture API or audio-track tap). No recording media flows through the backend, so storage and bandwidth costs for recordings are zero on the server side.
-- Local recording consent is satisfied by the universal in-call REC indicator (FR-033); jurisdictions requiring explicit prior consent (one-party vs. two-party consent laws) are addressed by the visible indicator — additional jurisdiction-specific consent prompts are out of scope for v1.
+- Call recording captures the local device stream. Format is determined automatically by the call type (video → MP4/MOV, voice → M4A/AAC); no manual format selection is exposed to the user.
+- Recordings are shared with all current group members via the group chat thread as a standard media message. This requires the recording file to be uploaded to the existing media infrastructure after capture. Server-side storage costs apply only for the sharing upload — the recording itself is captured on-device.
+- Recording upload and sharing follow the same retry and offline-queue behavior as other media messages.
+- Recording consent is satisfied by the universal in-call REC indicator (FR-033); jurisdictions requiring explicit prior consent (one-party vs. two-party consent laws) are addressed by the visible indicator — additional jurisdiction-specific consent prompts are out of scope for v1.
+- The "Join Call" button state is driven by socket events that the backend broadcasts when a call starts or ends for that group room.

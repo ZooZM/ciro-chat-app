@@ -19,6 +19,7 @@ import '../bloc/voice_note_controller.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../widgets/chat_input_bar.dart';
 import '../widgets/chat_search_bar.dart';
+import '../widgets/join_call_app_bar_action.dart';
 import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -293,7 +294,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 },
               ),
             ],
-            if (widget.chatData.type == ChatRoomType.GROUP)
+            if (widget.chatData.type == ChatRoomType.GROUP) ...[
+              JoinCallAppBarAction(
+                roomId: widget.chatData.id,
+                onJoin: () => _showGroupCallSheet(context),
+              ),
               IconButton(
                 icon: Icon(
                   Icons.call_outlined,
@@ -302,6 +307,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
                 onPressed: () => _showGroupCallSheet(context),
               ),
+            ],
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.more_vert,

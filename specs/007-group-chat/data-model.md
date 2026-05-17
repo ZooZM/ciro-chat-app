@@ -1,6 +1,9 @@
-# Data Model: Group Chat + Group Calls + Local Recording
+# Data Model: Group Chat + Group Calls + Shared Call Recording
 
-**Phase 1 output** | Generated: 2026-05-14
+**Phase 1 output** | Generated: 2026-05-14 | Revised: 2026-05-16
+
+> **Revision (2026-05-16)**: Recording entity gains `share_status` and `shared_message_id`
+> fields. INV-6 revised. Active-call tracking entity formalized.
 
 ## 1. Messaging Entities (Existing — no schema change required)
 
@@ -162,7 +165,7 @@ CallEnded { reason: 'last-participant' | 'self-leave' | 'declined' | 'error' }
 
 ---
 
-## 3. Recording Entities (NEW — local-only)
+## 3. Recording Entities (revised 2026-05-16 — capture + gallery save + chat share)
 
 ### Recording (Flutter domain — NEW)
 
@@ -171,31 +174,42 @@ Recording
 ├── id: String                    — UUID generated client-side
 ├── callRoomId: String            — chatRoomId where the call took place
 ├── callRoomName: String          — group name at time of recording (denormalized for listing)
-├── filePath: String              — absolute path inside app documents
+├── filePath: String              — absolute path inside app documents (working copy)
+├── galleryPath: String?          — public path after gallery/Downloads save (null on failure)
 ├── durationMs: int               — final duration after stop
-├── hasVideo: bool                — false in v1 (audio-only narrowing)
+├── hasVideo: bool                — true for video calls, false for voice calls (FR-032a)
 ├── sizeBytes: int
 ├── createdAt: DateTime
-└── displayName: String           — user-editable; defaults to "Recording <YYYY-MM-DD HH:mm>"
+├── displayName: String           — user-editable; defaults to "Recording <YYYY-MM-DD HH:mm>"
+├── shareStatus: ShareStatus      — idle | uploading | shared | failed
+└── sharedMessageId: String?      — clientMessageId of the chat message once shared (FR-035)
+```
+
+```
+enum ShareStatus { idle, uploading, shared, failed }
 ```
 
 ### SQLite — NEW migration v9
 
 ```sql
 CREATE TABLE recordings (
-  id              TEXT PRIMARY KEY,
-  call_room_id    TEXT NOT NULL,
-  call_room_name  TEXT NOT NULL,
-  file_path       TEXT NOT NULL,
-  duration_ms     INTEGER NOT NULL DEFAULT 0,
-  has_video       INTEGER NOT NULL DEFAULT 0,    -- 0 = audio-only, 1 = video
-  size_bytes      INTEGER NOT NULL DEFAULT 0,
-  created_at      INTEGER NOT NULL,              -- epoch millis
-  display_name    TEXT NOT NULL
+  id                 TEXT PRIMARY KEY,
+  call_room_id       TEXT NOT NULL,
+  call_room_name     TEXT NOT NULL,
+  file_path          TEXT NOT NULL,
+  gallery_path       TEXT,                          -- nullable
+  duration_ms        INTEGER NOT NULL DEFAULT 0,
+  has_video          INTEGER NOT NULL DEFAULT 0,    -- 0 = audio-only, 1 = video
+  size_bytes         INTEGER NOT NULL DEFAULT 0,
+  created_at         INTEGER NOT NULL,              -- epoch millis
+  display_name       TEXT NOT NULL,
+  share_status       TEXT NOT NULL DEFAULT 'idle',  -- idle | uploading | shared | failed
+  shared_message_id  TEXT                           -- nullable; FK by value to messages.client_message_id
 );
 
 CREATE INDEX idx_recordings_created_at ON recordings(created_at DESC);
 CREATE INDEX idx_recordings_call_room ON recordings(call_room_id);
+CREATE INDEX idx_recordings_share_status ON recordings(share_status);
 ```
 
 **Migration order** (Constitution §III):
@@ -207,26 +221,101 @@ CREATE INDEX idx_recordings_call_room ON recordings(call_room_id);
 ```
 [idle]
    │  user taps "Record" in GroupCallScreen
-   │  request mic permission (if not granted)
+   │  request mic permission (audio) or screen-record permission (video)
    ▼
-[recording]
+[recording { hasVideo }]
    │  emit groupCallRecordingStateChanged { isRecording: true, recorderId }
-   │  start `record` package capture into <docs>/recordings/<uuid>.m4a
+   │  audio: start `record` capture into <docs>/recordings/<uuid>.m4a
+   │  video: start screen recorder into <docs>/recordings/<uuid>.mp4
    ▼
    │  user taps "Stop" OR call ends OR app paused
    ▼
 [stopping]
    │  finalize file; read size; compute duration
-   │  INSERT INTO recordings ...
+   │  INSERT INTO recordings (..., share_status='idle')
    │  emit groupCallRecordingStateChanged { isRecording: false }
    ▼
-[idle] (Recording row visible in RecordingsListPage)
+[saving-to-gallery]
+   │  video: gal.putVideo(filePath) → galleryPath
+   │  audio: write to Downloads/CiroRecordings/ (Android) or Documents/Recordings/ (iOS)
+   │  UPDATE recordings SET gallery_path = ?
+   │  on failure: snackbar; gallery_path remains null; proceed
+   ▼
+[uploading]
+   │  UPDATE recordings SET share_status = 'uploading'
+   │  call ChatRemoteDataSource.uploadFile(filePath, category='recording') → fileUrl
+   │  on failure: UPDATE share_status = 'failed'; user can retry from RecordingsListPage
+   ▼
+[sharing]
+   │  call ChatCubit.sendMediaMessage(callRoomId, fileUrl, type=hasVideo?video:audio)
+   │  on success: UPDATE share_status='shared', shared_message_id = clientMessageId
+   │  on failure: UPDATE share_status = 'failed'
+   ▼
+[idle] (Recording row visible in RecordingsListPage with status icon)
 ```
 
 **Failure handling**:
 - Permission denied → show dialog, return to [idle].
-- Disk full → catch IOException, show snackbar, attempt to finalize partial file (if size > 0, keep; else delete).
-- App killed mid-recording → on next launch, scan `<docs>/recordings/` for orphan files (file exists but no DB row), import them with default display name and best-effort `createdAt` from file mtime.
+- Disk full → catch IOException, show snackbar, attempt to finalize partial file (if size > 3 s of audio or 5 s of video, keep; else delete).
+- App killed mid-recording → on next launch, scan `<docs>/recordings/` for orphan files (file exists but no DB row), import them with default display name and best-effort `createdAt` from file mtime; status set to `failed` so the user is prompted to retry the share.
+- Gallery save fails (permission denied / Photos full) → snackbar; recording row's `gallery_path` stays null; the chat-share pipeline still runs (these failures are independent).
+- Upload fails → `share_status = 'failed'`; recording remains in list; long-press → Retry share.
+- Send-message fails (after successful upload) → `share_status = 'failed'`; retry runs only the send-message step (the uploaded `fileUrl` is preserved on the recording row — add a `pending_file_url` column in a future migration if recovery is needed; v1 simply re-uploads on retry).
+
+---
+
+## 3a. Active Call Tracking (Server-Side, formalized 2026-05-16)
+
+This was previously an implicit in-memory map. Formalized here as a first-class entity to
+support FR-038 (Join Call button).
+
+### ActiveGroupCall (Backend — in-memory; not persisted)
+
+```
+ActiveGroupCall
+├── chatRoomId: string
+├── participants: Set<userId>     — currently joined
+├── recorders: Set<userId>        — currently recording
+├── startedAt: Date
+└── isVideo: boolean              — set by the initiating requestGroupCall
+```
+
+Maintained in `chat.gateway.ts` as `Map<chatRoomId, ActiveGroupCall>`. Cleared on restart;
+acceptable for v1 — restart is rare and clients re-discover state via `acceptGroupCall`
+error responses or the next `groupCallActive` emit.
+
+### Lifecycle Events
+
+```
+[no entry]
+   │  requestGroupCall received
+   ▼
+   │  create entry with caller as first participant
+   │  emit incomingGroupCall to room members (except caller)
+   │  emit groupCallActive { chatRoomId } to room members (including caller)
+   ▼
+[active call]
+   │  acceptGroupCall received → participants.add(userId); emit groupCallParticipantJoined
+   │  leaveGroupCall received   → participants.delete(userId); emit groupCallParticipantLeft
+   │  groupCallRecordingStateChanged → update recorders set; rebroadcast
+   ▼
+   │  participants.size drops to 1
+   ▼
+[ending]
+   │  emit callEnded to last participant
+   │  emit groupCallEnded { chatRoomId } to room members
+   │  delete entry
+   ▼
+[no entry]
+```
+
+### Replay-on-Connect
+
+When a user's socket connects (`handleConnection`):
+1. Look up the user's chat rooms.
+2. For each room with an entry in `activeGroupCalls`, emit `groupCallActive { chatRoomId }`
+   to that user so the Flutter `ChatCubit` can hydrate `_activeCallRoomIds`.
+3. This drives FR-038's "Join Call button visible across app restarts."
 
 ---
 
@@ -239,7 +328,10 @@ CREATE INDEX idx_recordings_call_room ON recordings(call_room_id);
 | INV-3 | Group admin succession picks `participants[0]` | `chat.service.ts` `leaveGroup()` |
 | INV-4 | Group call participant cap = 32 | `chat.gateway.ts` `handleAcceptGroupCall` |
 | INV-5 | Group call auto-ends when participant count drops to 1 | `chat.gateway.ts` `handleLeaveGroupCall` |
-| INV-6 | Recording media never leaves the device | `CallRecordingCubit` — no upload code path exists |
-| INV-7 | REC indicator visible to all participants when any one records | Socket broadcast of `groupCallRecordingStateChanged` |
+| INV-6 (revised) | Recording media is captured locally, saved to OS gallery (video) or Downloads (audio), and posted as a media message in the originating chat thread; the recording file itself never travels via the LiveKit data channel or any non-standard transport | `CallRecordingCubit` — uses `ChatRemoteDataSource.uploadFile` + `ChatCubit.sendMediaMessage` (existing media pipeline) |
+| INV-7 | REC indicator visible to all participants when any one records, **including late joiners** | Socket broadcast of `groupCallRecordingStateChanged` + `currentRecorders` field in `acceptGroupCall` response |
 | INV-8 | All Socket payloads cast via `Map<String,dynamic>.from(data)` after `is! Map` guard | Constitution §IV-A — applies to every new handler |
 | INV-9 | LiveKit token issuance verifies caller is a participant of the requested room | `video.service.ts` (small new check) |
+| INV-10 (new) | Format auto-matches call type: voice call → audio recording (M4A/AAC); video call → video recording (MP4) | `CallRecordingCubit.start` reads `CallActive.isVideo` and routes to the matching `RecordingCaptureService` method (FR-032a) |
+| INV-11 (new) | `groupCallActive` / `groupCallEnded` socket events are the single source of truth for the "Join Call" AppBar action; on socket reconnect, the server replays `groupCallActive` for every room of the user with an active call | `chat.gateway.ts.handleConnection` replay + `ChatCubit._activeCallRoomIds` set (FR-038) |
+| INV-12 (new) | A failed recording share remains in the local `recordings` table with `share_status = 'failed'` and is never silently deleted; user must explicitly delete or retry from `RecordingsListPage` | `RecordingsRepository` + `RecordingsListPage` long-press menu |

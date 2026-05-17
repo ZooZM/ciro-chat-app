@@ -1,6 +1,10 @@
-# REST Contract: Group Chat + Group Calls
+# REST Contract: Group Chat + Group Calls + Recording Share
 
-**Phase 1 output** | Generated: 2026-05-14
+**Phase 1 output** | Generated: 2026-05-14 | Revised: 2026-05-16
+
+> **Revision (2026-05-16)**: Section 4 inverted — recording is now uploaded and shared via
+> the existing media pipeline (FR-035). Upload cap lifted for recordings (RD-9). Optional
+> new endpoint for renaming/managing recordings remains LOCAL ONLY (no server).
 
 All endpoints require `Authorization: Bearer <accessToken>` header.
 Base URL: `AppConstants.apiBaseUrl` (resolved from `.env`).
@@ -103,21 +107,32 @@ POST /chat/upload
 Content-Type: multipart/form-data
 ```
 
-Request: `file` field — binary file, max 20 MB.
+Request:
+- `file` field — binary file
+- `category` field (optional) — one of `attachment` (default) | `recording`
+
+| `category` | Max file size |
+|------------|---------------|
+| `attachment` (default) | 20 MB (unchanged) |
+| `recording` (NEW, RD-9) | 500 MB |
 
 Response 201:
 ```jsonc
 {
-  "fileUrl": "/uploads/uuid.jpg",
-  "fileName": "avatar.jpg",
-  "fileSize": 204800,
-  "mimeType": "image/jpeg"
+  "fileUrl": "/uploads/uuid.mp4",
+  "fileName": "Recording 2026-05-16 14-23.mp4",
+  "fileSize": 12450000,
+  "mimeType": "video/mp4"
 }
 ```
 
 Errors:
-- `413` — file exceeds 20 MB
+- `413` — file exceeds the category's cap
 - `415` — unsupported MIME type
+
+**Backend change required**: `chat.controller.ts` upload handler reads the `category` form
+field and selects the appropriate size cap. Recording category is rate-limited to 5 uploads
+per minute per user to prevent abuse.
 
 ---
 
@@ -150,11 +165,33 @@ Errors (added):
 
 ---
 
-## 4. Recordings (No REST endpoints — local-only)
+## 4. Recordings — Share Pipeline (revised 2026-05-16)
 
-Per spec FR-035 and decision **C4**, recordings are stored entirely on-device:
+Per spec FR-035/FR-036 (revised) and research decisions RD-6/RD-7, recordings are:
 
-- Files: `<app-documents-dir>/recordings/<uuid>.m4a` (audio v1)
-- Metadata: local SQLite `recordings` table (see data-model.md)
+1. **Captured locally** in `<app-documents-dir>/recordings/<uuid>.{m4a|mp4}`.
+2. **Saved to OS** via `gal` (video → Photos/Gallery) or filesystem (audio → Downloads).
+3. **Uploaded** via the existing `POST /chat/upload?category=recording` endpoint (§2).
+4. **Sent** as a media message via the existing `sendMessage` socket event (see socket.md),
+   with `type = video | audio` and `fileUrl` from step 3.
+5. **Tracked** locally in the `recordings` SQLite table with `share_status` ∈ {idle,
+   uploading, shared, failed} (see data-model.md §3).
 
-There are **no backend endpoints** for recording listing, upload, download, or sharing. Sharing a recording with someone outside the device is out of scope for v1; if a user wants to share, they can export the file via the OS share sheet (system feature — not implemented as a backend endpoint).
+**No new REST endpoints are introduced** — the share pipeline reuses existing media flow.
+
+### Per-Step Endpoint Reference
+
+| Step | Endpoint / Event | Purpose |
+|------|------------------|---------|
+| Upload | `POST /chat/upload` (category=recording) | Get permanent `fileUrl` |
+| Send | Socket `sendMessage` { type=video|audio, fileUrl, chatRoomId, clientMessageId } | Post the recording as a chat message |
+| Status | Socket `messageSent` / `messageDelivered` / `messageRead` (existing) | Recording message follows standard media-message status flow |
+| Retry | Reruns Upload + Send from the recordings list (manual user action) | RD-7 retry-on-failure UX |
+
+### Recording Metadata — Local Only
+
+Recording rename, delete, and orphan-recovery are local-only. There are **no server endpoints**
+for managing recording metadata. The shared chat message and the local `Recording` row are
+independent records — renaming a local recording does not rename the shared chat message,
+and deleting a local recording does not delete the shared message (that requires the
+existing chat-message-delete flow, which is out of scope for this feature).

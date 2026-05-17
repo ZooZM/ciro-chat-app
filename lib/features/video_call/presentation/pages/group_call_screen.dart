@@ -27,7 +27,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _connectFromCubitState());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _connectFromCubitState(),
+    );
   }
 
   void _connectFromCubitState() {
@@ -42,7 +44,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     }
   }
 
-  Future<void> _connectToRoom(String url, String token, {bool isVideo = true}) async {
+  Future<void> _connectToRoom(
+    String url,
+    String token, {
+    bool isVideo = true,
+  }) async {
     try {
       _room = Room();
       _room!.addListener(_onRoomUpdate);
@@ -57,7 +63,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _error = e.toString(); _isConnecting = false; });
+        setState(() {
+          _error = e.toString();
+          _isConnecting = false;
+        });
       }
     }
   }
@@ -79,7 +88,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await _room?.disconnect();
     if (mounted) {
       if (canPop) {
-        router.pop();
+        try {
+          router.pop();
+        } catch (_) {
+          router.go('/home');
+        }
       } else {
         router.go('/home');
       }
@@ -117,8 +130,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           child: _isConnecting
               ? _buildConnecting()
               : _error != null
-                  ? _buildError()
-                  : _buildCallBody(),
+              ? _buildError()
+              : _buildCallBody(),
         ),
       ),
     );
@@ -149,8 +162,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Widget _buildCallBody() {
     return BlocBuilder<CallCubit, CallState>(
       builder: (context, state) {
-        final isRecording = state is CallActive && state.isGroupCall && state.recordingState.isRecording;
-        final remoteParticipants = _room?.remoteParticipants.values.toList() ?? [];
+        final isRecording =
+            state is CallActive &&
+            state.isGroupCall &&
+            state.recordingState.isRecording;
+        final remoteParticipants =
+            _room?.remoteParticipants.values.toList() ?? [];
 
         return Stack(
           children: [
@@ -163,7 +180,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               child: GestureDetector(
                 onTap: () => context.push('/recordings'),
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.resW, vertical: 6.resH),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10.resW,
+                    vertical: 6.resH,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(16.resR),
@@ -171,9 +191,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder_outlined, color: Colors.white, size: 16.resW),
+                      Icon(
+                        Icons.folder_outlined,
+                        color: Colors.white,
+                        size: 16.resW,
+                      ),
                       SizedBox(width: 4.resW),
-                      Text('Recordings', style: TextStyle(color: Colors.white, fontSize: 12.resSp)),
+                      Text(
+                        'Recordings',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.resSp,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -239,11 +269,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           if (!_isCameraDisabled)
             _LocalVideoWidget(room: _room)
           else
-            const Center(child: Icon(Icons.person, color: Colors.white54, size: 48)),
+            const Center(
+              child: Icon(Icons.person, color: Colors.white54, size: 48),
+            ),
           const Positioned(
             bottom: 8,
             left: 8,
-            child: Text('You', style: TextStyle(color: Colors.white, fontSize: 12)),
+            child: Text(
+              'You',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -264,7 +299,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           if (videoTrack != null)
             VideoTrackRenderer(videoTrack)
           else
-            const Center(child: Icon(Icons.person, color: Colors.white54, size: 48)),
+            const Center(
+              child: Icon(Icons.person, color: Colors.white54, size: 48),
+            ),
           Positioned(
             bottom: 8,
             left: 8,
@@ -293,15 +330,23 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               icon: _isMicMuted ? Icons.mic_off : Icons.mic,
               onTap: () async {
                 setState(() => _isMicMuted = !_isMicMuted);
-                await _room?.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
+                await _room?.localParticipant?.setMicrophoneEnabled(
+                  !_isMicMuted,
+                );
               },
             ),
             _ControlButton(
-              icon: isRecording ? Icons.stop_circle_outlined : Icons.fiber_manual_record,
-              color: isRecording ? const Color(0xFFE53935) : const Color(0xFF444444),
+              icon: isRecording
+                  ? Icons.stop_circle_outlined
+                  : Icons.fiber_manual_record,
+              color: isRecording
+                  ? const Color(0xFFE53935)
+                  : const Color(0xFF444444),
               onTap: () {
                 if (isRecording) {
-                  context.read<CallRecordingCubit>().stop(callRoomName: roomName);
+                  context.read<CallRecordingCubit>().stop(
+                    callRoomName: roomName,
+                  );
                 } else {
                   context.read<CallRecordingCubit>().start(
                     callRoomId: widget.roomId,
@@ -320,7 +365,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
               onTap: () async {
                 setState(() => _isCameraDisabled = !_isCameraDisabled);
-                await _room?.localParticipant?.setCameraEnabled(!_isCameraDisabled);
+                await _room?.localParticipant?.setCameraEnabled(
+                  !_isCameraDisabled,
+                );
               },
             ),
           ],
@@ -394,7 +441,14 @@ class _RecordingBanner extends StatelessWidget {
         children: [
           Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
           SizedBox(width: 6),
-          Text('REC', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(
+            'REC',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

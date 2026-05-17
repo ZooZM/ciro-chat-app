@@ -22,6 +22,10 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/call_recording/data/datasources/gallery_saver_service.dart'
+    as _i772;
+import '../../features/call_recording/data/datasources/recording_capture_service.dart'
+    as _i832;
 import '../../features/call_recording/data/datasources/recordings_local_data_source.dart'
     as _i750;
 import '../../features/call_recording/data/repositories/recordings_repository_impl.dart'
@@ -82,6 +86,12 @@ extension GetItInjectableX on _i174.GetIt {
       () => storageModule.secureStorage,
     );
     gh.lazySingleton<_i917.SocketService>(() => _i917.SocketService());
+    gh.lazySingleton<_i772.GallerySaverService>(
+      () => _i772.GallerySaverService(),
+    );
+    gh.lazySingleton<_i832.RecordingCaptureService>(
+      () => _i832.RecordingCaptureService(),
+    );
     gh.lazySingleton<_i137.StatusLocalDataSource>(
       () => _i137.StatusLocalDataSourceImpl(),
     );
@@ -146,12 +156,6 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
     );
-    gh.lazySingleton<_i189.CallRecordingCubit>(
-      () => _i189.CallRecordingCubit(
-        gh<_i59.RecordingsRepository>(),
-        gh<_i917.SocketService>(),
-      ),
-    );
     gh.factory<_i804.VideoCallCubit>(
       () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
     );
@@ -162,6 +166,15 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i539.StatusRepositoryImpl(
         localDataSource: gh<_i137.StatusLocalDataSource>(),
         remoteDataSource: gh<_i483.StatusRemoteDataSource>(),
+      ),
+    );
+    gh.lazySingleton<_i189.CallRecordingCubit>(
+      () => _i189.CallRecordingCubit(
+        gh<_i59.RecordingsRepository>(),
+        gh<_i917.SocketService>(),
+        gh<_i832.RecordingCaptureService>(),
+        gh<_i772.GallerySaverService>(),
+        gh<_i420.ChatRepository>(),
       ),
     );
     gh.factory<_i484.StatusCubit>(

@@ -20,6 +20,9 @@ class SocketEvents {
   static const String groupCallParticipantJoined = 'groupCallParticipantJoined';
   static const String groupCallParticipantLeft = 'groupCallParticipantLeft';
   static const String groupCallRecordingStateChanged = 'groupCallRecordingStateChanged';
+  // FR-038: active-call state (broadcast on start/end; replayed on socket reconnect)
+  static const String groupCallActive = 'groupCallActive';
+  static const String groupCallEnded = 'groupCallEnded';
 
   // Emit events
   static const String joinRoom = 'joinRoom';
