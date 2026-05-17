@@ -306,7 +306,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             bottom: 8,
             left: 8,
             child: Text(
-              participant.identity,
+              participant.name.isNotEmpty ? participant.name : participant.identity,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),

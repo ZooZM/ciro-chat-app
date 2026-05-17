@@ -24,10 +24,21 @@ import '../../../video_call/presentation/bloc/call_cubit.dart';
 // back-stack is kept intact — the user can return to exactly where they were.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class CallOverlay extends StatelessWidget {
+class CallOverlay extends StatefulWidget {
   final Widget child;
 
   const CallOverlay({super.key, required this.child});
+
+  @override
+  State<CallOverlay> createState() => _CallOverlayState();
+}
+
+class _CallOverlayState extends State<CallOverlay> {
+  // True while a lobby screen (outgoing/incoming) is on the navigation stack.
+  // Used to decide push vs pushReplacement when CallActive arrives: if a lobby
+  // was pushed, replace it; if the user joined directly from the chat screen
+  // (joinActiveGroupCall), push on top so the chat screen stays in the stack.
+  bool _lobbyWasPushed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +58,7 @@ class CallOverlay extends StatelessWidget {
 
         if (state is CallIncoming) {
           // ── Incoming call → full-screen ────────────────────────────────────
+          _lobbyWasPushed = true;
           if (state.isGroupCall) {
             navContext.push(
               AppRouterName.incomingGroupCall,
@@ -70,6 +82,7 @@ class CallOverlay extends StatelessWidget {
           }
         } else if (state is CallOutgoing) {
           // ── Outgoing call → full-screen ────────────────────────────────────
+          _lobbyWasPushed = true;
           navContext.push(
             AppRouterName.outgoingCall,
             extra: {
@@ -78,12 +91,22 @@ class CallOverlay extends StatelessWidget {
             },
           );
         } else if (state is CallActive) {
-          // ── Call connected → replace call lobby with media room ────────────
+          // ── Call connected → navigate to media room ────────────────────────
           if (state.isGroupCall) {
-            navContext.pushReplacement('/group_call/${state.chatRoomId}');
+            // If a lobby screen was pushed (outgoing/incoming), replace it so
+            // the back stack stays clean. If the user joined directly from the
+            // chat screen (no lobby), push so the chat screen is preserved and
+            // the "Join" banner remains reachable after leaving the call.
+            if (_lobbyWasPushed) {
+              _lobbyWasPushed = false;
+              navContext.pushReplacement('/group_call/${state.chatRoomId}');
+            } else {
+              navContext.push('/group_call/${state.chatRoomId}');
+            }
             return;
           }
 
+          _lobbyWasPushed = false;
           final initials = state.contactName.isNotEmpty
               ? (state.contactName.length >= 2
                   ? state.contactName.substring(0, 2).toUpperCase()
@@ -114,10 +137,11 @@ class CallOverlay extends StatelessWidget {
           // ── Call ended — pop the call screen if it is on top ───────────────
           // context.canPop() prevents crashes if the call ended before any
           // call route was pushed (e.g., rejected before accept UI showed).
+          _lobbyWasPushed = false;
           if (navContext.canPop()) navContext.pop();
         }
       },
-      child: child,
+      child: widget.child,
     );
   }
 }

@@ -379,7 +379,11 @@ class CallCubit extends Cubit<CallState> {
     if (s is! CallIncoming || !s.isGroupCall) return;
     _stopRinging();
     _socketService.acceptGroupCall(chatRoomId: s.chatRoomId);
-    emit(CallConnecting(contactName: s.groupName.isNotEmpty ? s.groupName : 'Group Call', isVideo: s.isVideo));
+    emit(CallConnecting(
+      contactName: s.groupName.isNotEmpty ? s.groupName : 'Group Call',
+      isVideo: s.isVideo,
+      chatRoomId: s.chatRoomId,
+    ));
   }
 
   /// Declines an incoming group call.

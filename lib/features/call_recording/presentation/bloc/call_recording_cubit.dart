@@ -7,6 +7,7 @@ import 'package:injectable/injectable.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/helpers/permission_service.dart';
 import '../../../../core/network/socket_service.dart';
 import '../../../chat/domain/repositories/chat_repository.dart';
 import '../../data/datasources/gallery_saver_service.dart';
@@ -87,22 +88,21 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
     this._chatRepository,
   ) : super(const RecordingIdle());
 
-  /// FR-032a: starts a recording with format auto-selected from [hasVideo].
+  /// FR-032a: starts a screen + audio recording (always video/MP4).
   Future<void> start({
     required String callRoomId,
     required String callRoomName,
-    bool hasVideo = false,
   }) async {
     if (state is RecordingActive) return;
 
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
+    final granted = await PermissionService.requestSingle(Permission.microphone);
+    if (!granted) {
       emit(const RecordingFailure('Microphone permission denied'));
       return;
     }
 
     try {
-      final filePath = await _captureService.start(hasVideo: hasVideo);
+      final filePath = await _captureService.start();
       if (filePath == null) {
         emit(const RecordingFailure('Failed to start recording'));
         return;
@@ -111,13 +111,13 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
       _socketService.emitGroupCallRecordingStateChanged(
         chatRoomId: callRoomId,
         isRecording: true,
-        hasVideo: hasVideo,
+        hasVideo: true,
       );
 
       emit(RecordingActive(
         startedAt: DateTime.now(),
         callRoomId: callRoomId,
-        hasVideo: hasVideo,
+        hasVideo: true,
       ));
     } catch (e) {
       emit(RecordingFailure(e.toString()));
