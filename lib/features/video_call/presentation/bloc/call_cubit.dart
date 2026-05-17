@@ -123,11 +123,16 @@ class CallActive extends CallState {
 class CallConnecting extends CallState {
   final String contactName;
   final bool isVideo;
+  final String chatRoomId;
 
-  const CallConnecting({required this.contactName, this.isVideo = true});
+  const CallConnecting({
+    required this.contactName,
+    this.isVideo = true,
+    this.chatRoomId = '',
+  });
 
   @override
-  List<Object?> get props => [contactName, isVideo];
+  List<Object?> get props => [contactName, isVideo, chatRoomId];
 }
 
 /// Call ended or rejected
@@ -181,10 +186,11 @@ class CallCubit extends Cubit<CallState> {
 
       // Group call path: caller gets token right away; acceptors get it via acceptGroupCall
       if (s is CallIncoming && s.isGroupCall ||
-          s is CallConnecting && s.contactName == 'Group Call' ||
+          s is CallConnecting && s.chatRoomId.isNotEmpty ||
           s is CallOutgoing && s.isGroupCall) {
         final incoming = s is CallIncoming ? s : null;
         final outgoing = s is CallOutgoing ? s : null;
+        final connecting = s is CallConnecting ? s : null;
         final rawParticipants = data['currentParticipants'] as List<dynamic>? ?? [];
         final participants = rawParticipants
             .map((id) => CallParticipant(userId: id.toString(), phoneNumber: '', joinedAt: DateTime.now()))
@@ -194,10 +200,17 @@ class CallCubit extends Cubit<CallState> {
           livekitUrl: data['livekitUrl'] as String? ?? AppConstants.liveKitWsUrl,
           contactName: incoming != null && incoming.groupName.isNotEmpty
               ? incoming.groupName
-              : (outgoing?.targetName ?? 'Group Call'),
-          isVideo: s is CallIncoming ? s.isVideo : (s is CallOutgoing ? s.isVideo : (s as CallConnecting).isVideo),
+              : (outgoing?.targetName ?? connecting?.contactName ?? 'Group Call'),
+          isVideo: s is CallIncoming
+              ? s.isVideo
+              : s is CallOutgoing
+                  ? s.isVideo
+                  : (s as CallConnecting).isVideo,
           isGroupCall: true,
-          chatRoomId: incoming?.chatRoomId ?? outgoing?.chatRoomId ?? data['chatRoomId'] as String? ?? '',
+          chatRoomId: incoming?.chatRoomId ??
+              outgoing?.chatRoomId ??
+              connecting?.chatRoomId ??
+              data['chatRoomId'] as String? ?? '',
           participants: participants,
         ));
         return;
@@ -384,6 +397,18 @@ class CallCubit extends Cubit<CallState> {
     if (s is! CallActive || !s.isGroupCall) return;
     _socketService.leaveGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallIdle());
+  }
+
+  /// Joins an ongoing group call from the group chat screen (no prior incoming
+  /// event). Emits [CallConnecting] so [CallOverlay] shows a banner while
+  /// waiting for the LiveKit token from the server's [callAccepted] response.
+  void joinActiveGroupCall({required String roomId, required bool isVideo}) {
+    _socketService.acceptGroupCall(chatRoomId: roomId);
+    emit(CallConnecting(
+      contactName: 'Group Call',
+      isVideo: isVideo,
+      chatRoomId: roomId,
+    ));
   }
 
   void _stopRinging() {

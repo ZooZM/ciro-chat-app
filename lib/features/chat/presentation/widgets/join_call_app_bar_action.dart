@@ -5,6 +5,8 @@ import 'package:ciro_chat_app/core/theme/app_colors.dart';
 
 /// FR-038: Pill button shown in group chat AppBar only when a call is active.
 /// Hidden when no call is in progress for [roomId].
+/// [onJoin] receives the `isVideo` flag of the active call so the caller can
+/// join the correct call type without guessing.
 class JoinCallAppBarAction extends StatelessWidget {
   const JoinCallAppBarAction({
     super.key,
@@ -13,20 +15,21 @@ class JoinCallAppBarAction extends StatelessWidget {
   });
 
   final String roomId;
-  final VoidCallback onJoin;
+  final void Function(bool isVideo) onJoin;
 
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<ChatCubit>();
-    return ValueListenableBuilder<Set<String>>(
+    return ValueListenableBuilder<Map<String, bool>>(
       valueListenable: cubit.activeCallRoomIds,
       builder: (context, activeRooms, _) {
-        if (!activeRooms.contains(roomId)) return const SizedBox.shrink();
+        final isVideo = activeRooms[roomId];
+        if (isVideo == null) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: ElevatedButton.icon(
-            onPressed: onJoin,
-            icon: const Icon(Icons.video_call, size: 18),
+            onPressed: () => onJoin(isVideo),
+            icon: Icon(isVideo ? Icons.video_call : Icons.phone, size: 18),
             label: const Text('Join'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.success,

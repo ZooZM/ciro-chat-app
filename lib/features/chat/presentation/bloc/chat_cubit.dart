@@ -88,8 +88,8 @@ class ChatCubit extends Cubit<ChatState> {
 
   final ValueNotifier<List<Message>> searchResults = ValueNotifier([]);
 
-  // FR-038: rooms that currently have an active group call (drives Join Call pill)
-  final ValueNotifier<Set<String>> activeCallRoomIds = ValueNotifier({});
+  // FR-038: rooms with an active group call → value is isVideo for that call
+  final ValueNotifier<Map<String, bool>> activeCallRoomIds = ValueNotifier({});
 
   /// Returns the current typing users for a given room.
   /// Used by [TypingIndicatorWidget] on first build before any [TypingUpdate]
@@ -189,13 +189,13 @@ class ChatCubit extends Cubit<ChatState> {
     _socketService.onGroupCallActive = (data) {
       final roomId = data['chatRoomId']?.toString() ?? '';
       if (roomId.isEmpty) return;
-      final updated = Set<String>.from(activeCallRoomIds.value)..add(roomId);
-      activeCallRoomIds.value = updated;
+      final isVideo = data['isVideo'] == true;
+      activeCallRoomIds.value = {...activeCallRoomIds.value, roomId: isVideo};
     };
     _socketService.onGroupCallEnded = (data) {
       final roomId = data['chatRoomId']?.toString() ?? '';
       if (roomId.isEmpty) return;
-      final updated = Set<String>.from(activeCallRoomIds.value)..remove(roomId);
+      final updated = Map<String, bool>.from(activeCallRoomIds.value)..remove(roomId);
       activeCallRoomIds.value = updated;
     };
 
@@ -1664,7 +1664,7 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   /// Returns true if a group call is currently active for [roomId].
-  bool hasActiveCall(String roomId) => activeCallRoomIds.value.contains(roomId);
+  bool hasActiveCall(String roomId) => activeCallRoomIds.value.containsKey(roomId);
 
   @override
   Future<void> close() {

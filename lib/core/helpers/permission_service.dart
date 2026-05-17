@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Result object returned after a bulk permission request
 class PermissionRequestResult {
   final bool allGranted;
   final List<Permission> permanentlyDenied;
@@ -16,60 +17,96 @@ class PermissionRequestResult {
 }
 
 class PermissionService {
-  /// All permissions required by the Ciro Chat app
   static const List<Permission> _requiredPermissions = [
     Permission.contacts,
     Permission.camera,
     Permission.microphone,
-    Permission.photos,        // iOS: Photo Library. Android: READ_EXTERNAL_STORAGE
-    Permission.storage,       // Android < 13: file storage access
+    Permission.photos,
+    Permission.storage,
     Permission.notification,
   ];
 
-  /// Request all required permissions in bulk.
-  /// Returns a [PermissionRequestResult] detailing what was granted/denied.
-  Future<PermissionRequestResult> requestAll() async {
-    Map<Permission, PermissionStatus> statuses;
+  // Serializes all permission_handler requests: only one .request() call may
+  // be in flight at a time. Two concurrent calls throw PlatformException.
+  static Future<void>? _ongoingRequest;
+
+  static Future<T> _serialized<T>(Future<T> Function() fn) async {
+    while (_ongoingRequest != null) {
+      await _ongoingRequest;
+    }
+    final completer = Completer<void>();
+    _ongoingRequest = completer.future;
     try {
-      statuses = await _requiredPermissions.request();
-    } on PlatformException {
-      // permission_handler_android 13+ can throw if the Activity binding
-      // isn't ready yet (e.g. immediately after a hot restart). Retry once.
-      await Future.delayed(const Duration(milliseconds: 300));
-      statuses = await _requiredPermissions.request();
+      return await fn();
+    } finally {
+      _ongoingRequest = null;
+      completer.complete();
     }
-
-    final permanentlyDenied = <Permission>[];
-    final denied = <Permission>[];
-
-    for (final permission in _requiredPermissions) {
-      final status = statuses[permission];
-      if (status == null) continue;
-
-      if (status.isPermanentlyDenied) {
-        permanentlyDenied.add(permission);
-      } else if (status.isDenied) {
-        denied.add(permission);
-      }
-    }
-
-    return PermissionRequestResult(
-      allGranted: permanentlyDenied.isEmpty && denied.isEmpty,
-      permanentlyDenied: permanentlyDenied,
-      denied: denied,
-    );
   }
 
-  /// Human-readable label for a given permission
+  /// Requests a single [permission] safely, serialized with all other requests.
+  /// Returns true if granted. Skips the native dialog if already granted.
+  static Future<bool> requestSingle(Permission permission) {
+    return _serialized(() async {
+      final status = await permission.status;
+      if (status.isGranted) return true;
+      final result = await permission.request();
+      return result.isGranted;
+    });
+  }
+
+  /// Request all required permissions in bulk.
+  /// Returns a [PermissionRequestResult] detailing what was granted/denied.
+  Future<PermissionRequestResult> requestAll() {
+    return _serialized(() async {
+      Map<Permission, PermissionStatus> statuses;
+      try {
+        statuses = await _requiredPermissions.request();
+      } on PlatformException {
+        // permission_handler_android 13+ can throw if the Activity binding
+        // isn't ready yet (e.g. immediately after a hot restart). Retry once.
+        await Future.delayed(const Duration(milliseconds: 300));
+        statuses = await _requiredPermissions.request();
+      }
+
+      final permanentlyDenied = <Permission>[];
+      final denied = <Permission>[];
+
+      for (final permission in _requiredPermissions) {
+        final status = statuses[permission];
+        if (status == null) continue;
+
+        if (status.isPermanentlyDenied) {
+          permanentlyDenied.add(permission);
+        } else if (status.isDenied) {
+          denied.add(permission);
+        }
+      }
+
+      return PermissionRequestResult(
+        allGranted: permanentlyDenied.isEmpty && denied.isEmpty,
+        permanentlyDenied: permanentlyDenied,
+        denied: denied,
+      );
+    });
+  }
+
   static String labelFor(Permission permission) {
     switch (permission) {
-      case Permission.contacts:   return 'Contacts';
-      case Permission.camera:     return 'Camera';
-      case Permission.microphone: return 'Microphone';
-      case Permission.photos:     return 'Photos';
-      case Permission.storage:    return 'Storage';
-      case Permission.notification: return 'Notifications';
-      default:                    return 'Required Permission';
+      case Permission.contacts:
+        return 'Contacts';
+      case Permission.camera:
+        return 'Camera';
+      case Permission.microphone:
+        return 'Microphone';
+      case Permission.photos:
+        return 'Photos';
+      case Permission.storage:
+        return 'Storage';
+      case Permission.notification:
+        return 'Notifications';
+      default:
+        return 'Required Permission';
     }
   }
 }
@@ -84,22 +121,18 @@ mixin PermissionHandlerMixin<T extends StatefulWidget> on State<T> {
 
     if (!mounted) return;
 
-    if (result.allGranted) return; // All good, proceed normally
+    if (result.allGranted) return;
 
-    // Handle permanently denied — show a dialog guiding user to Settings
     if (result.permanentlyDenied.isNotEmpty) {
       await _showPermanentlyDeniedDialog(result.permanentlyDenied);
       return;
     }
 
-    // Handle soft denials — show a polite snackbar
     if (result.denied.isNotEmpty) {
       final names = result.denied.map(PermissionService.labelFor).join(', ');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Some features may be limited. Denied: $names.',
-          ),
+          content: Text('Some features may be limited. Denied: $names.'),
           backgroundColor: Colors.orange.shade700,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
@@ -145,7 +178,7 @@ mixin PermissionHandlerMixin<T extends StatefulWidget> on State<T> {
             ),
             onPressed: () {
               Navigator.of(ctx).pop();
-              openAppSettings(); // Opens native device Settings for the app
+              openAppSettings();
             },
             child: const Text('Open Settings'),
           ),

@@ -297,7 +297,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             if (widget.chatData.type == ChatRoomType.GROUP) ...[
               JoinCallAppBarAction(
                 roomId: widget.chatData.id,
-                onJoin: () => _showGroupCallSheet(context),
+                onJoin: (isVideo) => context.read<CallCubit>().joinActiveGroupCall(
+                  roomId: widget.chatData.id,
+                  isVideo: isVideo,
+                ),
               ),
               IconButton(
                 icon: Icon(

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
+import 'package:ciro_chat_app/core/helpers/permission_service.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
@@ -9,6 +10,7 @@ import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ChatInputBar extends StatefulWidget {
   final VoidCallback onAttachmentTap;
@@ -78,10 +80,10 @@ class _ChatInputBarState extends State<ChatInputBar> {
   Future<void> _startRecording() async {
     debugPrint('[ChatInputBar] _startRecording initiated...');
     try {
-      final hasPermission = await _recorderController.checkPermission();
+      final granted = await PermissionService.requestSingle(Permission.microphone);
       if (!mounted) return;
 
-      if (!hasPermission) {
+      if (!granted) {
         debugPrint('[ChatInputBar] Microphone permission denied.');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Microphone permission denied')),
@@ -145,16 +147,19 @@ class _ChatInputBarState extends State<ChatInputBar> {
     if (!_isRecording || _isSendingVoiceNote) return;
     _isSendingVoiceNote = true;
     _timer?.cancel();
+    // Capture duration and remove AudioWaveforms from the tree BEFORE stopping
+    // the native recorder — the waveform widget crashes if it tries to read from
+    // a recorder that has already been stopped at the platform layer.
+    final duration = _recordDuration;
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _isRecordingLocked = false;
+        _recordDuration = 0;
+      });
+    }
     try {
       final path = await _recorderController.stop();
-      final duration = _recordDuration;
-      if (mounted) {
-        setState(() {
-          _isRecording = false;
-          _isRecordingLocked = false;
-          _recordDuration = 0;
-        });
-      }
 
       if (path != null && File(path).existsSync()) {
         if (duration > 0) {
