@@ -63,6 +63,13 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      getIt<ChatCubit>().suspendDeliberateOpen();
+    }
+
     final socket = getIt<SocketService>();
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

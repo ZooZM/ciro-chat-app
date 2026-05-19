@@ -57,6 +57,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   StreamSubscription<List<Message>>? _roomStreamSub;
   String? _activeRoomId;
+  bool _isDeliberatelyOpen = false;
   ChatSession? _pendingContact;
   String currentUserId = '';
   String currentUserPhone = '';
@@ -327,7 +328,7 @@ class ChatCubit extends Cubit<ChatState> {
         messageIds: [incoming.clientMessageId],
       );
 
-      if (isActiveRoom) {
+      if (isActiveRoom && _isDeliberatelyOpen) {
         _socketService.markRead(
           roomId: incoming.roomId,
           messageIds: [incoming.clientMessageId],
@@ -336,6 +337,8 @@ class ChatCubit extends Cubit<ChatState> {
           incoming.clientMessageId,
           MessageStatus.read,
         );
+      } else if (isActiveRoom && !_isDeliberatelyOpen) {
+        debugPrint('[ChatCubit] Suppressed auto-markRead for ${incoming.clientMessageId} in ${incoming.roomId} (deliberateOpen=false)');
       }
     };
 
@@ -369,6 +372,7 @@ class ChatCubit extends Cubit<ChatState> {
 
     _pendingContact = null;
     _activeRoomId = roomId;
+    _isDeliberatelyOpen = true;
     _roomStreamSub?.cancel();
     _localDataSource.resetUnreadCount(roomId);
 
@@ -431,6 +435,8 @@ class ChatCubit extends Cubit<ChatState> {
             debugPrint('[ChatCubit] Background sync error: $e');
           });
     }
+
+    await markRoomMessagesRead(roomId);
   }
 
   // ── FR-018: Infinite scroll pagination ─────────────────────────────────────
@@ -481,12 +487,24 @@ class ChatCubit extends Cubit<ChatState> {
       _roomStreamSub?.cancel();
       _activeRoomId = null;
     }
+    _isDeliberatelyOpen = false;
     _pendingContact = null;
     _currentTypingUsers.clear();
     _typingUsersController.add({});
   }
 
+  /// Clears the deliberate-open flag without tearing down the active room.
+  /// Called from main.dart's lifecycle observer on paused / inactive /
+  /// detached / hidden. Idempotent.
+  void suspendDeliberateOpen() {
+    _isDeliberatelyOpen = false;
+  }
+
   Future<void> markRoomMessagesRead(String roomId) async {
+    if (!_isDeliberatelyOpen) {
+      debugPrint('[ChatCubit] Suppressed markRoomMessagesRead for $roomId (deliberateOpen=false)');
+      return;
+    }
     final messages = await _localDataSource.getRoomMessages(roomId);
     final idsToMark = <String>[];
     for (final msg in messages) {
@@ -1517,6 +1535,7 @@ class ChatCubit extends Cubit<ChatState> {
   void reset() {
     _roomStreamSub?.cancel();
     _activeRoomId = null;
+    _isDeliberatelyOpen = false;
     currentUserId = '';
     isHydrationComplete = false;
     emit(ChatInitial());
