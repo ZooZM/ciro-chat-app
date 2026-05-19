@@ -12,7 +12,30 @@ class MockChatLocalDataSourceForTest extends Mock implements ChatLocalDataSource
 class MockChatRepository extends Mock implements ChatRepository {}
 class MockContactsServiceForTest extends Mock implements ContactsService {}
 
+// Fake Message for mocktail
+class FakeMessage extends Fake implements Message {
+  @override
+  String get id => 'fake-id';
+  @override
+  String get clientMessageId => 'fake-client-id';
+  @override
+  String get roomId => 'fake-room-id';
+  @override
+  String get senderId => 'fake-sender-id';
+  @override
+  String get text => 'fake-text';
+  @override
+  MessageStatus get status => MessageStatus.sent;
+  @override
+  DateTime get timestamp => DateTime.now();
+}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(FakeMessage());
+    registerFallbackValue(MessageStatus.sent);
+  });
+
   late ChatCubit chatCubit;
   late MockSocketService mockSocketService;
   late MockChatLocalDataSourceForTest mockLocalDataSource;
