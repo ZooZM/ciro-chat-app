@@ -177,7 +177,14 @@ class _ChatInputBarState extends State<ChatInputBar> {
       debugPrint('[ChatInputBar] Calling recorderController.stop()... (savedPath=$savedPath)');
       String? stoppedPath;
       try {
-        stoppedPath = await _recorderController.stop();
+        // Android bug: stop() can hang indefinitely. Add 5s timeout.
+        stoppedPath = await _recorderController.stop().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('[ChatInputBar] recorderController.stop() timed out after 5s — using savedPath');
+            return null;
+          },
+        );
       } catch (e, stack) {
         debugPrint('[ChatInputBar] recorderController.stop() threw: $e\n$stack');
       }
