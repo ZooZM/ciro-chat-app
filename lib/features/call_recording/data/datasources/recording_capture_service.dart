@@ -16,6 +16,9 @@ class RecordingCaptureService {
   /// (permission denied, unsupported, already recording, etc.).
   Future<String?> start() async {
     if (_isRecording) return 'active';
+    // Claim the slot synchronously before the first await so a second
+    // concurrent call sees the flag and bails out immediately.
+    _isRecording = true;
 
     try {
       final fileName = const Uuid().v4();
@@ -24,10 +27,13 @@ class RecordingCaptureService {
         titleNotification: 'Call Recording',
         messageNotification: 'Your group call is being recorded',
       );
-      if (!started) return null;
-      _isRecording = true;
+      if (!started) {
+        _isRecording = false;
+        return null;
+      }
       return fileName;
     } catch (e) {
+      _isRecording = false;
       debugPrint('[RecordingCaptureService] start failed: $e');
       return null;
     }

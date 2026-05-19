@@ -37,6 +37,9 @@ class _ChatInputBarState extends State<ChatInputBar> {
   int _recordDuration = 0;
   Timer? _timer;
 
+  // Stored so Android's stop() null-return edge case has a fallback path.
+  String? _currentRecordingPath;
+
   Timer? _typingTimer;
 
   @override
@@ -99,6 +102,8 @@ class _ChatInputBarState extends State<ChatInputBar> {
         '[ChatInputBar] Starting audio_waveforms record to $filePath...',
       );
       await _recorderController.record(path: filePath);
+      // Store path as field — Android's stop() can return null in edge cases.
+      _currentRecordingPath = filePath;
 
       if (!mounted) return;
 
@@ -128,10 +133,15 @@ class _ChatInputBarState extends State<ChatInputBar> {
   Future<void> _cancelRecording() async {
     if (!_isRecording) return;
     _timer?.cancel();
+    final savedPath = _currentRecordingPath;
+    _currentRecordingPath = null;
     try {
-      final path = await _recorderController.stop();
-      if (path != null && File(path).existsSync()) {
-        File(path).deleteSync();
+      final stoppedPath = await _recorderController.stop();
+      final resolvedPath = stoppedPath ?? savedPath;
+      debugPrint('[ChatInputBar] Cancel: stoppedPath=$stoppedPath savedPath=$savedPath resolved=$resolvedPath');
+      if (resolvedPath != null && File(resolvedPath).existsSync()) {
+        File(resolvedPath).deleteSync();
+        debugPrint('[ChatInputBar] Cancelled recording deleted: $resolvedPath');
       }
     } catch (e) {
       debugPrint('[ChatInputBar] Cancel recording failed: $e');
@@ -147,10 +157,14 @@ class _ChatInputBarState extends State<ChatInputBar> {
     if (!_isRecording || _isSendingVoiceNote) return;
     _isSendingVoiceNote = true;
     _timer?.cancel();
-    // Capture duration and remove AudioWaveforms from the tree BEFORE stopping
-    // the native recorder — the waveform widget crashes if it tries to read from
-    // a recorder that has already been stopped at the platform layer.
+
+    // Capture path and duration before any state changes.
+    final savedPath = _currentRecordingPath;
+    _currentRecordingPath = null;
     final duration = _recordDuration;
+
+    // Remove AudioWaveforms from the tree BEFORE stopping the native recorder —
+    // the waveform widget crashes if it reads from an already-stopped recorder.
     if (mounted) {
       setState(() {
         _isRecording = false;
@@ -158,47 +172,83 @@ class _ChatInputBarState extends State<ChatInputBar> {
         _recordDuration = 0;
       });
     }
+
     try {
-      final path = await _recorderController.stop();
+      debugPrint('[ChatInputBar] Calling recorderController.stop()... (savedPath=$savedPath)');
+      String? stoppedPath;
+      try {
+        stoppedPath = await _recorderController.stop();
+      } catch (e, stack) {
+        debugPrint('[ChatInputBar] recorderController.stop() threw: $e\n$stack');
+      }
 
-      if (path != null && File(path).existsSync()) {
-        if (duration > 0) {
-          List<double> waveformSamples = [];
-          final tmpController = PlayerController();
-          try {
-            await tmpController.preparePlayer(
-              path: path,
-              shouldExtractWaveform: true,
-              noOfSamples: 50,
-            );
-            waveformSamples = await tmpController.waveformExtraction
-                .extractWaveformData(path: path, noOfSamples: 50);
-          } catch (e) {
-            debugPrint('[ChatInputBar] Waveform extraction failed: $e');
-          } finally {
-            tmpController.dispose();
-          }
+      // Android edge case: stop() can return null even though the file was
+      // written successfully. Fall back to the path stored at record-start.
+      final path = stoppedPath ?? savedPath;
+      debugPrint('[ChatInputBar] stoppedPath=$stoppedPath  savedPath=$savedPath  resolvedPath=$path');
 
-          if (mounted) {
-            context.read<ChatCubit>().sendVoiceNote(
-              context,
-              path,
-              durationSeconds: duration,
-              waveformSamples: waveformSamples,
-            );
-          }
-        } else {
-          File(path).deleteSync();
+      if (path == null) {
+        debugPrint('[ChatInputBar] ERROR: resolved path is null — cannot send voice note.');
+        return;
+      }
+
+      final fileExists = File(path).existsSync();
+      debugPrint('[ChatInputBar] File.existsSync($path) = $fileExists');
+      if (!fileExists) {
+        debugPrint('[ChatInputBar] ERROR: recorded file does not exist at $path');
+        return;
+      }
+
+      final fileSize = File(path).lengthSync();
+      debugPrint('[ChatInputBar] File size: $fileSize bytes  duration: $duration s');
+
+      if (duration <= 0) {
+        debugPrint('[ChatInputBar] Duration is 0, discarding recording.');
+        try { File(path).deleteSync(); } catch (_) {}
+        return;
+      }
+
+      // ── Waveform extraction (best-effort; failures must NOT block send) ──────
+      List<double> waveformSamples = [];
+      final tmpController = PlayerController();
+      try {
+        debugPrint('[ChatInputBar] Preparing player for waveform extraction...');
+        await tmpController.preparePlayer(
+          path: path,
+          shouldExtractWaveform: true,
+          noOfSamples: 50,
+        );
+        debugPrint('[ChatInputBar] Player prepared. Extracting waveform data...');
+        waveformSamples = await tmpController.waveformExtraction
+            .extractWaveformData(path: path, noOfSamples: 50);
+        debugPrint('[ChatInputBar] Waveform extraction succeeded: ${waveformSamples.length} samples');
+      } catch (e, stack) {
+        debugPrint('[ChatInputBar] Waveform extraction failed (non-fatal): $e\n$stack');
+      } finally {
+        // Dispose in its own try-catch — a dispose failure on Android must NOT
+        // propagate and prevent sendVoiceNote from being called.
+        try {
+          tmpController.dispose();
+        } catch (e) {
+          debugPrint('[ChatInputBar] tmpController.dispose() failed (ignored): $e');
         }
       }
-    } catch (e) {
-      debugPrint('[ChatInputBar] Stop recording failed: $e');
+
+      // ── Send ─────────────────────────────────────────────────────────────────
+      debugPrint('[ChatInputBar] Calling sendVoiceNote with path=$path  duration=$duration  samples=${waveformSamples.length}');
       if (mounted) {
-        setState(() {
-          _isRecording = false;
-          _isRecordingLocked = false;
-        });
+        context.read<ChatCubit>().sendVoiceNote(
+          context,
+          path,
+          durationSeconds: duration,
+          waveformSamples: waveformSamples,
+        );
+        debugPrint('[ChatInputBar] sendVoiceNote dispatched successfully.');
+      } else {
+        debugPrint('[ChatInputBar] Widget unmounted before sendVoiceNote — message not sent.');
       }
+    } catch (e, stack) {
+      debugPrint('[ChatInputBar] _stopAndSendRecording unexpected error: $e\n$stack');
     } finally {
       _isSendingVoiceNote = false;
     }

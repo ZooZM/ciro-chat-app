@@ -134,8 +134,21 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
 
     try {
       final filePath = await _captureService.stop();
+
+      // Always notify participants the recording has stopped, even when the
+      // capture produced no file (e.g. writer never reached .writing state).
+      _socketService.emitGroupCallRecordingStateChanged(
+        chatRoomId: s.callRoomId,
+        isRecording: false,
+        hasVideo: s.hasVideo,
+      );
+
       if (filePath == null) {
-        emit(const RecordingFailure('Recording file not found after stop'));
+        // No output file was produced. This happens when stop arrives before
+        // the AVAssetWriter received its first video frame (very short
+        // recording) or when the native writer was in a failed state. Treat
+        // it as a silent cancellation rather than a hard error.
+        emit(const RecordingIdle());
         return;
       }
 
@@ -159,12 +172,6 @@ class CallRecordingCubit extends Cubit<CallRecordingState> {
         createdAt: now,
         displayName: displayName,
         shareStatus: ShareStatus.idle,
-      );
-
-      _socketService.emitGroupCallRecordingStateChanged(
-        chatRoomId: s.callRoomId,
-        isRecording: false,
-        hasVideo: s.hasVideo,
       );
 
       final saveResult = await _repository.save(recording);

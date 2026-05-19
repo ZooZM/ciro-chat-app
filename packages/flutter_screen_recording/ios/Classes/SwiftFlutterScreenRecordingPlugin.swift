@@ -59,6 +59,7 @@ public class SwiftFlutterScreenRecordingPlugin: NSObject, FlutterPlugin {
             do {
                 videoWriter = try AVAssetWriter(outputURL: videoOutputURL!, fileType: .mp4)
             } catch {
+                isRecording = false
                 result(FlutterError(code: "FILE_ERROR", message: "Unable to create video file", details: error.localizedDescription))
                 return
             }
@@ -100,8 +101,10 @@ public class SwiftFlutterScreenRecordingPlugin: NSObject, FlutterPlugin {
                 default:
                     break
                 }
-            }) { error in
+            }) { [weak self] error in
                 if let error = error {
+                    // Reset the flag so start can be attempted again after a failure.
+                    self?.isRecording = false
                     result(FlutterError(code: "CAPTURE_ERROR", message: "Failed to start screen recording", details: error.localizedDescription))
                 } else {
                     result(true)
@@ -147,7 +150,21 @@ public class SwiftFlutterScreenRecordingPlugin: NSObject, FlutterPlugin {
         if #available(iOS 11.0, *) {
             recorder.stopCapture { [weak self] error in
                 guard let self = self else { return }
-                
+
+                // Calling markAsFinished on a writer that never reached .writing
+                // (e.g. stop arrived before the first video buffer) causes SIGABRT.
+                // Only finalize when the writer is actually in the .writing state.
+                guard self.videoWriter?.status == .writing else {
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            result(FlutterError(code: "STOP_ERROR", message: "Failed to stop recording", details: error.localizedDescription))
+                        } else {
+                            result("")
+                        }
+                    }
+                    return
+                }
+
                 self.videoWriterInput?.markAsFinished()
                 self.audioWriterInput?.markAsFinished()
                 self.videoWriter?.finishWriting {
