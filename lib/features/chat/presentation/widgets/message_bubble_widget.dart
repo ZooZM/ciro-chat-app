@@ -833,9 +833,11 @@ class _VoiceBubble extends StatefulWidget {
   State<_VoiceBubble> createState() => _VoiceBubbleState();
 }
 
-class _VoiceBubbleState extends State<_VoiceBubble> {
+class _VoiceBubbleState extends State<_VoiceBubble>
+    with SingleTickerProviderStateMixin {
   late final PlayerController _playerController;
   StreamSubscription<PlayerState>? _playerStateSubscription;
+  late final AnimationController _shimmerController;
   bool _isPlaying = false;
   bool _isPrepared = false;
   bool _isPreparing = false;
@@ -845,6 +847,11 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   void initState() {
     super.initState();
     _playerController = PlayerController();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat();
+
     _playerStateSubscription = _playerController.onPlayerStateChanged.listen((
       state,
     ) {
@@ -953,6 +960,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
   @override
   void dispose() {
+    _shimmerController.dispose();
     VoiceNoteController().currentlyPlayingIdNotifier.removeListener(
       _onCurrentlyPlayingChanged,
     );
@@ -1060,10 +1068,26 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                                 waveThickness: 2.resW,
                               ),
                             )
-                          : Container(
-                              height: 2.resH,
-                              color: Colors.grey.shade300,
-                            ),
+                          : _isPreparing
+                              ? AnimatedBuilder(
+                                  animation: _shimmerController,
+                                  builder: (context, _) {
+                                    final opacity = 0.3 + (0.7 * _shimmerController.value);
+                                    return Container(
+                                      height: 2.resH,
+                                      width: MediaQuery.of(context).size.width * 0.4,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade300
+                                            .withValues(alpha: opacity),
+                                        borderRadius: BorderRadius.circular(1),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  height: 2.resH,
+                                  color: Colors.grey.shade300,
+                                ),
                     ),
                     SizedBox(height: 4.resH),
                     Text(
