@@ -937,9 +937,10 @@ class _VoiceBubbleState extends State<_VoiceBubble>
           });
         }
       } catch (e) {
-        debugPrint('[VoiceBubble] prepare error: $e');
+        debugPrint('[VoiceBubble] prepare error (non-fatal, voice will play without waveform): $e');
         if (mounted) {
           setState(() {
+            _isPrepared = true; // Mark as prepared even if waveform fails - audio still playable
             _isPreparing = false;
           });
         }
