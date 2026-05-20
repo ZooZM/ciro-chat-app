@@ -22,6 +22,7 @@ import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/chat/domain/repositories/chat_repository.dart'; // Use repository
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/contacts/data/contacts_service.dart';
+import 'package:ciro_chat_app/features/chat/domain/value_objects/voice_waveform.dart';
 
 part 'chat_state.dart';
 
@@ -58,6 +59,7 @@ class ChatCubit extends Cubit<ChatState> {
   StreamSubscription<List<Message>>? _roomStreamSub;
   String? _activeRoomId;
   bool _isDeliberatelyOpen = false;
+  final Map<String, VoiceWaveformGeometry> _voiceWaveformCache = {};
   ChatSession? _pendingContact;
   String currentUserId = '';
   String currentUserPhone = '';
@@ -491,6 +493,7 @@ class ChatCubit extends Cubit<ChatState> {
     _pendingContact = null;
     _currentTypingUsers.clear();
     _typingUsersController.add({});
+    _voiceWaveformCache.clear();
   }
 
   /// Clears the deliberate-open flag without tearing down the active room.
@@ -1536,6 +1539,7 @@ class ChatCubit extends Cubit<ChatState> {
     _roomStreamSub?.cancel();
     _activeRoomId = null;
     _isDeliberatelyOpen = false;
+    _voiceWaveformCache.clear();
     currentUserId = '';
     isHydrationComplete = false;
     emit(ChatInitial());
@@ -1780,6 +1784,19 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> saveWaveformCache(String messageId, List<double> samples) {
     return _localDataSource.saveWaveformCache(messageId, samples);
+  }
+
+  // ── In-Memory Waveform Cache (per conversation session, FR-010) ─────────────
+  // Feature 010: Cache waveform geometry in memory to prevent re-extraction
+  // on parent-list rebuilds. Cleared when room closes.
+
+  VoiceWaveformGeometry? getSessionWaveformCache(String messageId) {
+    return _voiceWaveformCache[messageId];
+  }
+
+  void cacheSessionWaveform(VoiceWaveformGeometry geometry) {
+    _voiceWaveformCache[geometry.messageId] = geometry;
+    debugPrint('[ChatCubit] Cached waveform for message ${geometry.messageId}');
   }
 
   // ── Block Management ────────────────────────────────────────────────────────

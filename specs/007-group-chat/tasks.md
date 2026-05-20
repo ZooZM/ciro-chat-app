@@ -142,7 +142,18 @@ FR-035 (gallery save + share to group chat), FR-036 (retry), FR-038 (Join Call A
 - [X] T038 [US4] Add a "Leave Group" `ListTile` (red text) at the bottom of `group_info_page.dart`; tapping opens a confirmation dialog; on confirm call `ChatCubit.leaveGroup(roomId)` (add method to ChatCubit if not present — it calls `ChatRemoteDataSource.leaveGroup` already implemented per research)
 - [X] T039 [US4] After successful leave, navigate the user to the conversations list (`context.go(AppRouterName.home)`) and ensure the local room state reflects "no longer participant" (FR-030)
 
-**Checkpoint**: Group info management is fully functional. Admins can manage; members can read-only view and leave.
+### Sub-Phase 6a: Shared Media on Group Info (FR-018a to FR-018e)
+
+**Purpose**: Reuse the 1-to-1 chat info screen's "Shared Media" widget on the group info screen so members can browse all photos, videos, voice notes, and call-recording media exchanged in the group.
+
+- [ ] T131 [US4] Locate the existing 1-to-1 "Shared Media" widget. Search for `SharedMedia`, `ChatMediaGallery`, or equivalent under `lib/features/chat/presentation/`. If the widget is currently embedded in the 1-to-1 chat info page, **extract it into a reusable widget** at `lib/features/chat/presentation/widgets/shared_media_section.dart` parameterised by `String chatRoomId` so the same widget can render for any room type. The widget MUST NOT assume 1-to-1 semantics anywhere internally
+- [ ] T132 [US4] Audit the SQLite query backing the Shared Media widget (likely in `ChatLocalDataSource` — search for the method that returns media-typed messages by room id). Confirm the query filter is by `room_id = ?` AND `media_type IN ('image','video','voice','audio')` AND `is_deleted_for_everyone = 0` (the last clause enforces FR-018d via existing schema; if the column does not exist on this branch yet, plumb it in alongside Phase 10 T123)
+- [ ] T133 [US4] In `lib/features/chat/presentation/pages/group_info_page.dart`, add the extracted `SharedMediaSection(chatRoomId: chatSession.id)` widget below the existing group info content (group name, photo, members list, admin actions, leave button). Wrap in a section header reading "Shared Media" matching the typography and spacing of the equivalent section on the 1-to-1 chat info page (FR-018b)
+- [ ] T134 [US4] Ensure the Shared Media section uses lazy / paginated rendering so it does not block the rest of `group_info_page.dart` from being interactive (FR-018e, SC-006a). The existing 1-to-1 widget likely already does this via `ListView.builder` or `GridView.builder`; verify and copy that behavior. The member list, group name field, and admin actions MUST be interactive within 1 s of opening the screen even if the media grid is still populating
+- [ ] T135 [US4] Verify retraction propagation (FR-018d): when a message is deleted for everyone (Phase 10 T123–T124 wiring), the Shared Media section's underlying stream MUST emit an updated list excluding the retracted media item within 3 s. If the existing 1-to-1 widget watches a Stream/BlocBuilder over the message store, the group reuse automatically inherits this; if it does a one-shot query, replace the query with a watch-style subscription
+- [ ] T136 [US4] Two-device test: in a 3-member group, send 5 images + 2 voice notes + 1 call recording over a few minutes; open Group Info on Member B; confirm all 8 media items appear in the Shared Media section, tap-to-open each launches the correct viewer (FR-018c), and the section opens within 1 s of Group Info becoming visible (SC-006a)
+
+**Checkpoint**: Group info management is fully functional. Admins can manage; members can read-only view and leave. Shared Media section gives members full visibility into the group's media history with parity to the 1-to-1 chat info screen.
 
 ---
 
@@ -257,6 +268,57 @@ FR-035 (gallery save + share to group chat), FR-036 (retry), FR-038 (Join Call A
 
 ---
 
+### Sub-Phase 8i: Post-Leave / Removal Enforcement (FR-042, FR-043, FR-044, FR-045)
+
+**Purpose**: Make membership state authoritative. After a user leaves or is removed, the backend MUST refuse all further activity for that user in that group, and the Flutter client MUST defensively discard any stale events that slip through.
+
+- [ ] T111 [US5] BACKEND: In `src/modules/chat/chat.service.ts`, ensure `leaveGroup()` and `removeParticipant()` atomically pull the user from the room's `participants` array BEFORE returning success to the caller. The participant-index update MUST be persisted before the response is emitted; no in-flight socket subscription for that user on that room MAY survive the call. Add a defensive `await session.commitTransaction()` (or equivalent) so the membership write is visible to subsequent queries in the same request lifecycle.
+- [ ] T112 [US5] BACKEND: In `src/modules/chat/chat.gateway.ts`, add a `requireGroupParticipant(socket, chatRoomId)` guard helper that returns `false` and emits a structured `socketError { code: 'NO_LONGER_PARTICIPANT', chatRoomId }` to the caller if the connected user's `phone` is not in the current `participants` array for `chatRoomId`. Apply the guard to ALL group-scoped socket message handlers: `sendMessage`, `typing`, `messageRead`, `messageDelivered`, `requestGroupCall`, `acceptGroupCall`, `groupCallRecordingStateChanged`, and any other group-scoped handler. The handler MUST return early on a `false` guard result; the action MUST NOT execute.
+- [ ] T113 [US5] BACKEND: In `chat.gateway.ts`, on `leaveGroup` / `removeParticipant` success, force-disconnect the affected user's socket subscription to that room (or equivalent — leave the Socket.IO room) so no further broadcast reaches them. Then broadcast a `participantLeft { chatRoomId, userId }` to remaining participants for UI refresh.
+- [ ] T114 [US5] BACKEND: Tighten `POST /chat/group/:roomId/*` REST endpoints (send message, get history with new-since timestamp, etc.) in `src/modules/chat/chat.controller.ts` so they reject with `403 { code: 'NO_LONGER_PARTICIPANT' }` when the authenticated user is not in the participant list. Apply the same guard used in T112 at the controller layer.
+- [ ] T115 [US5] In `lib/features/chat/presentation/bloc/chat_cubit.dart`, extend `onNewMessage`, `onMessageRead`, `onMessageDelivered`, and the group-call socket callbacks with a defensive check: if the local user is no longer in `room.participants` for the incoming `roomId`, discard the event silently and log a debug-level message (defense-in-depth for FR-044). The check uses the local SQLite room snapshot, which is updated by the leave/remove flow at T039 / T042.
+- [ ] T116 [US5] In `lib/features/chat/presentation/pages/group_chat_screen.dart` (already rewritten in T019), gate the `ChatInputBar`, call buttons, and group-info edit affordances on `currentUserPhone ∈ chatSession.participants`. When the user has left or been removed, render a non-dismissible bottom banner reading "You are no longer a participant" in place of the input bar (FR-045). Calls to `ChatCubit.sendMessage` MUST be impossible from this state.
+- [ ] T117 [US5] In `lib/features/chat/presentation/bloc/chat_cubit.dart`, add a global error-toast handler for the `NO_LONGER_PARTICIPANT` error code returned from either socket (`socketError` event) or REST (`403`). The handler surfaces a clear in-app snackbar and triggers a local refresh of the affected room's membership state from SQLite so the UI reflects the leave/removal without requiring a manual app restart.
+- [ ] T118 [US5] Two-device regression test (SC-010): A and B in a 3-member group; A leaves; have B send 10 messages over 30 s; assert (a) A's device receives 0 of them via socket, (b) A's local message count for the room is unchanged, (c) any attempt to call `ChatCubit.sendMessage(roomId)` on A's device while the room is shown surfaces "You are no longer a participant" and the message MUST NOT be persisted or queued
+
+**Checkpoint (8i)**: After leave or removal, the affected user is fully cut off from group activity within 1 s of the leave/remove API call returning. No stale messages slip through; client and backend agree on membership.
+
+---
+
+## Phase 10: User Story 7 — Delete-for-Everyone Propagation in Groups (Priority: P2)
+
+**Goal**: When the sender of a group message taps "Delete for Everyone" within the retraction window, the message is replaced by a deletion placeholder on every current group member's device within 3 s for online members and before display for offline members; the original content (text and any cached media) is purged from each member's device.
+
+**Independent Test**: 3-member group. Member A sends a text + image. A long-presses the text and chooses "Delete for Everyone" → within 3 s, B and C see the placeholder. A repeats for the image → within 3 s, B and C see the placeholder AND the local cached media file is no longer retrievable via the conversation media gallery.
+
+### Sub-Phase 10a: Backend Group Fan-Out
+
+- [ ] T119 [US7] BACKEND: In `src/modules/chat/chat.service.ts`, generalize the existing 1-to-1 `deleteMessageForEveryone(messageId)` service method to accept group rooms. When the target message belongs to a GROUP room, the method MUST: (a) verify the requester is the original sender, (b) verify the send timestamp is within the retraction window (1 hour by default; pull the window constant from existing 1-to-1 logic — do NOT introduce a new one), (c) mark the message document as `isDeletedForEveryone: true` with `deletedAt` timestamp and clear the original `content` / `mediaUrl` fields server-side. Returns the updated message id and timestamp.
+- [ ] T120 [US7] BACKEND: In `src/modules/chat/chat.gateway.ts`, extend the existing `messageDeletedForEveryone` socket emit to fan out to **all current group members** when the affected room is a group (use the `room.participants` list). The payload is unchanged: `{ messageId, chatRoomId, deletedAt }`. Reuse the existing handler — do NOT create a new event name. This keeps client code DRY for 1-to-1 vs. group.
+- [ ] T121 [US7] BACKEND: Apply the FR-042 participant guard (added in T112) to the delete-for-everyone request handler: only a current participant who is also the original sender may retract a group message. Other participants get `NO_LONGER_PARTICIPANT` or `NOT_MESSAGE_SENDER` errors as appropriate.
+- [ ] T122 [US7] BACKEND: In `chat.controller.ts`, ensure the REST sync endpoint (`GET /chat/messages?since=...`) returns deleted-for-everyone messages with their cleared content + `isDeletedForEveryone: true` flag so reconnecting / offline clients see the deletion BEFORE the original content (FR-040 offline path).
+
+### Sub-Phase 10b: Flutter Group Propagation + Cache Cleanup
+
+- [ ] T123 [US7] In `lib/features/chat/presentation/bloc/chat_cubit.dart`, audit the existing `onMessageDeletedForEveryone` handler (added when 1-to-1 delete-for-everyone landed) for correct behavior on group rooms. Specifically: ensure the handler runs the SAME code path regardless of room type, updates the local SQLite row to set `is_deleted_for_everyone = 1` and clear `content` / `media_url`, and emits a state change so the UI rebuilds with the placeholder.
+- [ ] T124 [US7] In `lib/features/chat/presentation/bloc/chat_cubit.dart`, extend the handler to also delete the underlying cached media file for image / video / voice messages on the receiver's device when the message is retracted. Use `DefaultCacheManager().removeFile(originalMediaUrl)` for the network cache and, if the message was already downloaded to a persistent app dir, delete that file as well. The media gallery view for the conversation MUST refresh to omit the retracted media (FR-041).
+- [ ] T125 [US7] In `lib/features/chat/presentation/bloc/chat_cubit.dart`, ensure the existing dedup-on-`clientMessageId` logic plus an idempotency check on `isDeletedForEveryone` make repeated arrivals of the same delete event a no-op (FR-041b). If the local message is already retracted, exit early without re-emitting state.
+- [ ] T126 [US7] In `lib/features/chat/presentation/widgets/` (the message bubble widget(s) — locate by grep for "isDeletedForEveryone" or the existing 1-to-1 placeholder usage), confirm the placeholder rendering branch applies uniformly when the message lives in a group room. Sender-name label (`GroupSenderName` from T018) MUST still render above the placeholder so members can see who retracted what.
+- [ ] T127 [US7] In `lib/core/services/push_notification_service.dart`, on `onMessageDeletedForEveryone` (foreground or background), call the OS notification cancel API for any active notification whose payload references the retracted `messageId` (FR-041a). Where the OS does not support remote cancel (e.g., older Android versions), document the limitation and clear the notification on next app foreground.
+
+### Sub-Phase 10c: UI Affordance
+
+- [ ] T128 [US7] In the group message bubble long-press menu (existing widget — likely shared with 1-to-1), confirm "Delete for Everyone" is offered only when (a) the local user is the original sender AND (b) the message send timestamp is within the retraction window AND (c) the local user is still a current participant of the group. When any condition fails, only "Delete for me" is offered. The window check MUST use the SAME constant the 1-to-1 path uses — do not duplicate.
+
+### Sub-Phase 10d: Regression Tests
+
+- [ ] T129 [P] [US7] Three-device regression (SC-009): A sends 5 messages (mix of text and media) to a 3-member group; A retracts each one in turn; assert within 3 s each shows the placeholder on B and C, and the corresponding cached media file is no longer present on B's or C's filesystem.
+- [ ] T130 [P] [US7] Offline regression: B is offline when A retracts a message; B reconnects; assert B's first observable state of the message is the placeholder (B MUST NOT briefly see the original then transition).
+
+**Checkpoint (Phase 10)**: Delete-for-Everyone works symmetrically in groups: every current member sees the placeholder; nobody can retrieve the original content via the chat list, search, or media gallery; notification surfaces are cleared where the OS permits.
+
+---
+
 ## Phase 9: Polish & Cross-Cutting Concerns (Regression + Hygiene)
 
 **Purpose**: Verify no existing feature has regressed and tighten anything left loose.
@@ -291,6 +353,8 @@ FR-035 (gallery save + share to group chat), FR-036 (retry), FR-038 (Join Call A
   - Sub-Phase 8f depends on T094–T095 (socket handlers before ChatCubit consumption).
   - Sub-Phase 8g tasks T098–T103 can start in parallel once T092 (pubspec) is done.
   - Sub-Phase 8h (T104–T107) depends on 8g (T100 entity, T102 repo interface).
+- **Sub-Phase 8i (Post-Leave Enforcement)**: T111–T118. Depends on Phase 7 (existing leave-group flow at T038–T043). T112's `requireGroupParticipant` guard blocks all later participant-scoped backend changes — land it first.
+- **Phase 10 (US7 Delete-for-Everyone)**: T119–T130. Depends on the existing 1-to-1 delete-for-everyone implementation being present (audit during T123). Independent of Sub-Phase 8i, but both T121 (group retraction sender check) and Sub-Phase 8i benefit from sharing the participant-guard helper from T112. If feasible, land T112 before T121.
 - **Phase 9 (Polish)**: T079–T110. Depends on all user stories you intend to ship. T108–T110 specifically require 8e–8h.
 
 ### User Story Independence
@@ -368,11 +432,13 @@ Developer E: Phase 8 (US6) sub-phases 8g/8h (recording infra + cubit rewrite)
 | 3: US1 (P1) | 6 (T012–T017) | MVP slice |
 | 4: US2 (P1) | 7 (T018–T024) | MVP slice |
 | 5: US3 (P2) | 5 (T025–T029) | 1 optional test |
-| 6: US4 (P2) | 10 (T030–T039) ✅ | 1 backend endpoint added |
+| 6: US4 (P2) | 10 (T030–T039) ✅ + 6 NEW (T131–T136) | 1 backend endpoint added; Sub-Phase 6a adds Shared Media on group info |
 | 7: US5 (P3) | 4 (T040–T043) ✅ | UI + integration |
 | 8: US6 (P2) | 35 (T044–T078) ✅ + 21 NEW (T087–T107) | Sub-phases 8e–8h are the new share pipeline + Join Call work |
+| 8i: US5 enforcement | 8 NEW (T111–T118) | Backend participant guard + client defense-in-depth (FR-042 to FR-045) |
+| 10: US7 Delete-for-Everyone | 12 NEW (T119–T130) | Group fan-out, media-cache purge, notification clear (FR-039 to FR-041b) |
 | 9: Polish | 8 (T079–T086) ✅ + 3 NEW (T108–T110) | T108–T110 cover Join Call + recording share regression |
-| **Total** | **110 tasks** | 56 completed [X]; 54 remaining [ ] |
+| **Total** | **136 tasks** | 56 completed [X]; 80 remaining [ ] |
 
 ### Parallel Opportunities Identified
 

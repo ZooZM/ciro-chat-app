@@ -6,7 +6,13 @@
 > **Revision history**: First drafted 2026-05-14 (local-only recording). Revised 2026-05-16
 > after spec update — recording is now auto-formatted by call type, uploaded as a group chat
 > media message, and additionally saved to the device gallery/Downloads. A "Join Call" button
-> is added to the group chat AppBar with active-call gating.
+> is added to the group chat AppBar with active-call gating. Revised 2026-05-19 — added US7
+> (Delete-for-Everyone propagation across all current group members, FR-039 to FR-041b) and
+> tightened post-leave/removal enforcement on the backend with client-side defense-in-depth
+> (FR-042 to FR-045). No new architectural primitives are needed: delete-for-everyone reuses
+> the existing 1-to-1 retraction event fanned out to all group participants; leave/remove
+> enforcement is a small backend-guard addition plus a stale-event filter on the Flutter
+> `onNewMessage` / socket handlers.
 
 ## Summary
 

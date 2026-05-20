@@ -85,22 +85,29 @@ A group member can open a group info screen to see the full member list, the gro
 4. **Given** the group admin taps a member's name in the group info screen, **When** they choose "Remove from group", **Then** that member is immediately removed and can no longer send or receive messages in the group.
 5. **Given** a non-admin member is on the group info screen, **When** they view a member's entry, **Then** the "Remove" option is not visible or is disabled.
 6. **Given** a member has been removed from a group, **When** they open the app, **Then** they can no longer see or access that group conversation.
+7. **Given** any group member opens the group info screen, **When** the screen renders, **Then** a "Shared Media" section is visible — matching the layout and behavior of the equivalent section on the 1-to-1 chat info screen — showing the photos, videos, voice notes, and call-recording media that have been exchanged in the group's message history.
+8. **Given** a member is viewing the Shared Media section, **When** they tap a media thumbnail, **Then** the corresponding full-size viewer (image viewer, video player, voice-note player) opens with the same interactions as opening that media from the chat thread.
+9. **Given** a group has received many shared media items, **When** the member scrolls within the Shared Media section, **Then** items load lazily without blocking other group info content (member list, name, photo) from being interactive.
+10. **Given** a sender retracts a message via "Delete for Everyone" (US7), **When** the deletion propagates, **Then** that media item MUST disappear from the Shared Media section on every current member's group info screen within the same propagation window as the chat-thread placeholder (FR-040).
 
 ---
 
 ### User Story 5 - Admin Succession and Group Exit (Priority: P3)
 
-A group member (admin or not) wants to leave the group. Non-admin members can leave freely. When the admin leaves, the system automatically promotes the member with the earliest join date (longest-standing member) to Admin before completing the departure — no manual selection is required.
+A group member (admin or not) wants to leave the group. Non-admin members can leave freely. When the admin leaves, the system automatically promotes the member with the earliest join date (longest-standing member) to Admin before completing the departure — no manual selection is required. After leaving, the member MUST be fully cut off from all group activity: no new messages received, no new messages sent, no calls initiated, no group info changes seen.
 
 **Why this priority**: Edge-case lifecycle management; group chat is fully functional without this.
 
-**Independent Test**: A non-admin member taps "Leave Group" and is removed; they no longer see the group in their list.
+**Independent Test**: A non-admin member taps "Leave Group" and is removed; they no longer see the group in their list, cannot send messages to it, and stop receiving new messages from it.
 
 **Acceptance Scenarios**:
 
 1. **Given** a non-admin member views group info, **When** they choose "Leave Group" and confirm, **Then** they are removed from the group immediately and the group disappears from their conversations list.
 2. **Given** the group admin views group info, **When** they choose "Leave Group" and confirm, **Then** the system automatically promotes the longest-standing member (earliest join date) to Admin, and the original admin is removed from the group.
 3. **Given** a member has left a group, **When** they try to access the old group link, **Then** they are informed they are no longer a member.
+4. **Given** a member just left a group, **When** they attempt to send a message to that group (through any client-side path that may still hold a stale reference), **Then** the backend MUST reject the send with an explicit "no longer a participant" error and the client surfaces a clear user-facing message; the message MUST NOT appear for the remaining group members.
+5. **Given** a member just left a group, **When** any other member subsequently sends a message to that group, **Then** the leaver's device MUST NOT receive that message via socket, push notification, or REST sync; the leaver's local copy of the group remains frozen at the moment of departure.
+6. **Given** a member has been forcibly removed from the group by the admin, **When** the removal completes, **Then** the same cut-off guarantees in scenarios 4 and 5 apply identically to the removed member.
 
 ---
 
@@ -127,6 +134,25 @@ A group member wants to start a voice or video call with all other members of th
 
 ---
 
+### User Story 7 - Delete-for-Everyone Propagation in Groups (Priority: P2)
+
+The sender of a group message wants to retract it so it disappears for every current group member, not just on the sender's own device. When the sender chooses "Delete for Everyone" on a message they sent, within a short window every current member's device replaces the original message (text, image, video, voice) with a "This message was deleted" placeholder, and the original content is erased from each member's local store and media cache. Existing 1-to-1 delete-for-everyone retraction-window conventions apply unchanged.
+
+**Why this priority**: Users expect "Delete for Everyone" in groups to work symmetrically to 1-to-1. A retracted group message that still appears on other members' devices is a trust failure: the sender believes they deleted it but it remains visible. This bug was reported as the primary reason senders distrust group messaging.
+
+**Independent Test**: 3-member group. Member A sends a text message; Members B and C see it. A long-presses the message and selects "Delete for Everyone". Within 3 s, B and C see "This message was deleted" placeholder in place of the original text. The original text MUST NOT be retrievable on B or C's devices afterwards.
+
+**Acceptance Scenarios**:
+
+1. **Given** Member A sent a text message to a 3-member group and both other members received it, **When** A chooses "Delete for Everyone" on that message, **Then** within 3 s Members B and C see the message replaced by the deletion placeholder, and the original text is erased from their local message stores.
+2. **Given** Member B was offline when A deleted for everyone, **When** B's device next reconnects and syncs, **Then** B's device replaces the original message with the deletion placeholder BEFORE displaying the message to B; B MUST NOT see the original text on reconnect.
+3. **Given** A sent an image (or video, or voice) message and then chooses "Delete for Everyone", **When** the deletion propagates, **Then** the original media file MUST be removed from each remaining member's local media cache; the cached media file MUST NOT be retrievable via the chat list, the conversation media gallery, search, or any other in-app surface.
+4. **Given** the retraction window for a given message has expired (default: 1 hour after the original send time), **When** A long-presses the message, **Then** the "Delete for Everyone" option MUST NOT be offered or MUST be disabled; only "Delete for me" is available.
+5. **Given** a member of the group left or was removed BEFORE A deleted the message, **When** A deletes for everyone, **Then** the leaver/removed member's local read-only copy is unaffected (per FR-031 they no longer receive new events). This is acceptable and not a leak — the message stayed exclusively with people who were members at the time it was sent.
+6. **Given** a deletion-for-everyone event reaches a member who has already viewed the message, **When** the device processes the event, **Then** any in-progress playback or display of the original content stops promptly and the placeholder replaces it; no further access to the original is possible from any in-app surface.
+
+---
+
 ### Edge Cases
 
 - What happens if the group photo upload fails? → Group is still created with a placeholder; the photo can be set later from group info.
@@ -139,6 +165,10 @@ A group member wants to start a voice or video call with all other members of th
 - What if the device runs out of storage during recording? → Recording MUST stop automatically with a clear notification; the partial file (if valid) is saved and shared; if the partial file is too short (< 3 s), it is discarded and the user is notified.
 - What if a participant's call type (video vs voice) differs from the recording format? → Recording format is determined by the local call stream — if the device is in a voice-only call, the recording is audio even if other participants have video enabled.
 - What if the "Join Call" state is stale (call ended while user had the chat screen open)? → The Join Call button MUST disappear within 5 seconds of the call ending (driven by a socket event); tapping a stale button before the update shows a "Call has ended" toast.
+- What if a sender deletes a message for everyone but a recipient's device is offline for many days? → On next sync, the deletion is applied BEFORE the original content is shown to that recipient. If the recipient happened to view the message via a partial pre-sync cache, the local store is purged on sync and the placeholder appears.
+- What if a recipient is in mid-playback of a video or voice message when "Delete for Everyone" arrives? → Active playback is allowed to complete the current frame/segment but no further reads of the cached file are permitted; once playback ends or the user navigates away, the file is purged and the placeholder appears.
+- What if a left/removed member's device emits a queued action (e.g., a pending send) after the leave/removal completes? → The backend MUST reject the action with an explicit "no longer a participant" error; the client surfaces an in-app toast and drops the queued action.
+- What if the network is briefly available and the backend forwards an event to a recently-left member before the membership index updates? → The member's device MUST recognize the stale event and discard it locally (defense-in-depth against backend-side race conditions).
 
 ## Requirements *(mandatory)*
 
@@ -173,6 +203,11 @@ A group member wants to start a voice or video call with all other members of th
 - **FR-016**: The group Admin MUST be able to change the group photo; the new photo MUST propagate to all members' screens without a restart.
 - **FR-017**: The group Admin MUST be able to remove any non-admin member; removed members MUST immediately lose access to the group.
 - **FR-018**: Non-admin members MUST NOT have access to remove-member or edit-group actions.
+- **FR-018a**: The group info screen MUST include a "Shared Media" section that displays all media items (images, videos, voice notes, and call-recording media messages) that have been shared in the group's message history. The section MUST be visible to every group member regardless of role; admin status is irrelevant for viewing.
+- **FR-018b**: The Shared Media section MUST match the visual layout and interactions of the equivalent section on the existing 1-to-1 chat info screen — same grouping (e.g., by media type and/or date), same thumbnail size, same tap-to-open behavior, same scroll affordance. Differences between 1-to-1 and group MUST be limited to the data set being rendered.
+- **FR-018c**: Tapping a media thumbnail in the Shared Media section MUST open the same full-size viewer that opens when the same media is tapped from inside the chat thread (image viewer, video player, voice-note player, call-recording player as applicable).
+- **FR-018d**: The Shared Media section MUST exclude any message that has been retracted via "Delete for Everyone" (US7). When a retraction event arrives, any corresponding media item already rendered in the Shared Media section MUST be removed within the same propagation window defined by FR-040.
+- **FR-018e**: The Shared Media section MUST NOT block the rest of the group info screen from being interactive while it loads. Member list, group name, group photo, and admin actions MUST be operable immediately when the screen opens, even before the media grid finishes populating.
 - **FR-019**: Any member MUST be able to leave a group voluntarily; the group MUST remain active for the remaining members.
 - **FR-020**: When the Admin leaves, the system MUST automatically promote the member with the earliest join date to Admin before completing the admin's departure.
 
@@ -208,12 +243,28 @@ A group member wants to start a voice or video call with all other members of th
 - **FR-037**: Recording start/stop events MUST be logged locally on the recorder's device for the recorder's own reference, but MUST NOT be persisted in the group's chat history as system messages. (The recording file itself sent as a media message per FR-035 is not a "recording event".)
 - **FR-038**: A "Join Call" action MUST be displayed in the group chat screen header (AppBar) if and only if a group call is actively in progress for that group at the time the screen is viewed. When no call is active, the action MUST NOT be visible. Tapping it joins the ongoing call.
 
+**Delete for Everyone (Group Propagation)**
+
+- **FR-039**: The sender of a group message MUST be able to choose "Delete for Everyone" on any message they sent within the retraction window. The default retraction window is **1 hour** from the original send timestamp. Beyond that window, only "Delete for me" is available.
+- **FR-040**: When "Delete for Everyone" is initiated for a group message, every current group member's device MUST replace the original message content (text and/or media reference) with a deletion placeholder ("This message was deleted") within **3 seconds** for online members, and on next sync before display for offline members.
+- **FR-041**: When "Delete for Everyone" succeeds, every current member's local copy MUST be purged of the original content — including the original text, the cached media file (image/video/voice), and any thumbnails or transcripts derived from the original. The original content MUST NOT be retrievable on any current member's device via the conversation list, the message search, the media gallery, or any other in-app surface.
+- **FR-041a**: Delete-for-Everyone events MUST also clear the message from any push-notification preview, lock-screen surface, or notification-center entry that was generated by the original message, on every receiving device where such a notification is still visible.
+- **FR-041b**: A Delete-for-Everyone event MUST be idempotent on receivers: if the same delete event is delivered more than once (e.g., via socket and via REST sync), the second and subsequent applications MUST be no-ops, and MUST NOT regress the placeholder to the original content.
+
+**Post-Leave / Removal Enforcement**
+
+- **FR-042**: When a member leaves the group voluntarily (FR-019) or is removed by the admin (FR-017), the backend MUST atomically update the group's participant index BEFORE returning success to the leave/remove request. Subsequent message sends, message receives, call initiations, group info reads, and group info edits by the leaver/removed member MUST be rejected by the backend with an explicit "no longer a participant" error.
+- **FR-043**: After a member leaves or is removed, the backend MUST NOT forward any further socket events (`newMessage`, `messageDelivered`, `messageRead`, `userTyping`, group-call events, recording events, etc.) for that group to that user, and MUST NOT include the group's data in any subsequent REST responses to that user.
+- **FR-044**: The leaver/removed member's device MUST reject any stale socket events or push notifications for that group received after the local leave/removal state has been applied. Defense-in-depth: even if backend race conditions allow one stray event through, the client discards it.
+- **FR-045**: The leaver/removed member's local conversations list MUST display the group in read-only mode (per FR-029, FR-030) — historical messages are visible, but the message input, call buttons, and group info edit affordances MUST be completely absent or disabled. Any tap on a disabled affordance MUST surface a clear "You are no longer a participant" notice.
+
 ### Key Entities
 
 - **Group**: Represents a multi-member conversation. Attributes: unique ID, name (required), photo (optional), list of members, designated admin, creation timestamp.
 - **Group Member**: A user participating in a group. Attributes: user reference, role (Admin or Member), join timestamp.
-- **Group Message**: A message within a group context. Same structure as a 1-to-1 message plus: sender identity (always visible to recipients), per-member delivery/read tracking.
+- **Group Message**: A message within a group context. Same structure as a 1-to-1 message plus: sender identity (always visible to recipients), per-member delivery/read tracking, retraction state (active vs. deleted-for-everyone).
 - **Admin Role**: A special role held by exactly one member at a time, granting permissions to edit group details and manage membership.
+- **Message Retraction**: A state on a Group Message indicating it has been deleted for everyone by the sender. Carries the timestamp of the retraction; replaces the original content on every current member's device. Once set, cannot be undone.
 
 ## Success Criteria *(mandatory)*
 
@@ -225,8 +276,13 @@ A group member wants to start a voice or video call with all other members of th
 - **SC-004**: Removing a member from a group takes effect immediately; the removed member loses access within 5 seconds on their device.
 - **SC-005**: 100% of 1-to-1 chat scenarios that worked before this feature ships continue to pass without any regression.
 - **SC-006**: Group info changes (name, photo) propagate to all active group members' screens within 3 seconds.
+- **SC-006a**: The Shared Media section of the group info screen opens and shows at least the first viewport of media thumbnails within 1 second of the screen becoming visible, on mid-range devices, for groups with up to 500 historical media items.
+- **SC-006b**: A media item retracted via "Delete for Everyone" disappears from the Shared Media section on every current member's group info screen within the FR-040 propagation window (3 s for online, on next sync for offline).
 - **SC-007**: A completed call recording appears as a media message in the group chat and is accessible to all group members within 30 seconds of the recording being stopped.
 - **SC-008**: The "Join Call" button appears in (or disappears from) the group chat screen within 5 seconds of a call starting or ending.
+- **SC-009**: A "Delete for Everyone" issued by the sender results in the original message disappearing for 100% of currently-online recipients within 3 seconds, and for offline recipients on next sync before any display of the original. Measured by an automated 100-iteration regression on a 3-device group.
+- **SC-010**: After a member leaves or is removed from a group, across a 100-iteration regression test: 0 messages can be sent by that member to that group, 0 new messages are received by that member from that group, and 0 stale socket events for that group are accepted by that member's device.
+- **SC-011**: Push-notification entries for messages that are subsequently deleted-for-everyone are cleared from the receivers' notification surfaces within 5 seconds of the deletion arriving on the device (where the device's OS supports notification update or removal).
 
 ## Assumptions
 
@@ -245,3 +301,8 @@ A group member wants to start a voice or video call with all other members of th
 - Recording upload and sharing follow the same retry and offline-queue behavior as other media messages.
 - Recording consent is satisfied by the universal in-call REC indicator (FR-033); jurisdictions requiring explicit prior consent (one-party vs. two-party consent laws) are addressed by the visible indicator — additional jurisdiction-specific consent prompts are out of scope for v1.
 - The "Join Call" button state is driven by socket events that the backend broadcasts when a call starts or ends for that group room.
+- The app already has a 1-to-1 "Delete for Everyone" mechanism (message-retraction event, deletion placeholder UI, local media-cache cleanup). This feature extends that mechanism to fan out across all current group members; no new retraction primitives are introduced.
+- The retraction window default of 1 hour matches the existing 1-to-1 retraction window. If the existing 1-to-1 window differs, the group window MUST be set to the same value to avoid inconsistent behavior across chat types.
+- Backend authority over membership is absolute. The leave/remove API call returns success only after the participant index has been atomically updated and all in-flight socket subscriptions for the leaver have been torn down. This is the foundation of FR-042 to FR-045.
+- Push-notification clearing on Delete-for-Everyone is best-effort and OS-dependent. Where the OS does not allow remote notification removal, the device-side handler clears the notification once the app foregrounds.
+- The existing 1-to-1 chat info screen already provides a "Shared Media" section backed by a query of the local SQLite messages store filtered by media type. The group info "Shared Media" section reuses the same widget tree and the same query, parameterised by `chatRoomId`. No new server endpoints are needed; the data is already in SQLite by virtue of normal message sync.

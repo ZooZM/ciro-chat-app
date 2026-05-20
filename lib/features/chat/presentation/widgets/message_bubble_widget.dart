@@ -16,6 +16,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
+import '../../domain/value_objects/voice_waveform.dart';
 import 'media_gallery_viewer.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -841,7 +842,6 @@ class _VoiceBubbleState extends State<_VoiceBubble>
   bool _isPlaying = false;
   bool _isPrepared = false;
   bool _isPreparing = false;
-  List<double>? _cachedWaveformData;
 
   @override
   void initState() {
@@ -885,12 +885,6 @@ class _VoiceBubbleState extends State<_VoiceBubble>
     final localPath = meta['localPath'] as String?;
     final fileUrl = widget.message.fileUrl;
 
-    // T145: Use pre-extracted waveform from sender if available.
-    final rawSamples = meta['waveformSamples'];
-    if (rawSamples is List && rawSamples.isNotEmpty) {
-      _cachedWaveformData = rawSamples.whereType<num>().map((e) => e.toDouble()).toList();
-    }
-
     String? path;
     if (localPath != null && File(localPath).existsSync()) {
       path = localPath;
@@ -900,35 +894,12 @@ class _VoiceBubbleState extends State<_VoiceBubble>
 
     if (path != null) {
       try {
-        // If we already have waveform from metadata, skip extraction on receiver.
-        final skipExtraction = _cachedWaveformData != null && _cachedWaveformData!.isNotEmpty;
-
-        final cached = skipExtraction
-            ? _cachedWaveformData
-            : await context.read<ChatCubit>().getWaveformCache(
-                widget.message.clientMessageId,
-              );
-
         await _playerController.preparePlayer(
           path: path,
-          shouldExtractWaveform: !skipExtraction && cached == null,
+          shouldExtractWaveform: false,
           noOfSamples: 50,
           volume: 1.0,
         );
-
-        if (!skipExtraction && cached == null) {
-          final extracted = await _playerController.waveformExtraction
-              .extractWaveformData(path: path, noOfSamples: 50);
-          if (extracted.isNotEmpty) {
-            await context.read<ChatCubit>().saveWaveformCache(
-              widget.message.clientMessageId,
-              extracted,
-            );
-            _cachedWaveformData = extracted;
-          }
-        } else if (cached != null) {
-          _cachedWaveformData = cached;
-        }
 
         if (mounted) {
           setState(() {
@@ -940,7 +911,7 @@ class _VoiceBubbleState extends State<_VoiceBubble>
         debugPrint('[VoiceBubble] prepare error (non-fatal, voice will play without waveform): $e');
         if (mounted) {
           setState(() {
-            _isPrepared = true; // Mark as prepared even if waveform fails - audio still playable
+            _isPrepared = true;
             _isPreparing = false;
           });
         }
@@ -1045,50 +1016,18 @@ class _VoiceBubbleState extends State<_VoiceBubble>
               ),
               SizedBox(width: 8.resW),
 
-              // Waveform
+              // Waveform (cached, doesn't rebuild on playback state changes)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
+                    _CachedVoiceWaveformDisplay(
+                      message: widget.message,
+                      playerController: _isPrepared ? _playerController : null,
+                      isLoading: _isPreparing,
+                      shimmerController: _shimmerController,
                       height: 36.resH,
-                      child: _isPrepared
-                          ? AudioFileWaveforms(
-                              size: Size(
-                                MediaQuery.of(context).size.width * 0.4,
-                                36.resH,
-                              ),
-                              playerController: _playerController,
-                              waveformData: _cachedWaveformData ?? const [],
-                              enableSeekGesture: true,
-                              waveformType: WaveformType.fitWidth,
-                              playerWaveStyle: PlayerWaveStyle(
-                                fixedWaveColor: Colors.grey.shade400,
-                                liveWaveColor: AppColors.primary,
-                                spacing: 5,
-                                waveThickness: 2.resW,
-                              ),
-                            )
-                          : _isPreparing
-                              ? AnimatedBuilder(
-                                  animation: _shimmerController,
-                                  builder: (context, _) {
-                                    final opacity = 0.3 + (0.7 * _shimmerController.value);
-                                    return Container(
-                                      height: 2.resH,
-                                      width: MediaQuery.of(context).size.width * 0.4,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade300
-                                            .withValues(alpha: opacity),
-                                        borderRadius: BorderRadius.circular(1),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  height: 2.resH,
-                                  color: Colors.grey.shade300,
-                                ),
+                      width: MediaQuery.of(context).size.width * 0.4,
                     ),
                     SizedBox(height: 4.resH),
                     Text(
@@ -1730,6 +1669,186 @@ class _EventBubble extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 010: Cached Voice Waveform Display
+// Isolates waveform caching from playback state changes to prevent rebuilds
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CachedVoiceWaveformDisplay extends StatefulWidget {
+  final Message message;
+  final PlayerController? playerController;
+  final bool isLoading;
+  final AnimationController shimmerController;
+  final double height;
+  final double width;
+
+  const _CachedVoiceWaveformDisplay({
+    required this.message,
+    required this.playerController,
+    required this.isLoading,
+    required this.shimmerController,
+    required this.height,
+    required this.width,
+  });
+
+  @override
+  State<_CachedVoiceWaveformDisplay> createState() =>
+      _CachedVoiceWaveformDisplayState();
+}
+
+class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay> {
+  List<double>? _waveformSamples;
+  bool _isExtracting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWaveformData();
+  }
+
+  Future<void> _loadWaveformData() async {
+    if (_isExtracting) return;
+    _isExtracting = true;
+
+    try {
+      final cubit = context.read<ChatCubit>();
+      final meta = widget.message.metadata ?? {};
+
+      // T010: Prefer sender-provided waveform data
+      final rawSamples = meta['waveformSamples'];
+      if (rawSamples is List && rawSamples.isNotEmpty) {
+        final samples =
+            rawSamples.whereType<num>().map((e) => e.toDouble()).toList();
+        if (mounted) {
+          setState(() => _waveformSamples = samples);
+          cubit.cacheSessionWaveform(
+            VoiceWaveformGeometry(
+              messageId: widget.message.id,
+              samples: samples,
+              duration: meta['duration'] as int?,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check in-memory session cache
+      final sessionCached = cubit.getSessionWaveformCache(widget.message.id);
+      if (sessionCached != null) {
+        if (mounted) {
+          setState(() {
+            _waveformSamples = sessionCached.samples;
+          });
+          debugPrint('[VoiceWaveformDisplay] Cache hit for message ${widget.message.id}');
+        }
+        return;
+      }
+
+      // Check persistent cache as fallback
+      final persistentCached = await cubit.getWaveformCache(
+        widget.message.clientMessageId,
+      );
+      if (persistentCached != null && persistentCached.isNotEmpty) {
+        if (mounted) {
+          setState(() => _waveformSamples = persistentCached);
+        }
+        cubit.cacheSessionWaveform(
+          VoiceWaveformGeometry(
+            messageId: widget.message.id,
+            samples: persistentCached,
+            duration: meta['duration'] as int?,
+          ),
+        );
+        return;
+      }
+
+      // Extract from audio file if no cached data
+      final localPath = meta['localPath'] as String?;
+      final fileUrl = widget.message.fileUrl;
+      String? path;
+      if (localPath != null && File(localPath).existsSync()) {
+        path = localPath;
+      } else if (fileUrl != null && fileUrl.isNotEmpty) {
+        path = widget.message.resolvedFileUrl;
+      }
+
+      if (path != null && widget.playerController != null) {
+        try {
+          final extracted =
+              await widget.playerController!.waveformExtraction
+                  .extractWaveformData(path: path, noOfSamples: 50);
+
+          if (extracted.isNotEmpty) {
+            if (mounted) {
+              setState(() => _waveformSamples = extracted);
+            }
+
+            // Save to both caches
+            await cubit.saveWaveformCache(
+              widget.message.clientMessageId,
+              extracted,
+            );
+            cubit.cacheSessionWaveform(
+              VoiceWaveformGeometry(
+                messageId: widget.message.id,
+                samples: extracted,
+                duration: meta['duration'] as int?,
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint(
+              '[VoiceWaveformDisplay] Extraction failed (waveform will show as empty): $e');
+        }
+      }
+    } finally {
+      _isExtracting = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: widget.height,
+      child: _waveformSamples != null && _waveformSamples!.isNotEmpty && widget.playerController != null
+          ? AudioFileWaveforms(
+              size: Size(widget.width, widget.height),
+              playerController: widget.playerController!,
+              waveformData: _waveformSamples!,
+              enableSeekGesture: true,
+              waveformType: WaveformType.fitWidth,
+              playerWaveStyle: PlayerWaveStyle(
+                fixedWaveColor: Colors.grey.shade400,
+                liveWaveColor: AppColors.primary,
+                spacing: 5,
+                waveThickness: 2.resW,
+              ),
+            )
+          : widget.isLoading
+              ? AnimatedBuilder(
+                  animation: widget.shimmerController,
+                  builder: (context, _) {
+                    final opacity =
+                        0.3 + (0.7 * widget.shimmerController.value);
+                    return Container(
+                      height: 2.resH,
+                      width: widget.width,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300
+                            .withValues(alpha: opacity),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    );
+                  },
+                )
+              : Container(
+                  height: 2.resH,
+                  color: Colors.grey.shade300,
+                ),
     );
   }
 }
