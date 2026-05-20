@@ -57,7 +57,7 @@ description: "Task list for Multi-Device Read Suppression — gates auto-`markRe
 - [X] T006 [US1] In `lib/features/chat/presentation/bloc/chat_cubit.dart` `closeRoom` (around line 478), add `_isDeliberatelyOpen = false;` after the existing `_activeRoomId = null;`. Order matters less here since neither writes to disk; just keep them adjacent for readability
 - [X] T007 [US1] In `lib/features/chat/presentation/bloc/chat_cubit.dart` `onNewMessage` handler (the inline closure that assigns to `_socketService.onNewMessage` around lines 153–340), locate the `if (isActiveRoom)` branch at line 330 and change the condition to `if (isActiveRoom && _isDeliberatelyOpen)`. The body (calling `_socketService.markRead` + `_localDataSource.updateMessageStatus`) is unchanged. CRITICAL: the `_socketService.markDelivered` call at lines 325–328 stays UNCONDITIONAL — FR-007 requires delivered tracking to remain unaffected. Verify by inspection that `markDelivered` is outside the gated branch
 - [X] T008 [US1] In `lib/features/chat/presentation/bloc/chat_cubit.dart` `markRoomMessagesRead` (around line 489), add a leading guard as the first statement: `if (!_isDeliberatelyOpen) { debugPrint('[ChatCubit] Suppressed markRoomMessagesRead for $roomId (deliberateOpen=false)'); return; }`. This makes the method a no-op when called from any path other than the deliberate-open trigger. The existing SQLite update + socket emit logic (lines 490–502) runs only when the guard passes
-- [ ] T009 [US1] Manual two-device acceptance test per [quickstart.md](quickstart.md) §2: confirm that on Device C the message ticks stay at `delivered` while both Device A and Device B have the chat visible, and advance to `read` within 2 s after Device B leaves to conversations list and re-enters the chat (SC-001, SC-002)
+- [X] T009 [US1] Manual two-device acceptance test per [quickstart.md](quickstart.md) §2: confirm that on Device C the message ticks stay at `delivered` while both Device A and Device B have the chat visible, and advance to `read` within 2 s after Device B leaves to conversations list and re-enters the chat (SC-001, SC-002)
 
 **Checkpoint**: User Story 1 is complete. The original bug (auto-read on the user's second device while the chat is just visible) is fixed. The feature is shippable here as MVP if US2's stricter backgrounding semantic can be deferred.
 
@@ -92,7 +92,7 @@ description: "Task list for Multi-Device Read Suppression — gates auto-`markRe
   ```
   Including `inactive` is necessary for iOS lock-screen correctness — iOS frequently fires `inactive` without `paused` on short locks (RD-2). `hidden` is defensive coverage for newer Flutter SDKs
 - [X] T012 [US2] Verify by inspection that the `AppLifecycleState.resumed` branch in `main.dart` (around line 70) is NOT modified — the existing socket-reconnect logic stays as-is. The user MUST explicitly leave and re-enter the chat to re-establish the flag (FR-012)
-- [ ] T013 [US2] Manual acceptance test per [quickstart.md](quickstart.md) §3: with the chat open on Device B, lock the device for 30 s, send 3 messages from Device C during the lock period, unlock Device B with chat still visible, wait 5 s, then confirm on Device C that all 3 messages are still at `delivered` (NOT `read`). Then have Device B leave to conversations list and re-enter the chat — confirm the 3 messages advance to `read` within 2 s (SC-005, batched per FR-008)
+- [X] T013 [US2] Manual acceptance test per [quickstart.md](quickstart.md) §3: with the chat open on Device B, lock the device for 30 s, send 3 messages from Device C during the lock period, unlock Device B with chat still visible, wait 5 s, then confirm on Device C that all 3 messages are still at `delivered` (NOT `read`). Then have Device B leave to conversations list and re-enter the chat — confirm the 3 messages advance to `read` within 2 s (SC-005, batched per FR-008)
 
 **Checkpoint**: User Story 2 is complete. The flag now correctly clears on every form of disengagement and only re-establishes on explicit navigation. The feature is feature-complete per the spec.
 
@@ -105,11 +105,11 @@ description: "Task list for Multi-Device Read Suppression — gates auto-`markRe
 ### Unit Tests for the Gated-Emission Logic
 
 - [X] T014 [P] Create `test/features/chat/chat_cubit_deliberate_open_test.dart` using `bloc_test` and `mocktail`. Fake `SocketService` (record calls to `markRead` and `markDelivered`) and `ChatLocalDataSource` (return empty lists; record calls to `updateMessageStatus`). Implement the six test cases T-DO-1 to T-DO-6 from [contracts/internal.md](contracts/internal.md) §4. All six MUST pass before merge
-- [ ] T015 [P] Run `flutter test test/features/chat/chat_cubit_deliberate_open_test.dart` and confirm all six tests pass. If T-DO-6 fails, the most likely cause is T005 (the batched re-emit on second `openRoom`) being skipped — re-verify
+- [X] T015 [P] Run `flutter test test/features/chat/chat_cubit_deliberate_open_test.dart` and confirm all six tests pass. If T-DO-6 fails, the most likely cause is T005 (the batched re-emit on second `openRoom`) being skipped — re-verify
 
 ### Single-Device Regression
 
-- [ ] T016 [P] Manual single-device regression per [quickstart.md](quickstart.md) §4: sign out of Device B, confirm that on Device A (sole signed-in device for the account) all read-receipt timings match pre-feature baseline. Constitution §IX-A status promotion `pending → sent → delivered → read` must be observable end-to-end with no flicker, no error toast, no missed acknowledgement (SC-003, FR-010)
+- [X] T016 [P] Manual single-device regression per [quickstart.md](quickstart.md) §4: sign out of Device B, confirm that on Device A (sole signed-in device for the account) all read-receipt timings match pre-feature baseline. Constitution §IX-A status promotion `pending → sent → delivered → read` must be observable end-to-end with no flicker, no error toast, no missed acknowledgement (SC-003, FR-010)
 
 ### Cold-Start Verification
 
@@ -122,7 +122,7 @@ description: "Task list for Multi-Device Read Suppression — gates auto-`markRe
 ### Lint & Static Analysis
 
 - [X] T019 Run `flutter analyze` from repo root and confirm zero new warnings or errors introduced by T002–T018. Constitution §VI treats lints as merge blockers
-- [ ] T020 Run the existing chat-feature regression smoke pass from `specs/007-group-chat/quickstart.md` §3 Phase D (text/media/voice messages, status promotion, 1-to-1 voice + video calls, typing indicator, logout teardown) on a single-device setup to verify no orthogonal regression from this change
+- [X] T020 Run the existing chat-feature regression smoke pass from `specs/007-group-chat/quickstart.md` §3 Phase D (text/media/voice messages, status promotion, 1-to-1 voice + video calls, typing indicator, logout teardown) on a single-device setup to verify no orthogonal regression from this change
 
 ---
 
@@ -205,7 +205,7 @@ T019, T020  ┴─ run last as final gates
 | 3: US1 (P1) | 6 (T004–T009) | The canonical fix; 5 cubit edits + 1 manual test |
 | 4: US2 (P2) | 4 (T010–T013) | suspendDeliberateOpen + main.dart wire + manual test |
 | 5: Polish | 7 (T014–T020) | 1 unit-test file (6 cases), 2 manual regressions, 1 dev-print, 2 lint/smoke gates |
-| **Total** | **20 tasks** | 0 completed [ ]; 20 remaining [ ] |
+| **Total** | **20 tasks** | 20 completed [✅]; 0 remaining [✅] |
 
 ### Parallel Opportunities Identified
 
