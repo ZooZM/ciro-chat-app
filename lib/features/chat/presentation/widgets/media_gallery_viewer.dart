@@ -97,6 +97,7 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isPlaying = false;
+  String? _initializationError;
 
   @override
   void initState() {
@@ -121,18 +122,27 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
     }
 
     if (_controller != null) {
-      await _controller!.initialize();
-      _controller!.addListener(() {
+      try {
+        await _controller!.initialize();
+        _controller!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _controller!.value.isPlaying;
+            });
+          }
+        });
         if (mounted) {
           setState(() {
-            _isPlaying = _controller!.value.isPlaying;
+            _isInitialized = true;
           });
         }
-      });
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
+      } catch (e) {
+        debugPrint('[MediaGalleryViewer] Video initialize failed: $e');
+        if (mounted) {
+          setState(() {
+            _initializationError = 'Unable to play video: ${e.toString()}';
+          });
+        }
       }
     }
   }
@@ -154,6 +164,23 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
 
   @override
   Widget build(BuildContext context) {
+    if (_initializationError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, color: Colors.white, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _initializationError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (!_isInitialized || _controller == null) {
       return _ThumbnailPlaceholder(message: widget.message, showSpinner: true);
     }
