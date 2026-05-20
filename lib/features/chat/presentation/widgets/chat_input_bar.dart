@@ -7,6 +7,7 @@ import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
@@ -217,28 +218,35 @@ class _ChatInputBarState extends State<ChatInputBar> {
 
       // ── Waveform extraction (best-effort; failures must NOT block send) ──────
       List<double> waveformSamples = [];
-      final tmpController = PlayerController();
-      try {
-        debugPrint('[ChatInputBar] Preparing player for waveform extraction...');
-        await tmpController.preparePlayer(
-          path: path,
-          shouldExtractWaveform: true,
-          noOfSamples: 50,
-        );
-        debugPrint('[ChatInputBar] Player prepared. Extracting waveform data...');
-        waveformSamples = await tmpController.waveformExtraction
-            .extractWaveformData(path: path, noOfSamples: 50);
-        debugPrint('[ChatInputBar] Waveform extraction succeeded: ${waveformSamples.length} samples');
-      } catch (e, stack) {
-        debugPrint('[ChatInputBar] Waveform extraction failed (non-fatal): $e\n$stack');
-      } finally {
-        // Dispose in its own try-catch — a dispose failure on Android must NOT
-        // propagate and prevent sendVoiceNote from being called.
+      // Android: PlayerController cannot access private app directory paths.
+      // Skip waveform extraction on Android to avoid PlatformException.
+      // Waveform is cosmetic only; message sends fine without it.
+      if (!defaultTargetPlatform.name.contains('android')) {
+        final tmpController = PlayerController();
         try {
-          tmpController.dispose();
-        } catch (e) {
-          debugPrint('[ChatInputBar] tmpController.dispose() failed (ignored): $e');
+          debugPrint('[ChatInputBar] Preparing player for waveform extraction...');
+          await tmpController.preparePlayer(
+            path: path,
+            shouldExtractWaveform: true,
+            noOfSamples: 50,
+          );
+          debugPrint('[ChatInputBar] Player prepared. Extracting waveform data...');
+          waveformSamples = await tmpController.waveformExtraction
+              .extractWaveformData(path: path, noOfSamples: 50);
+          debugPrint('[ChatInputBar] Waveform extraction succeeded: ${waveformSamples.length} samples');
+        } catch (e, stack) {
+          debugPrint('[ChatInputBar] Waveform extraction failed (non-fatal): $e\n$stack');
+        } finally {
+          // Dispose in its own try-catch — a dispose failure on Android must NOT
+          // propagate and prevent sendVoiceNote from being called.
+          try {
+            tmpController.dispose();
+          } catch (e) {
+            debugPrint('[ChatInputBar] tmpController.dispose() failed (ignored): $e');
+          }
         }
+      } else {
+        debugPrint('[ChatInputBar] Skipping waveform extraction on Android (file path inaccessible)');
       }
 
       // ── Send ─────────────────────────────────────────────────────────────────
