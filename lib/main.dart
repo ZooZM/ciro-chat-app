@@ -11,6 +11,7 @@ import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
 import 'core/network/dio_client.dart';
 import 'features/auth/data/datasources/auth_local_data_source.dart';
+import 'features/auth/presentation/bloc/auth_cubit.dart';
 import 'features/chat/presentation/bloc/chat_cubit.dart';
 import 'features/chat/presentation/widgets/call_overlay.dart';
 import 'features/status/presentation/bloc/status_cubit.dart';
@@ -35,8 +36,17 @@ void main() async {
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // Link Network failure fallback strictly after router & DI initialization
-  globalOnUnauthorizedRedirect = () => appRouter.go(AppRouterName.auth);
+  // Network revocation fallback: run the full V-A logout teardown (resets
+  // cubits, disconnects socket, unregisters push, wipes local data, clears
+  // tokens). The AuthCubit emits Unauthenticated, which the router's refresh
+  // stream picks up and routes to the auth screen — no manual navigation
+  // needed. Guarded against re-entrancy because logOut() is idempotent on
+  // already-cleared state.
+  globalOnUnauthorizedRedirect = () {
+    final authCubit = getIt<AuthCubit>();
+    if (authCubit.state is Unauthenticated) return;
+    authCubit.logOut();
+  };
 
   runApp(const MainApp());
 }

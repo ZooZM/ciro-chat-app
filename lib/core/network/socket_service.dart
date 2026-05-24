@@ -2,15 +2,14 @@ import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
-import 'package:dio/dio.dart';
-import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
+import 'package:ciro_chat_app/core/error/revocation_exception.dart';
+import 'package:ciro_chat_app/core/services/token_refresh_service.dart';
 
 @lazySingleton
 class SocketService {
   IO.Socket? _socket;
-  bool _isRefreshing = false;
 
   // Exposes declarative binding for WhatsApp-style Connecting... banner
   final ValueNotifier<bool> isConnectedNotifier = ValueNotifier(false);
@@ -106,7 +105,6 @@ class SocketService {
     _socket?.onConnect((_) {
       debugPrint('[SocketService] Connected');
       isConnectedNotifier.value = true;
-      _isRefreshing = false;
       // Notify Cubit so it can trigger the REST status sync for missed events.
       onReconnected?.call();
     });
@@ -442,52 +440,30 @@ class SocketService {
   }
 
   Future<void> _handleTokenRefresh() async {
-    if (_isRefreshing) return;
-    _isRefreshing = true;
-
     debugPrint(
       '[SocketService] Token expired. Pausing reconnection and triggering refresh...',
     );
-    _socket
-        ?.disconnect(); // Ensure socket stops hammering the server while we cleanly HTTP refresh
-
-    final authLocal = getIt<AuthLocalDataSource>();
+    _socket?.disconnect();
 
     try {
-      final refreshToken = await authLocal.getRefreshToken();
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        // Launch isolated network payload identical to DioClient interceptor logic
-        final refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+      final newAccess = await getIt<TokenRefreshService>().refreshTokens();
 
-        final response = await refreshDio.post(
-          '/auth/refresh',
-          data: {'refreshToken': refreshToken},
-        );
-
-        final newAccess = response.data['accessToken'];
-        final newRefresh = response.data['refreshToken'] ?? refreshToken;
-
-        await authLocal.saveTokens(
-          accessToken: newAccess,
-          refreshToken: newRefresh,
-        );
-
-        debugPrint(
-          '[SocketService] Refresh successful. Resuming socket connection...',
-        );
-        if (_socket != null) {
-          _socket!.auth = {'token': newAccess};
-          _socket!.connect();
-        }
-      } else {
-        await authLocal.deleteTokens();
+      debugPrint(
+        '[SocketService] Refresh successful. Resuming socket connection...',
+      );
+      if (_socket != null) {
+        _socket!.auth = {'token': newAccess};
+        _socket!.connect();
       }
-    } catch (e) {
-      debugPrint('[SocketService] Socket Token Refresh Failed: $e');
-      await authLocal.deleteTokens();
+    } on RevocationException catch (revoked) {
+      debugPrint('[SocketService] Session revoked: $revoked');
+      // Full V-A teardown runs inside globalOnUnauthorizedRedirect.
       globalOnUnauthorizedRedirect?.call();
-    } finally {
-      _isRefreshing = false;
+    } catch (e) {
+      // Non-terminal failure: leave the socket disconnected; the next
+      // reconnect attempt (or a fresh HTTP request triggering DioClient's
+      // refresh path) will retry. Do NOT delete tokens here.
+      debugPrint('[SocketService] Socket refresh failed (non-terminal): $e');
     }
   }
 }

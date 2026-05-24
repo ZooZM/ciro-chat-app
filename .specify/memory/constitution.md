@@ -1,18 +1,14 @@
 <!--
 Sync Impact Report:
-- Version change: 1.1.0 → 1.2.0
+- Version change: 1.2.0 → 1.3.0
 - Modified principles:
-  - III. Data Storage: corrected storage engine for credentials/tokens (Hive → FlutterSecureStorage)
-  - IV. Real-Time Communication: added Socket.IO Map type-safety rule, presence system, token-refresh lifecycle
-  - V. Memory Leak Prevention: expanded logout teardown to cover PushNotificationService and socket refresh redirect
-- Added sections:
-  - VIII. Media Handling & URL Resolution (new principle)
-  - IX. Message Status Flow (new principle)
+  - IV-C. Token Refresh Lifecycle: replaced "Any refresh failure → deleteTokens + redirect" rule with
+    revocation-only logout. Both DioClient and SocketService now delegate to TokenRefreshService,
+    which retries transient failures with exponential backoff and only throws RevocationException on
+    explicit backend signals (HTTP 401 with message "Refresh token revoked" or
+    "Invalid or expired refresh token"). Implements feature 009-persistent-session.
 - Templates requiring updates:
-  - ✅ updated: .specify/memory/constitution.md
-  - ✅ updated: .specify/templates/plan-template.md (Constitution Check items corrected)
-  - ⚠ pending: .specify/templates/spec-template.md (no structural change needed)
-  - ⚠ pending: .specify/templates/tasks-template.md (no structural change needed)
+  - ✅ updated: .specify/memory/constitution.md (this file)
 - Deferred TODOs:
   - RATIFICATION_DATE for v1.0.0 preserved as 2026-04-23 (original)
 -->
@@ -160,13 +156,16 @@ final value = map['key']?.toString();
 
 | Trigger | Actor | Behaviour |
 |---|---|---|
-| HTTP 401 response | `DioClient` interceptor | Uses isolated `refreshDio` to call `POST /auth/refresh`; retries original request |
-| Socket connect error / disconnect with JWT reason | `SocketService._handleTokenRefresh` | Same isolated refresh flow; reconnects socket on success |
-| App start (token near expiry, < 5 min) | `AuthCubit._proactiveTokenRefreshIfNeeded` | Decodes JWT `exp`, refreshes before socket connect |
-| Any refresh failure | Both actors | MUST call `deleteTokens()` then `globalOnUnauthorizedRedirect?.call()` |
+| HTTP 401 response | `DioClient` interceptor | Delegates to `TokenRefreshService.refreshTokens()`; retries original request with new token |
+| Socket connect error / disconnect with JWT reason | `SocketService._handleTokenRefresh` | Delegates to `TokenRefreshService.refreshTokens()`; reconnects socket on success |
+| App start (token near expiry, < 5 min) | `AuthCubit._proactiveTokenRefreshIfNeeded` | Decodes JWT `exp`, delegates to `TokenRefreshService` |
+| Any refresh failure | All actors | MUST call `TokenRefreshService.refreshTokens()`. Only `RevocationException` (HTTP 401 with message `"Refresh token revoked"` or `"Invalid or expired refresh token"`) triggers `deleteTokens()` + `globalOnUnauthorizedRedirect?.call()`. All other failures (network error, timeout, 5xx, any other 401 message) retry indefinitely with exponential backoff (2s → 60s cap) handled inside the service. |
 
 `globalOnUnauthorizedRedirect` is declared in `dio_client.dart`. Import it with
 `show globalOnUnauthorizedRedirect` to avoid the full DioClient dependency.
+`TokenRefreshService` is a `@lazySingleton` in `lib/core/services/`; it coalesces
+concurrent callers behind a `Completer<String>` so at most one refresh is in
+flight per device at any time.
 
 ### V. Memory Leak Prevention & Logout Teardown
 
@@ -307,4 +306,4 @@ This Constitution supersedes all other practices. Amendments require:
 
 All PRs and reviews MUST include a Constitution Check (see `plan-template.md`).
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-23 | **Last Amended**: 2026-05-14
+**Version**: 1.3.0 | **Ratified**: 2026-04-23 | **Last Amended**: 2026-05-20

@@ -1,13 +1,12 @@
 import 'dart:convert';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../../../core/error/failures.dart';
-import '../../../../core/theme/app_constants.dart';
+import '../../../../core/error/revocation_exception.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../data/datasources/auth_local_data_source.dart';
 
@@ -16,8 +15,10 @@ import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
 import '../../../../core/network/socket_service.dart';
+import '../../../../core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
 import '../../../../core/di/injection.dart';
 import '../../../../core/services/push_notification_service.dart';
+import '../../../../core/services/token_refresh_service.dart';
 
 part 'auth_state.dart';
 
@@ -92,27 +93,15 @@ class AuthCubit extends Cubit<AuthState> {
 
       debugPrint('[AuthCubit] Access token expires in ${remaining.inSeconds}s — proactive refresh');
 
-      final refreshToken = await _localDataSource.getRefreshToken() ?? '';
-      if (refreshToken.isEmpty) return;
-
-      final refreshDio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
-      final response = await refreshDio.post(
-        '/auth/refresh',
-        data: {'refreshToken': refreshToken},
-      );
-
-      final newAccess = response.data['accessToken'] as String?;
-      final newRefresh =
-          response.data['refreshToken'] as String? ?? refreshToken;
-
-      if (newAccess != null && newAccess.isNotEmpty) {
-        await _localDataSource.saveTokens(
-          accessToken: newAccess,
-          refreshToken: newRefresh,
-        );
-        debugPrint('[AuthCubit] Proactive token refresh successful');
-      }
+      await getIt<TokenRefreshService>().refreshTokens();
+      debugPrint('[AuthCubit] Proactive token refresh successful');
+    } on RevocationException catch (revoked) {
+      debugPrint('[AuthCubit] Proactive refresh detected revocation: $revoked');
+      // Full V-A teardown runs inside globalOnUnauthorizedRedirect → logOut().
+      globalOnUnauthorizedRedirect?.call();
     } catch (e) {
+      // Non-fatal: the next real request will trigger another refresh via
+      // DioClient. Do NOT delete tokens here.
       debugPrint('[AuthCubit] Proactive token refresh failed (non-fatal): $e');
     }
   }

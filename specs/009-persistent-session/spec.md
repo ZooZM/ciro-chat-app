@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "i need you update refreshToken logic to refresh will and i need the user stay login forever"
 
+## Clarifications
+
+### Session 2026-05-20
+
+- Q: How should the refresh-token JWT lifetime be reconciled with "no fixed maximum age"? → A: Rolling 365-day TTL — refresh token reissued with fresh 365d expiry on each successful refresh
+- Q: What is the maximum interval between refresh-retry attempts during a sustained backend outage? → A: 60 seconds cap (2s → 4s → 8s → 16s → 32s → 60s, then held at 60s)
+- Q: Which backend responses from `POST /auth/refresh` count as terminal "session revoked" signals? → A: Both HTTP 401 with `message == "Refresh token revoked"` AND HTTP 401 with `message == "Invalid or expired refresh token"` — all other failures are transient
+- Q: On app resume from background, should the app proactively refresh the token or stay reactive? → A: Reactive — let the next HTTP/socket call trigger refresh-on-401 naturally; no synchronous resume-time check
+- Q: How is the telemetry referenced by SC-001/SC-002 collected? → A: Deferred — no client telemetry plumbing in this feature; SC-001/SC-002 are aspirational/manual targets validated post-release via spot checks and backend logs
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - User never has to sign in again after the first time (Priority: P1)
@@ -61,7 +71,7 @@ The feature must NOT make sign-out harder. All existing ways to end a session (t
 - The device's system clock drifts significantly: the app MUST tolerate clock skew and not log the user out on the basis of local-clock expiry alone; it relies on the backend's authority over session validity.
 - The app is killed mid-refresh: on next launch, the partial state must not cause a logout; the app should treat the credentials as still valid and re-attempt refresh.
 - Concurrent refresh attempts (e.g., a network request and a socket reconnect both detect expiry at the same time): only one refresh must be in flight at a time; others wait for its result. A single network-blip refresh failure must not be observed multiple times and must not log the user out.
-- The user has been signed in for many months and has accumulated very long-lived refresh credentials: the credentials must still be accepted by the backend; there is no fixed maximum age before forced re-authentication.
+- The user has been signed in for many months and has accumulated very long-lived refresh credentials: the credentials must still be accepted by the backend. The refresh credential carries a rolling 365-day expiry that is reissued on every successful refresh, so any user who opens the app at least once per year never hits the cap; a user who is fully inactive for 365+ days is treated equivalently to an uninstall.
 - The backend deprecates an older credential format and requires re-issuance: this is a controlled rollout; the backend handles re-issuance silently using the existing valid credentials during the rollout window.
 - The user signs in on a new device: no impact on existing devices unless the backend's security policy chooses to revoke them (out of scope for this feature; existing policy preserved).
 
@@ -72,10 +82,10 @@ The feature must NOT make sign-out harder. All existing ways to end a session (t
 - **FR-001**: A signed-in user MUST remain signed in indefinitely, ending the session only when one of the following occurs: (a) the user explicitly signs out, (b) the backend explicitly revokes the session, (c) the user changes their password, or (d) the app data is cleared / reinstalled.
 - **FR-002**: Mere elapsed time, regardless of duration, MUST NOT end a user's session.
 - **FR-003**: Credential rotation MUST be performed silently in the background without any user-visible interruption (no spinners, no toasts, no screen transitions).
-- **FR-004**: A credential rotation failure that is NOT an explicit backend revocation (i.e., network error, request timeout, 5xx, refresh request cancelled by app lifecycle) MUST NOT end the user's session. The app MUST retry with backoff and continue retrying until the credential rotation succeeds, the backend explicitly revokes the session, or the user signs out.
-- **FR-005**: Only an explicit backend signal of "session revoked" or "session invalid" — distinct from a generic auth error — MUST cause the app to end the session and return the user to the sign-in screen.
+- **FR-004**: A credential rotation failure that is NOT an explicit backend revocation (i.e., network error, request timeout, 5xx, refresh request cancelled by app lifecycle) MUST NOT end the user's session. The app MUST retry with exponential backoff starting at 2 seconds and doubling each attempt, capped at a maximum interval of 60 seconds, and continue retrying until the credential rotation succeeds, the backend explicitly revokes the session, or the user signs out.
+- **FR-005**: Only an explicit backend signal of "session revoked" or "session invalid" — distinct from a generic auth error — MUST cause the app to end the session and return the user to the sign-in screen. Specifically, only an HTTP 401 response from `POST /auth/refresh` whose body `message` equals `"Refresh token revoked"` or `"Invalid or expired refresh token"` is terminal; all other failures (network error, timeout, 5xx, any other 401 message) MUST be retried per FR-004.
 - **FR-006**: When the backend explicitly revokes the session, the app MUST end the session within 60 seconds of the next backend interaction (HTTP request OR socket event) on the affected device.
-- **FR-007**: At app cold-start, if locally stored credentials exist, the app MUST attempt to use them and refresh them as needed, navigating the user directly to their conversations without showing a sign-in screen as an interstitial. The sign-in screen MUST only appear if the credentials are explicitly rejected by the backend as revoked/invalid.
+- **FR-007**: At app cold-start, if locally stored credentials exist, the app MUST attempt to use them and refresh them as needed, navigating the user directly to their conversations without showing a sign-in screen as an interstitial. The sign-in screen MUST only appear if the credentials are explicitly rejected by the backend as revoked/invalid. On app resume from background, the app MUST NOT perform a synchronous proactive refresh; it relies on the existing refresh-on-401 flow (FR-004 / FR-005) to handle token expiry transparently when the next backend request fires.
 - **FR-008**: Concurrent credential-refresh attempts MUST be coalesced; at most one refresh request is in flight per device at any time. Other consumers of the refreshed credential wait for the in-flight refresh's result.
 - **FR-009**: All existing sign-out paths (in-app sign-out button, server-side revocation, password change broadcast) MUST continue to work and MUST trigger the full local teardown sequence (clear credentials, disconnect socket, unregister push, clear local app data per existing logout flow).
 - **FR-010**: The credential refresh logic MUST be resilient to app-process termination: a refresh that was in progress when the app was killed MUST be re-attempted on the next launch without ending the session.
@@ -92,11 +102,11 @@ The feature must NOT make sign-out harder. All existing ways to end a session (t
 
 ### Measurable Outcomes
 
-- **SC-001**: A user who has signed in once experiences zero involuntary sign-outs over a 90-day measurement window, except for the explicit conditions listed in FR-001.
-- **SC-002**: Across all opens of the app by signed-in users during a 30-day window, fewer than 0.1% of opens result in the user being shown a sign-in screen for reasons other than the explicit conditions listed in FR-001.
+- **SC-001**: A user who has signed in once experiences zero involuntary sign-outs over a 90-day measurement window, except for the explicit conditions listed in FR-001. Measurement is performed post-release via spot checks and backend `/auth/refresh` failure logs; no client telemetry SDK is added by this feature.
+- **SC-002**: Across all opens of the app by signed-in users during a 30-day window, fewer than 0.1% of opens result in the user being shown a sign-in screen for reasons other than the explicit conditions listed in FR-001. Measurement is performed post-release using the same approach as SC-001.
 - **SC-003**: When a user signs out via the in-app button, the local session ends within 2 seconds of confirmation and the user lands on the sign-in screen.
 - **SC-004**: When the backend revokes a user's session for security reasons, the device returns the user to the sign-in screen on the next backend interaction within 60 seconds (SC-004 covers the propagation latency required by FR-006).
-- **SC-005**: 100% of network-error-only failures during credential refresh observed in production telemetry result in a successful retry (not a logout) within the same network session, once connectivity is restored.
+- **SC-005**: ≥99.9% of network-error-only failures during credential refresh, sampled via backend `/auth/refresh` failure logs and manual session reviews after release, result in a successful retry (not a logout) within the same network session, once connectivity is restored. No client telemetry SDK is added by this feature.
 - **SC-006**: Cold start to "conversations list visible" elapsed time for a signed-in user is no greater than the current measured value, regardless of whether a silent credential refresh runs during start-up.
 
 ## Assumptions

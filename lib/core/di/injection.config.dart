@@ -71,6 +71,7 @@ import '../../features/video_call/presentation/bloc/video_call_cubit.dart'
 import '../network/dio_client.dart' as _i667;
 import '../network/socket_service.dart' as _i917;
 import '../services/push_notification_service.dart' as _i63;
+import '../services/token_refresh_service.dart' as _i785;
 
 extension GetItInjectableX on _i174.GetIt {
   // initializes the registration of main-scope dependencies inside of GetIt
@@ -115,6 +116,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
+    gh.lazySingleton<_i785.TokenRefreshService>(
+      () => _i785.TokenRefreshService(gh<_i852.AuthLocalDataSource>()),
     );
     gh.lazySingleton<_i104.CallCubit>(
       () => _i104.CallCubit(gh<_i917.SocketService>()),
