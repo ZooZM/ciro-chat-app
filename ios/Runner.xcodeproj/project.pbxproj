@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -106,14 +106,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		00B8E1AD618D46F0B15DECE34D2F0051 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		00B8E1AD618D46F0B15DECE34D2F0051 /* Exceptions for "ScreenShareBroadcast" folder in "ScreenShareBroadcast" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 6C31B8E62FC4998700B4588D /* ScreenShareBroadcast */;
 		};
-		6C31B9092FC4998800B4588D /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		6C31B9092FC4998800B4588D /* Exceptions for "ScreenShareBroadcastSetupUI" folder in "ScreenShareBroadcastSetupUI" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -123,8 +123,30 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		6C31B8EA2FC4998700B4588D /* ScreenShareBroadcast */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (00B8E1AD618D46F0B15DECE34D2F0051 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScreenShareBroadcast; sourceTree = "<group>"; };
-		6C31B8F62FC4998800B4588D /* ScreenShareBroadcastSetupUI */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (6C31B9092FC4998800B4588D /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScreenShareBroadcastSetupUI; sourceTree = "<group>"; };
+		6C31B8EA2FC4998700B4588D /* ScreenShareBroadcast */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				00B8E1AD618D46F0B15DECE34D2F0051 /* Exceptions for "ScreenShareBroadcast" folder in "ScreenShareBroadcast" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ScreenShareBroadcast;
+			sourceTree = "<group>";
+		};
+		6C31B8F62FC4998800B4588D /* ScreenShareBroadcastSetupUI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6C31B9092FC4998800B4588D /* Exceptions for "ScreenShareBroadcastSetupUI" folder in "ScreenShareBroadcastSetupUI" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ScreenShareBroadcastSetupUI;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -474,13 +496,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -511,13 +529,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

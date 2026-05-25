@@ -465,7 +465,7 @@ class _ParticipantVideoView extends StatelessWidget {
     }
 
     final videoTrack = participant!.videoTrackPublications
-        .where((pub) => pub.track is VideoTrack)
+        .where((pub) => pub.source == TrackSource.camera && pub.track is VideoTrack)
         .map((pub) => pub.track as VideoTrack)
         .firstOrNull;
 

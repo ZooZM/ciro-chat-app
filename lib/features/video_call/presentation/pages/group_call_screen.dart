@@ -432,7 +432,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   Widget _buildRemoteTile(RemoteParticipant participant) {
     final videoTrack = participant.videoTrackPublications
-        .where((pub) => pub.track is VideoTrack && !pub.muted)
+        .where((pub) => pub.source == TrackSource.camera && pub.track is VideoTrack && !pub.muted)
         .map((pub) => pub.track as VideoTrack)
         .firstOrNull;
 
@@ -527,7 +527,7 @@ class _LocalVideoWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final track = room?.localParticipant?.videoTrackPublications
-        .where((pub) => pub.track is VideoTrack && !pub.muted)
+        .where((pub) => pub.source == TrackSource.camera && pub.track is VideoTrack && !pub.muted)
         .map((pub) => pub.track as VideoTrack)
         .firstOrNull;
     if (track == null) return const SizedBox.shrink();
