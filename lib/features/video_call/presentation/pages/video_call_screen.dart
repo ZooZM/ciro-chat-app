@@ -10,7 +10,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
 import '../bloc/call_cubit.dart';
-import '../widgets/screen_share_tile.dart';
 import '../widgets/screen_share_toggle_sheet.dart';
 
 class VideoCallScreen extends StatefulWidget {
@@ -31,6 +30,7 @@ class VideoCallScreen extends StatefulWidget {
 
 class _VideoCallScreenState extends State<VideoCallScreen> {
   Room? _room;
+  EventsListener<RoomEvent>? _roomEventsListener;
   bool _isConnecting = true;
   bool _isMicMuted = false;
   bool _isCameraDisabled = false;
@@ -134,6 +134,25 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       // Listen to peer connection events native to the LiveKit Room!
       _room!.addListener(_onRoomUpdate);
 
+      // Local track publish/unpublish and remote subscribe events don't always
+      // fire the Room ChangeNotifier — listen explicitly so the UI rebuilds
+      // when the iOS broadcast extension publishes the screen share track
+      // asynchronously after the user picks it in the system picker.
+      _roomEventsListener = _room!.createListener();
+      _roomEventsListener!
+        ..on<LocalTrackPublishedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<LocalTrackUnpublishedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackSubscribedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackUnsubscribedEvent>((_) {
+          if (mounted) setState(() {});
+        });
+
       await _room!.connect(widget.livekitUrl, widget.livekitToken);
 
       // Register the room with the repository so screen-share cubit actions work
@@ -194,6 +213,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void dispose() {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
+    _roomEventsListener?.dispose();
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
@@ -233,52 +253,164 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         body: BlocBuilder<CallCubit, CallState>(
           builder: (context, callState) {
             final isSharing = callState is CallActive && callState.isLocallySharingScreen;
-            final remoteSharerUserId = callState is CallActive ? callState.activeSharerUserId : '';
-            final remoteSharerName = callState is CallActive ? callState.activeSharerName : '';
-            final remoteSharerHasAudio = callState is CallActive && callState.activeSharerHasAudio;
+
+            // Source of truth = the Room. Find the first remote participant
+            // with a screen-share publication instead of relying on the cubit's
+            // activeSharerUserId (which depends on socket events arriving and
+            // user IDs matching LiveKit participant identities exactly).
+            String remoteSharerUserId = '';
+            String remoteSharerName = '';
+            VideoTrack? remoteShareTrack;
+            bool remoteSharerHasAudio = false;
+            if (_room != null) {
+              for (final p in _room!.remoteParticipants.values) {
+                final videoPub = p.videoTrackPublications
+                    .where((pub) => pub.source == TrackSource.screenShareVideo)
+                    .firstOrNull;
+                if (videoPub != null) {
+                  remoteSharerUserId = p.identity;
+                  remoteSharerName = p.name.isNotEmpty ? p.name : p.identity;
+                  final t = videoPub.track;
+                  if (t is VideoTrack) remoteShareTrack = t;
+                  remoteSharerHasAudio = p.audioTrackPublications
+                      .any((a) => a.source == TrackSource.screenShareAudio);
+                  break;
+                }
+              }
+            }
+            final showRemoteTile = remoteSharerUserId.isNotEmpty;
             final isMutedLocally = callState is CallActive &&
                 callState.mutedScreenAudioBySharerId.contains(remoteSharerUserId);
-            final showRemoteTile = remoteSharerUserId.isNotEmpty && remoteSharerUserId != _localUserId;
 
-            // Resolve remote screen-share video track at screen level (Constitution II)
-            VideoTrack? remoteShareTrack;
-            if (showRemoteTile) {
-              final pub = getIt<VideoCallRepository>().screenShareVideoTrackOf(remoteSharerUserId);
-              remoteShareTrack = pub?.track as VideoTrack?;
+            debugPrint(
+              '[VideoCallScreen] remoteParticipants=${_room?.remoteParticipants.values.map((p) => '${p.identity}:vid=${p.videoTrackPublications.map((pub) => '${pub.source}/sub=${pub.subscribed}/track=${pub.track?.runtimeType}').toList()}').toList()}, showRemoteTile=$showRemoteTile',
+            );
+
+            // Resolve local screen-share track so sharer can preview what they're sharing.
+            // Use two strategies because livekit_client's iOS broadcast flow doesn't
+            // always tag the publication with TrackSource.screenShareVideo cleanly.
+            VideoTrack? localShareTrack;
+            if (isSharing) {
+              final local = _room?.localParticipant;
+              if (local != null) {
+                var pub = local.videoTrackPublications
+                    .where((p) => p.source == TrackSource.screenShareVideo)
+                    .firstOrNull;
+                pub ??= local.videoTrackPublications
+                    .where((p) => p.source != TrackSource.camera)
+                    .firstOrNull;
+                final t = pub?.track;
+                if (t is VideoTrack) localShareTrack = t;
+                debugPrint(
+                  '[VideoCallScreen] isSharing=true, localPubs=${local.videoTrackPublications.map((p) => '${p.source}/${p.track?.runtimeType}').toList()}, picked=$localShareTrack',
+                );
+              }
             }
 
             return Stack(
               children: [
-                // Background - Remote VideoTrack
+                // Background: full-screen screen share when remote is sharing; remote camera otherwise
                 Positioned.fill(
-                  child: _ParticipantVideoView(
-                    participant: remoteParticipant,
-                    name: widget.contactName,
-                  ),
+                  child: showRemoteTile
+                      ? (remoteShareTrack != null
+                          ? VideoTrackRenderer(remoteShareTrack)
+                          : Container(
+                              color: Colors.black,
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const CircularProgressIndicator(color: Colors.white54),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '$remoteSharerName is sharing…',
+                                      style: const TextStyle(color: Colors.white54),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ))
+                      : _ParticipantVideoView(
+                          participant: remoteParticipant,
+                          name: widget.contactName,
+                        ),
                 ),
 
-                // T025 — Remote screen-share tile (shown as additional grid cell)
+                // Screen share label + per-receiver audio mute (top-left, over background)
                 if (showRemoteTile)
                   Positioned(
                     top: 60,
                     left: 20,
-                    width: 120,
-                    height: 180,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: ScreenShareTile(
-                        videoTrack: remoteShareTrack,
-                        participantName: remoteSharerName,
-                        hasAudio: remoteSharerHasAudio,
-                        isMutedLocally: isMutedLocally,
-                        onMuteToggle: () => context
-                            .read<CallCubit>()
-                            .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.screen_share_outlined, color: Colors.white70, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$remoteSharerName • Screen',
+                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (remoteSharerHasAudio) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => context
+                                .read<CallCubit>()
+                                .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isMutedLocally ? Icons.volume_off : Icons.volume_up,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                // Remote camera PiP when screen share is the full-screen background
+                if (showRemoteTile)
+                  Positioned(
+                    top: 105,
+                    left: 20,
+                    width: 100,
+                    height: 140,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _ParticipantVideoView(
+                        participant: remoteParticipant,
+                        name: widget.contactName,
                       ),
                     ),
                   ),
 
-                // PiP - Local VideoTrack
+                // Local PiP: screen share preview when sharing locally, camera otherwise.
+                // When sharing but the track hasn't appeared yet (iOS broadcast extension
+                // publishes asynchronously), show a clear placeholder so the sharer
+                // sees immediate feedback.
                 Positioned(
                   top: 60,
                   right: 20,
@@ -288,14 +420,37 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     decoration: BoxDecoration(
                       color: Colors.black54,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24),
+                      border: Border.all(
+                        color: isSharing ? AppColors.primary : Colors.white24,
+                        width: isSharing ? 2 : 1,
+                      ),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: _ParticipantVideoView(
-                      participant: localParticipant,
-                      isLocal: true,
-                      name: 'Me',
-                    ),
+                    child: isSharing
+                        ? (localShareTrack != null
+                            ? VideoTrackRenderer(localShareTrack)
+                            : Container(
+                                color: Colors.black87,
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.screen_share, color: Colors.white, size: 36),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Sharing\nyour screen',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Colors.white, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ))
+                        : _ParticipantVideoView(
+                            participant: localParticipant,
+                            isLocal: true,
+                            name: 'Me',
+                          ),
                   ),
                 ),
 

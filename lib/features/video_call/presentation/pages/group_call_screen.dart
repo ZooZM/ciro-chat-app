@@ -27,6 +27,7 @@ class GroupCallScreen extends StatefulWidget {
 
 class _GroupCallScreenState extends State<GroupCallScreen> {
   Room? _room;
+  EventsListener<RoomEvent>? _roomEventsListener;
   bool _isConnecting = true;
   bool _isMicMuted = false;
   bool _isCameraDisabled = false;
@@ -131,6 +132,25 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         ),
       );
       _room!.addListener(_onRoomUpdate);
+
+      // Track-level events don't always fire Room's ChangeNotifier. Listen
+      // explicitly so the UI rebuilds when the iOS broadcast extension
+      // publishes the local screen-share track asynchronously.
+      _roomEventsListener = _room!.createListener();
+      _roomEventsListener!
+        ..on<LocalTrackPublishedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<LocalTrackUnpublishedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackSubscribedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackUnsubscribedEvent>((_) {
+          if (mounted) setState(() {});
+        });
+
       await _room!.connect(url, token);
       getIt<VideoCallRepository>().setExternalRoom(_room!);
       await _room!.localParticipant?.setCameraEnabled(isVideo);
@@ -183,6 +203,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   void dispose() {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
+    _roomEventsListener?.dispose();
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
@@ -250,27 +271,67 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             state.isGroupCall &&
             state.recordingState.isRecording;
         final isSharing = state is CallActive && state.isLocallySharingScreen;
-        final remoteSharerUserId = state is CallActive ? state.activeSharerUserId : '';
-        final remoteSharerName = state is CallActive ? state.activeSharerName : '';
-        final remoteSharerHasAudio = state is CallActive && state.activeSharerHasAudio;
+
+        // Source of truth = the Room. Iterate remote participants and pick the
+        // first one with a screen-share publication. This works whether or not
+        // the cubit's activeSharerUserId is in sync with LiveKit's participant
+        // identity (the previous lookup via screenShareVideoTrackOf depended on
+        // those matching exactly).
+        final remoteParticipants = _room?.remoteParticipants.values.toList() ?? [];
+        String remoteSharerUserId = '';
+        String remoteSharerName = '';
+        VideoTrack? remoteShareTrack;
+        bool remoteSharerHasAudio = false;
+        for (final p in remoteParticipants) {
+          final videoPub = p.videoTrackPublications
+              .where((pub) => pub.source == TrackSource.screenShareVideo)
+              .firstOrNull;
+          if (videoPub != null) {
+            remoteSharerUserId = p.identity;
+            remoteSharerName = p.name.isNotEmpty ? p.name : p.identity;
+            final t = videoPub.track;
+            if (t is VideoTrack) remoteShareTrack = t;
+            remoteSharerHasAudio = p.audioTrackPublications
+                .any((a) => a.source == TrackSource.screenShareAudio);
+            break;
+          }
+        }
+        final showRemoteTile = remoteSharerUserId.isNotEmpty;
         final isMutedLocally = state is CallActive &&
             state.mutedScreenAudioBySharerId.contains(remoteSharerUserId);
-        final showRemoteTile = remoteSharerUserId.isNotEmpty && remoteSharerUserId != _localUserId;
 
-        VideoTrack? remoteShareTrack;
-        if (showRemoteTile) {
-          final pub = getIt<VideoCallRepository>().screenShareVideoTrackOf(remoteSharerUserId);
-          remoteShareTrack = pub?.track as VideoTrack?;
+        debugPrint(
+          '[GroupCallScreen] remoteParticipants=${remoteParticipants.map((p) => '${p.identity}:vid=${p.videoTrackPublications.map((pub) => '${pub.source}/sub=${pub.subscribed}/track=${pub.track?.runtimeType}').toList()}').toList()}, showRemoteTile=$showRemoteTile',
+        );
+
+        // Resolve local screen-share track for the sharer's own preview tile.
+        // Two strategies because livekit_client's iOS broadcast publication
+        // doesn't always tag the source as screenShareVideo cleanly.
+        VideoTrack? localShareTrack;
+        if (isSharing) {
+          final local = _room?.localParticipant;
+          if (local != null) {
+            var pub = local.videoTrackPublications
+                .where((p) => p.source == TrackSource.screenShareVideo)
+                .firstOrNull;
+            pub ??= local.videoTrackPublications
+                .where((p) => p.source != TrackSource.camera)
+                .firstOrNull;
+            final t = pub?.track;
+            if (t is VideoTrack) localShareTrack = t;
+            debugPrint(
+              '[GroupCallScreen] isSharing=true, localPubs=${local.videoTrackPublications.map((p) => '${p.source}/${p.track?.runtimeType}').toList()}, picked=$localShareTrack',
+            );
+          }
         }
-
-        final remoteParticipants = _room?.remoteParticipants.values.toList() ?? [];
 
         return Stack(
           children: [
             _buildParticipantGrid(remoteParticipants, remoteShareTrack: remoteShareTrack,
                 remoteSharerName: remoteSharerName, remoteSharerHasAudio: remoteSharerHasAudio,
                 isMutedLocally: isMutedLocally, showRemoteTile: showRemoteTile,
-                remoteSharerUserId: remoteSharerUserId),
+                remoteSharerUserId: remoteSharerUserId,
+                isSharing: isSharing, localShareTrack: localShareTrack),
 
             // Recordings fast-access button (T076)
             Positioned(
@@ -362,12 +423,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     required String remoteSharerUserId,
     required bool remoteSharerHasAudio,
     required bool isMutedLocally,
+    required bool isSharing,
+    required VideoTrack? localShareTrack,
   }) {
-    // +1 for local; +1 extra when a remote screen share is active (T026)
-    final shareExtra = showRemoteTile ? 1 : 0;
-    final total = remoteParticipants.length + 1 + shareExtra;
+    // +1 for local; +1 extra when a remote screen share is active (T026);
+    // +1 more when the local user is sharing — preview their own screen share.
+    final remoteShareExtra = showRemoteTile ? 1 : 0;
+    final localShareExtra = isSharing ? 1 : 0;
+    final total = remoteParticipants.length + 1 + remoteShareExtra + localShareExtra;
 
-    if (total <= 2 && !showRemoteTile) {
+    if (total <= 2 && !showRemoteTile && !isSharing) {
       return Column(
         children: [
           Expanded(child: _buildLocalTile()),
@@ -388,19 +453,28 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       itemCount: total,
       itemBuilder: (context, i) {
         if (i == 0) return _buildLocalTile();
-        // Screen share tile comes last
         final camCount = remoteParticipants.length;
         if (i <= camCount) return _buildRemoteTile(remoteParticipants[i - 1]);
-        // i == camCount + 1 → screen share tile
-        return ScreenShareTile(
-          videoTrack: remoteShareTrack,
-          participantName: remoteSharerName,
-          hasAudio: remoteSharerHasAudio,
-          isMutedLocally: isMutedLocally,
-          onMuteToggle: () => context
-              .read<CallCubit>()
-              .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
-        );
+        // Share-tile slot. Order: remote share first (if active), then local share.
+        var shareIdx = i - camCount - 1;
+        if (showRemoteTile) {
+          if (shareIdx == 0) {
+            return ScreenShareTile(
+              videoTrack: remoteShareTrack,
+              participantName: remoteSharerName,
+              hasAudio: remoteSharerHasAudio,
+              isMutedLocally: isMutedLocally,
+              onMuteToggle: () => context
+                  .read<CallCubit>()
+                  .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+            );
+          }
+          shareIdx -= 1;
+        }
+        if (isSharing && shareIdx == 0) {
+          return _LocalShareTile(localShareTrack: localShareTrack);
+        }
+        return const SizedBox.shrink();
       },
     );
   }
@@ -514,6 +588,67 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+// ── Local screen share tile ─────────────────────────────────────────────────
+
+class _LocalShareTile extends StatelessWidget {
+  final VideoTrack? localShareTrack;
+  const _LocalShareTile({required this.localShareTrack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (localShareTrack != null)
+            VideoTrackRenderer(localShareTrack!)
+          else
+            Container(
+              color: Colors.black87,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.screen_share, color: Colors.white, size: 36),
+                    SizedBox(height: 8),
+                    Text(
+                      'Sharing\nyour screen',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.screen_share_outlined, color: Colors.white70, size: 14),
+                  SizedBox(width: 4),
+                  Text(
+                    'You • Screen',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -132,9 +132,21 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
           await _screenShareChannel.invokeMethod('start');
           _androidServiceRunning = true;
         }
+        // CRITICAL: useiOSBroadcastExtension: true routes track creation to
+        // FlutterBroadcastScreenCapturer (reads frames from the App Group
+        // Unix socket written by ScreenShareBroadcast.appex). Without this
+        // flag, flutter_webrtc falls back to FlutterRPScreenRecorder (in-app
+        // RPScreenRecorder) — the track gets captured from inside the app's
+        // own process, producing recursive frames locally and nothing usable
+        // for remote peers. Passing explicit screenShareCaptureOptions here
+        // overrides Room.defaultScreenShareCaptureOptions, so the flag must
+        // be set on this options object explicitly.
         await local.setScreenShareEnabled(
           true,
-          screenShareCaptureOptions: ScreenShareCaptureOptions(captureScreenAudio: withDeviceAudio),
+          screenShareCaptureOptions: ScreenShareCaptureOptions(
+            useiOSBroadcastExtension: true,
+            captureScreenAudio: withDeviceAudio,
+          ),
         );
       } else {
         await local.setScreenShareEnabled(false);
