@@ -126,7 +126,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        context.read<CallCubit>().endCall();
+        await context.read<CallCubit>().endCall();
         await _room?.disconnect();
         if (context.mounted) Navigator.of(context).pop();
       },
@@ -297,7 +297,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                   height: 56.resH,
                   child: ElevatedButton.icon(
                     onPressed: () async {
-                      context.read<CallCubit>().endCall();
+                      await context.read<CallCubit>().endCall();
                       await _room?.disconnect();
                       if (context.mounted) context.go(AppRouterName.home);
                     },

@@ -70,6 +70,11 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onGroupCallActive;
   void Function(Map<String, dynamic> data)? onGroupCallEnded;
 
+  // ── Screen share callbacks (set by CallCubit) ────────────────────────────
+  void Function(String chatRoomId, String userId, String userName, bool isSharing, bool withAudio)? onScreenShareStateChanged;
+  void Function(String chatRoomId)? onScreenShareAccepted;
+  void Function(String chatRoomId, String activeSharerUserId, String activeSharerName, String reason)? onScreenShareRejected;
+
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
 
@@ -292,6 +297,41 @@ class SocketService {
       if (data == null || data is! Map) return;
       onNewChatRoom?.call(Map<String, dynamic>.from(data));
     });
+
+    // ── Screen share events (T007) ────────────────────────────────────────
+    _socket?.on('screenShareStateChanged', (data) {
+      debugPrint('[SCREEN SHARE] screenShareStateChanged: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      final userId = map['userId']?.toString() ?? '';
+      final userName = map['userName']?.toString() ?? '';
+      final isSharing = map['isSharing'] == true;
+      final withAudio = map['withAudio'] == true;
+      if (chatRoomId.isEmpty || userId.isEmpty) return;
+      onScreenShareStateChanged?.call(chatRoomId, userId, userName, isSharing, withAudio);
+    });
+
+    _socket?.on('screenShareAccepted', (data) {
+      debugPrint('[SCREEN SHARE] screenShareAccepted: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      if (chatRoomId.isEmpty) return;
+      onScreenShareAccepted?.call(chatRoomId);
+    });
+
+    _socket?.on('screenShareRejected', (data) {
+      debugPrint('[SCREEN SHARE] screenShareRejected: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      final activeSharerUserId = map['activeSharerUserId']?.toString() ?? '';
+      final activeSharerName = map['activeSharerName']?.toString() ?? '';
+      final reason = map['reason']?.toString() ?? '';
+      if (chatRoomId.isEmpty) return;
+      onScreenShareRejected?.call(chatRoomId, activeSharerUserId, activeSharerName, reason);
+    });
   }
 
   // ── Chat emitters ─────────────────────────────────────────────────────────
@@ -416,6 +456,24 @@ class SocketService {
       'chatRoomId': chatRoomId,
       'isRecording': isRecording,
       'hasVideo': hasVideo,
+    });
+  }
+
+  // ── Screen share emitters (T008) ────────────────────────────────────────
+
+  void emitScreenShareStateChanged({
+    required String chatRoomId,
+    required String userId,
+    required String userName,
+    required bool isSharing,
+    required bool withAudio,
+  }) {
+    _socket?.emit('screenShareStateChanged', {
+      'chatRoomId': chatRoomId,
+      'userId': userId,
+      'userName': userName,
+      'isSharing': isSharing,
+      'withAudio': withAudio,
     });
   }
 

@@ -120,9 +120,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i785.TokenRefreshService>(
       () => _i785.TokenRefreshService(gh<_i852.AuthLocalDataSource>()),
     );
-    gh.lazySingleton<_i104.CallCubit>(
-      () => _i104.CallCubit(gh<_i917.SocketService>()),
-    );
     gh.lazySingleton<_i483.StatusRemoteDataSource>(
       () => _i483.StatusRemoteDataSourceImpl(gh<_i917.SocketService>()),
     );
@@ -159,6 +156,12 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i59.RecordingsRepository>(
       () =>
           _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
+    );
+    gh.lazySingleton<_i104.CallCubit>(
+      () => _i104.CallCubit(
+        gh<_i917.SocketService>(),
+        gh<_i220.VideoCallRepository>(),
+      ),
     );
     gh.factory<_i804.VideoCallCubit>(
       () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),

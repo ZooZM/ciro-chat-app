@@ -80,6 +80,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       getIt<ChatCubit>().suspendDeliberateOpen();
     }
 
+    // T031: Do NOT stop screen share on paused/inactive — iOS Broadcast Extension
+    // and Android foreground service keep running while the app is backgrounded.
+    // Only the OS-level stop path (LocalTrackUnpublishedEvent) handles teardown.
     final socket = getIt<SocketService>();
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

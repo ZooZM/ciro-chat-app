@@ -61,5 +61,9 @@
 		<string>We need access to your media library to allow you to send media files in chats.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>RTCScreenSharingExtension</key>
+		<string>com.cirochat.zeyad.ciroChat.ScreenShareBroadcast</string>
+		<key>RTCAppGroupIdentifier</key>
+		<string>group.com.cirochat.zeyad.shared</string>
 	</dict>
 </plist>

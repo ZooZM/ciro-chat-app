@@ -1,10 +1,28 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/network/socket_service.dart';
 import '../../../../core/theme/app_constants.dart';
 import '../../domain/entities/call_participant.dart';
+import '../../domain/repositories/video_call_repository.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIDE EVENTS (T011) — transient signals the UI consumes once (not persisted in state)
+// ─────────────────────────────────────────────────────────────────────────────
+
+sealed class CallSideEvent {}
+
+/// Another participant is already sharing — show "X is already sharing" SnackBar.
+class CallScreenShareConflict extends CallSideEvent {
+  final String activeSharerName;
+  CallScreenShareConflict(this.activeSharerName);
+}
+
+/// OS permission was denied or dismissed — show "Permission required" SnackBar.
+class CallScreenShareDenied extends CallSideEvent {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATES
@@ -81,6 +99,13 @@ class CallActive extends CallState {
   final String chatRoomId;
   final List<CallParticipant> participants;
   final RecordingState recordingState;
+  // Screen share fields (T010)
+  final bool isLocallySharingScreen;
+  final bool localShareIncludesAudio;
+  final String activeSharerUserId;    // empty = no one sharing
+  final String activeSharerName;
+  final bool activeSharerHasAudio;
+  final Set<String> mutedScreenAudioBySharerId; // local-only, never broadcast
 
   const CallActive({
     required this.livekitToken,
@@ -91,6 +116,12 @@ class CallActive extends CallState {
     this.chatRoomId = '',
     this.participants = const [],
     this.recordingState = RecordingState.inactive,
+    this.isLocallySharingScreen = false,
+    this.localShareIncludesAudio = false,
+    this.activeSharerUserId = '',
+    this.activeSharerName = '',
+    this.activeSharerHasAudio = false,
+    this.mutedScreenAudioBySharerId = const {},
   });
 
   CallActive copyWith({
@@ -102,6 +133,12 @@ class CallActive extends CallState {
     String? chatRoomId,
     List<CallParticipant>? participants,
     RecordingState? recordingState,
+    bool? isLocallySharingScreen,
+    bool? localShareIncludesAudio,
+    String? activeSharerUserId,
+    String? activeSharerName,
+    bool? activeSharerHasAudio,
+    Set<String>? mutedScreenAudioBySharerId,
   }) {
     return CallActive(
       livekitToken: livekitToken ?? this.livekitToken,
@@ -112,11 +149,31 @@ class CallActive extends CallState {
       chatRoomId: chatRoomId ?? this.chatRoomId,
       participants: participants ?? this.participants,
       recordingState: recordingState ?? this.recordingState,
+      isLocallySharingScreen: isLocallySharingScreen ?? this.isLocallySharingScreen,
+      localShareIncludesAudio: localShareIncludesAudio ?? this.localShareIncludesAudio,
+      activeSharerUserId: activeSharerUserId ?? this.activeSharerUserId,
+      activeSharerName: activeSharerName ?? this.activeSharerName,
+      activeSharerHasAudio: activeSharerHasAudio ?? this.activeSharerHasAudio,
+      mutedScreenAudioBySharerId: mutedScreenAudioBySharerId ?? this.mutedScreenAudioBySharerId,
     );
   }
 
   @override
-  List<Object?> get props => [livekitToken, livekitUrl, isVideo, isGroupCall, participants, recordingState];
+  List<Object?> get props => [
+    livekitToken,
+    livekitUrl,
+    isVideo,
+    isGroupCall,
+    participants,
+    recordingState,
+    isLocallySharingScreen,
+    localShareIncludesAudio,
+    activeSharerUserId,
+    activeSharerName,
+    activeSharerHasAudio,
+    // Use sorted list for set equality in Equatable
+    [...mutedScreenAudioBySharerId]..sort(),
+  ];
 }
 
 /// Receiver accepts the call and waits for token authorization
@@ -151,12 +208,18 @@ class CallEnded extends CallState {
 @lazySingleton
 class CallCubit extends Cubit<CallState> {
   final SocketService _socketService;
+  final VideoCallRepository _repo;
   final FlutterRingtonePlayer _audioPlayer;
+  final _sideEventController = StreamController<CallSideEvent>.broadcast();
 
-  CallCubit(this._socketService)
+  /// One-shot signals (conflict, denial) that the UI consumes via StreamSubscription.
+  Stream<CallSideEvent> get sideEvents => _sideEventController.stream;
+
+  CallCubit(this._socketService, this._repo)
     : _audioPlayer = FlutterRingtonePlayer(),
       super(const CallIdle()) {
     _bindSocketListeners();
+    _bindRepoListeners();
   }
 
   // ── Socket listener binding ───────────────────────────────────────────────
@@ -286,6 +349,37 @@ class CallCubit extends Cubit<CallState> {
         ),
       ));
     };
+
+    // ── Screen share socket listeners (T017, T022) ────────────────────────────
+
+    // T017: Backend rejected our share attempt — another user holds the lock.
+    _socketService.onScreenShareRejected = (chatRoomId, activeSharerUserId, activeSharerName, reason) {
+      _sideEventController.add(CallScreenShareConflict(activeSharerName));
+    };
+
+    // T022: A remote participant started or stopped sharing.
+    _socketService.onScreenShareStateChanged = (chatRoomId, userId, userName, isSharing, withAudio) {
+      final s = state;
+      if (s is! CallActive || s.chatRoomId != chatRoomId) return;
+      // Ignore events about ourselves — our own state is already updated locally.
+      // We compare against the local sharer in the state (set during startScreenShare).
+      if (isSharing) {
+        emit(s.copyWith(
+          activeSharerUserId: userId,
+          activeSharerName: userName,
+          activeSharerHasAudio: withAudio,
+        ));
+      } else if (s.activeSharerUserId == userId) {
+        emit(s.copyWith(
+          activeSharerUserId: '',
+          activeSharerName: '',
+          activeSharerHasAudio: false,
+          mutedScreenAudioBySharerId: Set.from(
+            s.mutedScreenAudioBySharerId.where((id) => id != userId),
+          ),
+        ));
+      }
+    };
   }
 
   // ── Public actions ────────────────────────────────────────────────────────
@@ -338,15 +432,36 @@ class CallCubit extends Cubit<CallState> {
     emit(const CallEnded(reason: 'rejected'));
   }
 
+  /// T034 — Stops a local screen share (if any) before tearing down the call.
+  /// Uses activeSharer fields stored in CallActive since those ARE the local user
+  /// when isLocallySharingScreen is true.
+  Future<void> _tearDownLocalScreenShare() async {
+    final s = state;
+    if (s is! CallActive || !s.isLocallySharingScreen) return;
+    await _repo.setScreenShareEnabled(false).then(
+      (_) {},
+      onError: (e) => debugPrint('[CallCubit] teardown screen-share error (ignored): $e'),
+    );
+    _socketService.emitScreenShareStateChanged(
+      chatRoomId: s.chatRoomId,
+      userId: s.activeSharerUserId,
+      userName: s.activeSharerName,
+      isSharing: false,
+      withAudio: false,
+    );
+  }
+
   /// Either side ends the active call
-  void endCall() {
+  Future<void> endCall() async {
+    await _tearDownLocalScreenShare();
     _stopRinging();
     _socketService.endCall();
     emit(const CallIdle());
   }
 
   /// Reset to idle (e.g., after navigating away from ended call)
-  void reset() {
+  Future<void> reset() async {
+    await _tearDownLocalScreenShare();
     _stopRinging();
     emit(const CallIdle());
   }
@@ -396,9 +511,10 @@ class CallCubit extends Cubit<CallState> {
   }
 
   /// Leaves an active group call.
-  void leaveGroupCall() {
+  Future<void> leaveGroupCall() async {
     final s = state;
     if (s is! CallActive || !s.isGroupCall) return;
+    await _tearDownLocalScreenShare();
     _socketService.leaveGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallIdle());
   }
@@ -415,16 +531,151 @@ class CallCubit extends Cubit<CallState> {
     ));
   }
 
+  // ── Screen share actions (T015–T017, T022–T023) ──────────────────────────
+
+  /// T012a — Binds the repo callback so OS-level stops (iOS banner / Android STOP)
+  /// are handled the same as an explicit in-app stop.
+  void _bindRepoListeners({String localUserId = '', String localUserName = ''}) {
+    _repo.onLocalScreenShareEndedExternally = () {
+      _handleExternalScreenShareStop(localUserId, localUserName);
+    };
+  }
+
+  /// Called when the OS tears down the broadcast without an explicit in-app tap.
+  /// Mirrors stopScreenShare but skips the redundant setScreenShareEnabled(false).
+  void _handleExternalScreenShareStop(String localUserId, String localUserName) {
+    final s = state;
+    if (s is! CallActive || !s.isLocallySharingScreen) return;
+    _socketService.emitScreenShareStateChanged(
+      chatRoomId: s.chatRoomId,
+      userId: localUserId,
+      userName: localUserName,
+      isSharing: false,
+      withAudio: false,
+    );
+    emit(s.copyWith(
+      isLocallySharingScreen: false,
+      localShareIncludesAudio: false,
+      activeSharerUserId: '',
+      activeSharerName: '',
+      activeSharerHasAudio: false,
+      mutedScreenAudioBySharerId: const {},
+    ));
+  }
+
+  /// T015 — Initiates a screen share after the user chose their audio mode.
+  Future<void> startScreenShare({
+    required bool withDeviceAudio,
+    required String localUserId,
+    required String localUserName,
+  }) async {
+    final s = state;
+    if (s is! CallActive) return;
+
+    // FR-012: another user is already sharing
+    if (s.activeSharerUserId.isNotEmpty && s.activeSharerUserId != localUserId) {
+      _sideEventController.add(CallScreenShareConflict(s.activeSharerName));
+      return;
+    }
+
+    // Already sharing locally — no-op
+    if (s.isLocallySharingScreen) return;
+
+    // Wire external-stop callback with the current user context
+    _bindRepoListeners(localUserId: localUserId, localUserName: localUserName);
+
+    final result = await _repo.setScreenShareEnabled(true, withDeviceAudio: withDeviceAudio);
+    result.fold(
+      (_) => _sideEventController.add(CallScreenShareDenied()),
+      (_) {
+        _socketService.emitScreenShareStateChanged(
+          chatRoomId: s.chatRoomId,
+          userId: localUserId,
+          userName: localUserName,
+          isSharing: true,
+          withAudio: withDeviceAudio,
+        );
+        emit(s.copyWith(
+          isLocallySharingScreen: true,
+          localShareIncludesAudio: withDeviceAudio,
+          activeSharerUserId: localUserId,
+          activeSharerName: localUserName,
+          activeSharerHasAudio: withDeviceAudio,
+        ));
+      },
+    );
+  }
+
+  /// T016 — Stops the local screen share.
+  Future<void> stopScreenShare({
+    required String localUserId,
+    required String localUserName,
+  }) async {
+    final s = state;
+    if (s is! CallActive || !s.isLocallySharingScreen) return;
+
+    // Errors from setScreenShareEnabled(false) are swallowed — stopping should never fail loudly
+    await _repo.setScreenShareEnabled(false).then(
+      (_) {},
+      onError: (e) => debugPrint('[CallCubit] stopScreenShare error (ignored): $e'),
+    );
+
+    _socketService.emitScreenShareStateChanged(
+      chatRoomId: s.chatRoomId,
+      userId: localUserId,
+      userName: localUserName,
+      isSharing: false,
+      withAudio: false,
+    );
+    emit(s.copyWith(
+      isLocallySharingScreen: false,
+      localShareIncludesAudio: false,
+      activeSharerUserId: '',
+      activeSharerName: '',
+      activeSharerHasAudio: false,
+      mutedScreenAudioBySharerId: const {},
+    ));
+  }
+
+  /// T023 — Toggles per-receiver mute for a remote participant's screen-share audio.
+  /// Uses setSubscribed(bool) — the LiveKit API for locally enabling/disabling a track.
+  Future<void> toggleReceivedScreenShareAudioMute(String sharerUserId) async {
+    final s = state;
+    if (s is! CallActive) return;
+
+    final isMuted = s.mutedScreenAudioBySharerId.contains(sharerUserId);
+    final pub = _repo.screenShareAudioTrackOf(sharerUserId);
+    if (pub != null) {
+      // isMuted=true → currently muted → unmute → enable() (resume delivery)
+      // isMuted=false → currently unmuted → mute → disable() (pause delivery)
+      try {
+        if (isMuted) {
+          await pub.enable();
+        } else {
+          await pub.disable();
+        }
+      } catch (e) {
+        debugPrint('[CallCubit] toggleReceivedScreenShareAudioMute error: $e');
+      }
+    }
+
+    final updated = Set<String>.from(s.mutedScreenAudioBySharerId);
+    if (isMuted) {
+      updated.remove(sharerUserId);
+    } else {
+      updated.add(sharerUserId);
+    }
+    emit(s.copyWith(mutedScreenAudioBySharerId: updated));
+  }
+
   void _stopRinging() {
-    try {
-      _audioPlayer.stop();
-    } catch (_) {}
+    _audioPlayer.stop().ignore();
   }
 
   @override
   Future<void> close() {
     _stopRinging();
-    _audioPlayer.stop();
+    _sideEventController.close();
     return super.close();
   }
 }

@@ -1,9 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/theme/app_colors.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../bloc/call_cubit.dart';
+import '../../../auth/presentation/bloc/auth_cubit.dart';
+import '../../domain/repositories/video_call_repository.dart';
+import '../widgets/screen_share_tile.dart';
+import '../widgets/screen_share_toggle_sheet.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 
 /// Full-screen group video/voice call screen backed by LiveKit.
@@ -23,12 +31,76 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _isMicMuted = false;
   bool _isCameraDisabled = false;
   String? _error;
+  // Screen share
+  StreamSubscription<CallSideEvent>? _sideEventSub;
+  StreamSubscription<CallState>? _callStateSub;
+  String _localUserId = '';
+  String _localUserName = '';
+  String _prevSharerUserId = '';
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _connectFromCubitState(),
+    final authState = getIt<AuthCubit>().state;
+    if (authState is Authenticated) {
+      _localUserId = authState.userData?['id']?.toString() ?? '';
+      _localUserName = authState.userData?['phoneNumber']?.toString() ?? '';
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _connectFromCubitState();
+      if (!mounted) return;
+      final cubit = context.read<CallCubit>();
+      _sideEventSub = cubit.sideEvents.listen((event) {
+        if (!mounted) return;
+        if (event is CallScreenShareConflict) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${event.activeSharerName} is already sharing. Ask them to stop first.'),
+          ));
+        } else if (event is CallScreenShareDenied) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text(
+              'Permission required to share your screen. Enable it in device settings.',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: openAppSettings,
+            ),
+          ));
+        }
+      });
+      // T027 — notify when a remote participant starts sharing (FR-011)
+      _callStateSub = cubit.stream.listen((state) {
+        if (!mounted) return;
+        final newId = state is CallActive ? state.activeSharerUserId : '';
+        if (newId.isNotEmpty && newId != _localUserId && _prevSharerUserId.isEmpty) {
+          final name = state is CallActive ? state.activeSharerName : '';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('$name started sharing their screen'),
+            duration: const Duration(seconds: 2),
+          ));
+        }
+        _prevSharerUserId = newId;
+      });
+    });
+  }
+
+  Future<void> _onScreenShareTap(BuildContext ctx) async {
+    final cubit = ctx.read<CallCubit>();
+    final s = cubit.state;
+    if (s is CallActive && s.isLocallySharingScreen) {
+      await cubit.stopScreenShare(localUserId: _localUserId, localUserName: _localUserName);
+      return;
+    }
+    final withAudio = await showModalBottomSheet<bool>(
+      context: ctx,
+      isScrollControlled: true,
+      builder: (_) => const ScreenShareToggleSheet(),
+    );
+    if (withAudio == null) return;
+    await cubit.startScreenShare(
+      withDeviceAudio: withAudio,
+      localUserId: _localUserId,
+      localUserName: _localUserName,
     );
   }
 
@@ -50,9 +122,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     bool isVideo = true,
   }) async {
     try {
-      _room = Room();
+      _room = Room(
+        roomOptions: const RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+          defaultScreenShareCaptureOptions:
+              ScreenShareCaptureOptions(useiOSBroadcastExtension: true),
+        ),
+      );
       _room!.addListener(_onRoomUpdate);
       await _room!.connect(url, token);
+      getIt<VideoCallRepository>().setExternalRoom(_room!);
       await _room!.localParticipant?.setCameraEnabled(isVideo);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
       if (mounted) {
@@ -84,7 +164,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (recCubit.state is RecordingActive) {
       await recCubit.stop();
     }
-    callCubit.leaveGroupCall();
+    await callCubit.leaveGroupCall();
     await _room?.disconnect();
     if (mounted) {
       if (canPop) {
@@ -101,6 +181,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   @override
   void dispose() {
+    _sideEventSub?.cancel();
+    _callStateSub?.cancel();
+    getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
     super.dispose();
@@ -166,12 +249,28 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             state is CallActive &&
             state.isGroupCall &&
             state.recordingState.isRecording;
-        final remoteParticipants =
-            _room?.remoteParticipants.values.toList() ?? [];
+        final isSharing = state is CallActive && state.isLocallySharingScreen;
+        final remoteSharerUserId = state is CallActive ? state.activeSharerUserId : '';
+        final remoteSharerName = state is CallActive ? state.activeSharerName : '';
+        final remoteSharerHasAudio = state is CallActive && state.activeSharerHasAudio;
+        final isMutedLocally = state is CallActive &&
+            state.mutedScreenAudioBySharerId.contains(remoteSharerUserId);
+        final showRemoteTile = remoteSharerUserId.isNotEmpty && remoteSharerUserId != _localUserId;
+
+        VideoTrack? remoteShareTrack;
+        if (showRemoteTile) {
+          final pub = getIt<VideoCallRepository>().screenShareVideoTrackOf(remoteSharerUserId);
+          remoteShareTrack = pub?.track as VideoTrack?;
+        }
+
+        final remoteParticipants = _room?.remoteParticipants.values.toList() ?? [];
 
         return Stack(
           children: [
-            _buildParticipantGrid(remoteParticipants),
+            _buildParticipantGrid(remoteParticipants, remoteShareTrack: remoteShareTrack,
+                remoteSharerName: remoteSharerName, remoteSharerHasAudio: remoteSharerHasAudio,
+                isMutedLocally: isMutedLocally, showRemoteTile: showRemoteTile,
+                remoteSharerUserId: remoteSharerUserId),
 
             // Recordings fast-access button (T076)
             Positioned(
@@ -191,19 +290,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.folder_outlined,
-                        color: Colors.white,
-                        size: 16.resW,
-                      ),
+                      Icon(Icons.folder_outlined, color: Colors.white, size: 16.resW),
                       SizedBox(width: 4.resW),
-                      Text(
-                        'Recordings',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.resSp,
-                        ),
-                      ),
+                      Text('Recordings', style: TextStyle(color: Colors.white, fontSize: 12.resSp)),
                     ],
                   ),
                 ),
@@ -219,11 +308,45 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 child: const Center(child: _RecordingBanner()),
               ),
 
+            // T019 equivalent — "You are sharing" banner
+            if (isSharing)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Material(
+                  color: AppColors.primary,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.screen_share, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text('You are sharing your screen',
+                                style: TextStyle(color: Colors.white, fontSize: 13)),
+                          ),
+                          TextButton(
+                            onPressed: () => context.read<CallCubit>().stopScreenShare(
+                                  localUserId: _localUserId,
+                                  localUserName: _localUserName,
+                                ),
+                            child: const Text('Stop', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             Positioned(
               left: 0,
               right: 0,
               bottom: 32.resH,
-              child: _buildControls(),
+              child: _buildControls(isSharing: isSharing),
             ),
           ],
         );
@@ -231,10 +354,20 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
-  Widget _buildParticipantGrid(List<RemoteParticipant> remoteParticipants) {
-    final total = remoteParticipants.length + 1; // +1 for local
+  Widget _buildParticipantGrid(
+    List<RemoteParticipant> remoteParticipants, {
+    required bool showRemoteTile,
+    required VideoTrack? remoteShareTrack,
+    required String remoteSharerName,
+    required String remoteSharerUserId,
+    required bool remoteSharerHasAudio,
+    required bool isMutedLocally,
+  }) {
+    // +1 for local; +1 extra when a remote screen share is active (T026)
+    final shareExtra = showRemoteTile ? 1 : 0;
+    final total = remoteParticipants.length + 1 + shareExtra;
 
-    if (total <= 2) {
+    if (total <= 2 && !showRemoteTile) {
       return Column(
         children: [
           Expanded(child: _buildLocalTile()),
@@ -255,7 +388,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       itemCount: total,
       itemBuilder: (context, i) {
         if (i == 0) return _buildLocalTile();
-        return _buildRemoteTile(remoteParticipants[i - 1]);
+        // Screen share tile comes last
+        final camCount = remoteParticipants.length;
+        if (i <= camCount) return _buildRemoteTile(remoteParticipants[i - 1]);
+        // i == camCount + 1 → screen share tile
+        return ScreenShareTile(
+          videoTrack: remoteShareTrack,
+          participantName: remoteSharerName,
+          hasAudio: remoteSharerHasAudio,
+          isMutedLocally: isMutedLocally,
+          onMuteToggle: () => context
+              .read<CallCubit>()
+              .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+        );
       },
     );
   }
@@ -316,7 +461,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildControls({required bool isSharing}) {
     return BlocBuilder<CallRecordingCubit, CallRecordingState>(
       builder: (context, recordingState) {
         final isRecording = recordingState is RecordingActive;
@@ -330,23 +475,21 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               icon: _isMicMuted ? Icons.mic_off : Icons.mic,
               onTap: () async {
                 setState(() => _isMicMuted = !_isMicMuted);
-                await _room?.localParticipant?.setMicrophoneEnabled(
-                  !_isMicMuted,
-                );
+                await _room?.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
               },
             ),
+            // T020 — Screen share icon
             _ControlButton(
-              icon: isRecording
-                  ? Icons.stop_circle_outlined
-                  : Icons.fiber_manual_record,
-              color: isRecording
-                  ? const Color(0xFFE53935)
-                  : const Color(0xFF444444),
+              icon: isSharing ? Icons.stop_screen_share : Icons.screen_share_outlined,
+              color: isSharing ? AppColors.primary : const Color(0xFF444444),
+              onTap: () => _onScreenShareTap(context),
+            ),
+            _ControlButton(
+              icon: isRecording ? Icons.stop_circle_outlined : Icons.fiber_manual_record,
+              color: isRecording ? const Color(0xFFE53935) : const Color(0xFF444444),
               onTap: () {
                 if (isRecording) {
-                  context.read<CallRecordingCubit>().stop(
-                    callRoomName: roomName,
-                  );
+                  context.read<CallRecordingCubit>().stop(callRoomName: roomName);
                 } else {
                   context.read<CallRecordingCubit>().start(
                     callRoomId: widget.roomId,
@@ -365,9 +508,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
               onTap: () async {
                 setState(() => _isCameraDisabled = !_isCameraDisabled);
-                await _room?.localParticipant?.setCameraEnabled(
-                  !_isCameraDisabled,
-                );
+                await _room?.localParticipant?.setCameraEnabled(!_isCameraDisabled);
               },
             ),
           ],

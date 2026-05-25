@@ -97,3 +97,7 @@ class NetworkFailure extends Failure {
 class AuthFailure extends Failure {
   const AuthFailure(super.message);
 }
+
+class ScreenShareDeniedFailure extends Failure {
+  const ScreenShareDeniedFailure([super.message = 'Screen-share permission denied']);
+}
