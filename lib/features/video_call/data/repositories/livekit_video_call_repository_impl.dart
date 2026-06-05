@@ -17,6 +17,7 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
   EventsListener<RoomEvent>? _roomListener;
   void Function()? _onLocalScreenShareEndedExternally;
   bool _androidServiceRunning = false;
+  bool _callServiceRunning = false;
 
   LivekitVideoCallRepositoryImpl(this._remoteDataSource);
 
@@ -128,19 +129,21 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
 
     try {
       if (enabled) {
+        // Android: arm the native side BEFORE flutter_webrtc shows the system
+        // consent dialog. The "start" call doesn't actually start the FGS — it
+        // sets a flag in MainActivity. MainActivity.onActivityResult then
+        // starts the FGS the moment RESULT_OK arrives from the consent dialog,
+        // BEFORE flutter_webrtc's fragment calls getMediaProjection (which on
+        // Android 14 requires the FGS to already be running with type
+        // mediaProjection). See MainActivity.kt for the timing details.
+        //
+        // useiOSBroadcastExtension: true routes the iOS track to the broadcast
+        // extension socket reader. Passing explicit options here overrides
+        // Room defaults, so the flag must be set on this object.
         if (defaultTargetPlatform == TargetPlatform.android) {
           await _screenShareChannel.invokeMethod('start');
           _androidServiceRunning = true;
         }
-        // CRITICAL: useiOSBroadcastExtension: true routes track creation to
-        // FlutterBroadcastScreenCapturer (reads frames from the App Group
-        // Unix socket written by ScreenShareBroadcast.appex). Without this
-        // flag, flutter_webrtc falls back to FlutterRPScreenRecorder (in-app
-        // RPScreenRecorder) — the track gets captured from inside the app's
-        // own process, producing recursive frames locally and nothing usable
-        // for remote peers. Passing explicit screenShareCaptureOptions here
-        // overrides Room.defaultScreenShareCaptureOptions, so the flag must
-        // be set on this options object explicitly.
         await local.setScreenShareEnabled(
           true,
           screenShareCaptureOptions: ScreenShareCaptureOptions(
@@ -165,6 +168,21 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
       final msg = e.toString().toLowerCase();
       final label = msg.contains('cancel') ? 'cancelled' : 'denied';
       return Left(ScreenShareDeniedFailure(label));
+    }
+  }
+
+  /// Starts/stops the Android call foreground service so the OS doesn't
+  /// suspend mic/camera access when the screen locks. No-op on iOS — iOS
+  /// CallKit / VoIP push handles backgrounding separately.
+  @override
+  Future<void> setCallServiceActive(bool active) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (active == _callServiceRunning) return;
+    try {
+      await _screenShareChannel.invokeMethod(active ? 'startCallService' : 'stopCallService');
+      _callServiceRunning = active;
+    } catch (e) {
+      debugPrint('[LivekitRepo] setCallServiceActive($active) error: $e');
     }
   }
 

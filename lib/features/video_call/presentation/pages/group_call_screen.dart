@@ -153,6 +153,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
       await _room!.connect(url, token);
       getIt<VideoCallRepository>().setExternalRoom(_room!);
+      // Keep the WebRTC connection alive when the screen locks (Android).
+      getIt<VideoCallRepository>().setCallServiceActive(true);
       await _room!.localParticipant?.setCameraEnabled(isVideo);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
       if (mounted) {
@@ -204,6 +206,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _roomEventsListener?.dispose();
+    getIt<VideoCallRepository>().setCallServiceActive(false);
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();

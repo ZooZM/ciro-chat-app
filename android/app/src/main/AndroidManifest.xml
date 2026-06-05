@@ -30,6 +30,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
+    <!-- Call lifecycle: keep mic/camera alive when phone is locked -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <application
@@ -73,6 +78,12 @@
             android:name="com.example.ciro_chat_app.ScreenShareForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Call foreground service — keeps WebRTC alive while screen is locked -->
+        <service
+            android:name="com.example.ciro_chat_app.CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

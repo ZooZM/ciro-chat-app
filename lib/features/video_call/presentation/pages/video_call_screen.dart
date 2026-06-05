@@ -158,6 +158,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       // Register the room with the repository so screen-share cubit actions work
       getIt<VideoCallRepository>().setExternalRoom(_room!);
 
+      // Start the Android call foreground service so the OS doesn't suspend
+      // mic/camera when the screen locks. No-op on iOS.
+      getIt<VideoCallRepository>().setCallServiceActive(true);
+
       // Publish local media tracks immediately upon connecting
       await _room!.localParticipant?.setCameraEnabled(true);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
@@ -214,6 +218,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _roomEventsListener?.dispose();
+    getIt<VideoCallRepository>().setCallServiceActive(false);
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();

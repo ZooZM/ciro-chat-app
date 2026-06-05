@@ -27,4 +27,9 @@ abstract class VideoCallRepository {
   /// Registers an externally-created [Room] (owned by the call screen) so that
   /// screen-share and track-finder methods work on the correct room instance.
   void setExternalRoom(Room? room);
+
+  /// Starts or stops the Android call foreground service. The service declares
+  /// foregroundServiceType="microphone|camera" so Android keeps WebRTC alive
+  /// while the screen is locked. No-op on iOS.
+  Future<void> setCallServiceActive(bool active);
 }
