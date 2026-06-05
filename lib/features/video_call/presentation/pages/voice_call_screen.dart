@@ -13,6 +13,8 @@ class VoiceCallScreen extends StatefulWidget {
   final String avatarInitials;
   final String livekitUrl;
   final String livekitToken;
+  final bool initialMicMuted;
+  final bool initialSpeakerOn;
 
   const VoiceCallScreen({
     Key? key,
@@ -20,6 +22,8 @@ class VoiceCallScreen extends StatefulWidget {
     required this.avatarInitials,
     required this.livekitUrl,
     required this.livekitToken,
+    this.initialMicMuted = false,
+    this.initialSpeakerOn = false,
   }) : super(key: key);
 
   @override
@@ -29,14 +33,17 @@ class VoiceCallScreen extends StatefulWidget {
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Room? _room;
   bool _isConnecting = true;
-  bool _isMicMuted = false;
-  bool _isSpeakerOn = false; // Speaker is typically off for voice calls
+  late bool _isMicMuted;
+  late bool _isSpeakerOn;
   bool _hasRemoteParticipantJoined = false;
   bool _isUpgrading = false;
 
   @override
   void initState() {
     super.initState();
+    _isMicMuted = widget.initialMicMuted;
+    _isSpeakerOn = widget.initialSpeakerOn;
+    
     if (widget.livekitToken.trim().isEmpty ||
         widget.livekitUrl.trim().isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -54,11 +61,15 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
       await _room!.connect(widget.livekitUrl, widget.livekitToken);
 
-      // Publish local audio immediately upon connecting
-      await _room!.localParticipant?.setMicrophoneEnabled(true);
+      // Publish local audio with initial state
+      await _room!.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
 
-      // Default to earpiece for voice calls if possible, but user might toggle to speaker
-      _isSpeakerOn = Hardware.instance.speakerOn ?? false;
+      // Set initial speaker state
+      try {
+        await Hardware.instance.setSpeakerphoneOn(_isSpeakerOn);
+      } catch (e) {
+        debugPrint('Failed to set speakerphone: $e');
+      }
 
       if (mounted) {
         setState(() {

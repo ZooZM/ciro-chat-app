@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -21,11 +22,6 @@ class IncomingGroupCallScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayName = groupName.isNotEmpty ? groupName : callerName;
-    final initials = displayName.length >= 2
-        ? displayName.substring(0, 2).toUpperCase()
-        : displayName.isNotEmpty
-            ? displayName[0].toUpperCase()
-            : 'G';
 
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
@@ -38,61 +34,155 @@ class IncomingGroupCallScreen extends StatelessWidget {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF555555),
+        backgroundColor: const Color(0xFF616161),
         body: SafeArea(
           child: Column(
             children: [
-              const Spacer(flex: 2),
-
-              // ── Group avatar ──────────────────────────────────────────────
-              CircleAvatar(
-                radius: 75.resR,
-                backgroundColor: const Color(0xFF8E6FB1),
-                child: Text(
-                  initials,
-                  style: const TextStyle(color: Colors.white, fontSize: 54, fontWeight: FontWeight.w500),
-                ),
-              ),
-              SizedBox(height: 24.resH),
+              SizedBox(height: 60.resH),
 
               // ── Group name ────────────────────────────────────────────────
               Text(
                 displayName,
-                style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
               SizedBox(height: 8.resH),
 
-              // ── Caller info ───────────────────────────────────────────────
               Text(
-                '$callerName is calling',
-                style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 16),
-              ),
-              SizedBox(height: 6.resH),
-
-              Text(
-                isVideo ? 'Group Video Call' : 'Group Voice Call',
-                style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14),
+                'call_group_call'.tr(),
+                style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 16),
               ),
 
-              const Spacer(flex: 3),
+              const Spacer(),
 
-              // ── Action buttons ────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.only(bottom: 40.resH, left: 30.resW, right: 30.resW),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              // ── Center Group Icon ──────────────────────────────────────────────
+              Container(
+                width: 160.resW,
+                height: 160.resW,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEEEEEE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.group,
+                    size: 80,
+                    color: Color(0xFF4CAF50),
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // ── Bottom Action Card ────────────────────────────────────────────
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 20.resH),
+                padding: EdgeInsets.symmetric(horizontal: 20.resW, vertical: 20.resH),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B3B3B),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _GroupCallButton(
-                      icon: Icons.call_end,
-                      color: const Color(0xFFE53935),
-                      label: 'Decline',
-                      onTap: () => context.read<CallCubit>().declineGroupCall(),
+                    // Caller info row
+                    Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF4CAF50),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        SizedBox(width: 10.resW),
+                        Expanded(
+                          child: Text(
+                            'call_is_calling_you'.tr(namedArgs: {'name': callerName}),
+                            style: const TextStyle(color: Colors.white, fontSize: 15),
+                          ),
+                        ),
+                        // Mini Avatars (stacked)
+                        SizedBox(
+                          width: 80.resW,
+                          height: 32.resH,
+                          child: Stack(
+                            alignment: Alignment.centerRight,
+                            children: [
+                              Positioned(
+                                right: 0,
+                                child: CircleAvatar(
+                                  radius: 14.resR,
+                                  backgroundColor: const Color(0xFF2E7D32),
+                                  child: const Text('S', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                ),
+                              ),
+                              Positioned(
+                                right: 20.resW,
+                                child: CircleAvatar(
+                                  radius: 14.resR,
+                                  backgroundColor: const Color(0xFF388E3C),
+                                  child: const Text('M', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                ),
+                              ),
+                              Positioned(
+                                right: 40.resW,
+                                child: CircleAvatar(
+                                  radius: 14.resR,
+                                  backgroundColor: const Color(0xFF4CAF50),
+                                  child: const Text('+', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    _GroupCallButton(
-                      icon: isVideo ? Icons.videocam : Icons.phone,
-                      color: const Color(0xFF4CAF50),
-                      label: 'Accept',
-                      onTap: () => context.read<CallCubit>().acceptGroupCall(),
+                    SizedBox(height: 20.resH),
+                    // Ignore / Join buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE53935),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: EdgeInsets.symmetric(vertical: 14.resH),
+                            ),
+                            onPressed: () {
+                              if (context.canPop()) context.pop();
+                            },
+                            child: Text(
+                              'call_action_ignore'.tr(),
+                              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16.resW),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4CAF50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: EdgeInsets.symmetric(vertical: 14.resH),
+                            ),
+                            onPressed: () => context.read<CallCubit>().acceptGroupCall(),
+                            child: Text(
+                              'call_action_join'.tr(),
+                              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -101,40 +191,6 @@ class IncomingGroupCallScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _GroupCallButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-  final VoidCallback onTap;
-
-  const _GroupCallButton({
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 70.resW,
-            height: 70.resW,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 32.resW),
-          ),
-        ),
-        SizedBox(height: 12.resH),
-        Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
-      ],
     );
   }
 }
