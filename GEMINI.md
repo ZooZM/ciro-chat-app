@@ -1,5 +1,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-[specs/005-refactor-bugfix-batch/plan.md](specs/005-refactor-bugfix-batch/plan.md)
+[specs/group_call_ui_plan.md](specs/group_call_ui_plan.md)
 <!-- SPECKIT END -->

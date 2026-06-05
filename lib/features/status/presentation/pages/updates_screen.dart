@@ -8,6 +8,7 @@ import 'package:ciro_chat_app/features/status/presentation/widgets/status_search
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class UpdatesScreen extends StatelessWidget {
   const UpdatesScreen({super.key});
@@ -74,7 +75,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 child: Row(
                   children: [
                     Text(
-                      'Updates',
+                      'nav_updates'.tr(),
                       style: AppTypography.subtitle1.copyWith(
                         color: Colors.black,
                         fontWeight: FontWeight.w700,
@@ -152,15 +153,15 @@ class _UpdatesViewState extends State<_UpdatesView> {
                           ],
                         ),
                         title: Text(
-                          'My status',
+                          'status_my_status'.tr(),
                           style: AppTypography.subtitle1.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         subtitle: Text(
                           myStatus != null
-                              ? 'Tap to view your status'
-                              : 'Tap to add status update',
+                              ? 'status_tap_to_view'.tr()
+                              : 'status_tap_to_add'.tr(),
                           style: AppTypography.body2.copyWith(
                             color: AppColors.textSecondary,
                           ),
@@ -184,7 +185,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                             vertical: 8.resH,
                           ),
                           child: Text(
-                            'Recent updates',
+                            'status_recent_updates'.tr(),
                             style: AppTypography.subtitle2.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,
@@ -219,7 +220,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                             vertical: 8.resH,
                           ),
                           child: Text(
-                            'Viewed updates',
+                            'status_viewed_updates'.tr(),
                             style: AppTypography.subtitle2.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,
@@ -253,7 +254,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                       SliverFillRemaining(
                         child: Center(
                           child: Text(
-                            'No recent updates',
+                            'status_no_recent'.tr(),
                             style: AppTypography.body1.copyWith(
                               color: AppColors.textSecondary,
                             ),

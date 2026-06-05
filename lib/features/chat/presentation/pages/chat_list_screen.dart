@@ -13,6 +13,7 @@ import '../bloc/chat_cubit.dart';
 import '../../../../core/theme/app_logo.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../status/presentation/pages/updates_screen.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -49,6 +50,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
         titleSpacing: 16.resW,
         title: ChatListAppBar(),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.language,
+              color: AppColors.primary,
+              size: 24.resW,
+            ),
+            onPressed: () {
+              if (context.locale.languageCode == 'en') {
+                context.setLocale(const Locale('ar'));
+              } else {
+                context.setLocale(const Locale('en'));
+              }
+            },
+          ),
           IconButton(
             icon: Icon(
               Icons.logout,
@@ -121,31 +136,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 // color: AppColors.primary,
                 colorBlendMode: BlendMode.srcIn,
               ),
-              label: 'Chats',
+              label: 'nav_chats'.tr(),
             ),
             // ── 2. Updates ────────────────────────────────────────────────
             BottomNavigationBarItem(
               icon: Icon(Icons.motion_photos_on_outlined, size: 24.resW),
               activeIcon: Icon(Icons.motion_photos_on, size: 24.resW),
-              label: 'Updates',
+              label: 'nav_updates'.tr(),
             ),
             // ── 3. Map ────────────────────────────────────────────────────
             BottomNavigationBarItem(
               icon: Icon(Icons.map_outlined, size: 24.resW),
               activeIcon: Icon(Icons.map, size: 24.resW),
-              label: 'Map',
+              label: 'nav_map'.tr(),
             ),
             // ── 4. Calls ──────────────────────────────────────────────────
             BottomNavigationBarItem(
               icon: Icon(Icons.call_outlined, size: 24.resW),
               activeIcon: Icon(Icons.call, size: 24.resW),
-              label: 'Calls',
+              label: 'nav_calls'.tr(),
             ),
             // ── 5. Profile ────────────────────────────────────────────────
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline, size: 24.resW),
               activeIcon: Icon(Icons.person, size: 24.resW),
-              label: 'Profile',
+              label: 'nav_profile'.tr(),
             ),
           ],
         ),
@@ -175,7 +190,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                'Chats',
+                'nav_chats'.tr(),
                 style: AppTypography.subtitle1.copyWith(
                   color: Colors.black,
                   fontWeight: FontWeight.w700,
@@ -204,7 +219,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       ),
                       SizedBox(width: 8.resW),
                       Text(
-                        'Search',
+                        'search_placeholder'.tr(),
                         style: AppTypography.body1.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -340,7 +355,7 @@ class ChatListAppBar extends StatelessWidget {
                 builder: (context, isConnected, _) {
                   if (isConnected) return const SizedBox.shrink();
                   return Text(
-                    'Connecting...',
+                    'status_connecting'.tr(),
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 8,

@@ -199,6 +199,8 @@ final GoRouter appRouter = GoRouter(
           avatarInitials: data['avatarInitials'] as String? ?? '',
           livekitUrl: data['livekitUrl'] as String? ?? '',
           livekitToken: data['livekitToken'] as String? ?? '',
+          initialMicMuted: data['initialMicMuted'] as bool? ?? false,
+          initialSpeakerOn: data['initialSpeakerOn'] as bool? ?? false,
         );
       },
     ),

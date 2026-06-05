@@ -19,6 +19,7 @@ import 'features/video_call/presentation/bloc/call_cubit.dart';
 import 'features/call_recording/presentation/bloc/call_recording_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -28,6 +29,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  await EasyLocalization.ensureInitialized();
   await dotenv.load(fileName: '.env');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Bloc.observer = const AppBlocObserver();
@@ -48,7 +50,15 @@ void main() async {
     authCubit.logOut();
   };
 
-  runApp(const MainApp());
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      startLocale: const Locale('en'),
+      child: const MainApp(),
+    ),
+  );
 }
 
 class MainApp extends StatefulWidget {
@@ -100,7 +110,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       designSize: const Size(390, 844),
       minTextAdapt: true,
       splitScreenMode: true,
-      builder: (context, child) {
+      builder: (screenUtilContext, child) {
         return MultiBlocProvider(
           providers: [
             BlocProvider<ChatCubit>(create: (_) => getIt<ChatCubit>()),
@@ -117,6 +127,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           child: CallOverlay(
             child: MaterialApp.router(
               title: 'Ciro Chat App',
+              localizationsDelegates: context.localizationDelegates,
+              supportedLocales: context.supportedLocales,
+              locale: context.locale,
               theme: ThemeData.dark(useMaterial3: true),
               routerConfig: appRouter,
               debugShowCheckedModeBanner: false,

@@ -62,6 +62,7 @@ dependencies:
   url_launcher: ^6.3.1
   gal: ^2.3.0
   flutter_screen_recording: ^2.0.0
+  easy_localization: ^3.0.8
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +79,7 @@ flutter:
   assets:
     - assets/icons/
     - assets/logo.png
+    - assets/translations/
     - .env
 
 dependency_overrides:
