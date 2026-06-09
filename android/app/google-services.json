@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "735278945774",
+    "project_id": "ciro-app-ceece",
+    "storage_bucket": "ciro-app-ceece.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:735278945774:android:622e49b2f997dca150aaff",
+        "android_client_info": {
+          "package_name": "com.example.ciro_chat_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3Ep6Wyffv_y7RIEwPKpbiACPx3Ts51VA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

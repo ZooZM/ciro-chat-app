@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
-import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/chat_session.dart';
@@ -173,22 +174,98 @@ class AttachmentSheetWidget extends StatelessWidget {
   }
 
   Future<void> _handleLocation(BuildContext context) async {
-    Navigator.pop(context);
+    // Capture all context-dependent objects before any await to avoid
+    // BuildContext-across-async-gap lint warnings.
+    final chatCubit = context.read<ChatCubit>();
+    final navigator = Navigator.of(context);
 
-    if (!context.mounted) return;
-    final result = await LocationService.getCurrentLocation(context);
-
-    if (result.isSuccess && context.mounted) {
-      await context.read<ChatCubit>().sendLocationMessage(
-        result.latitude!,
-        result.longitude!,
-        result.address!,
-      );
-    } else if (!result.isSuccess && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.errorMessage ?? 'Location unavailable')),
-      );
+    // Phase 1: resolve permission while sheet is still in the tree so dialogs work.
+    final permStatus = await Permission.location.request();
+    if (!permStatus.isGranted) {
+      if (permStatus.isPermanentlyDenied && context.mounted) {
+        final open = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Location Permission Required'),
+            content: const Text(
+              'Location permission is permanently denied. Please enable it in app settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+        if (open == true) await openAppSettings();
+      }
+      navigator.pop();
+      return;
     }
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (context.mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Location Services Disabled'),
+            content: const Text('Please enable GPS to share your location.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await Geolocator.openLocationSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+      }
+      navigator.pop();
+      return;
+    }
+
+    // Phase 2: permission + GPS confirmed — close the sheet, then fetch position.
+    navigator.pop();
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      String address = 'Unknown Location';
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          final parts = <String>[
+            if (p.street != null && p.street!.isNotEmpty) p.street!,
+            if (p.locality != null && p.locality!.isNotEmpty) p.locality!,
+            if (p.country != null && p.country!.isNotEmpty) p.country!,
+          ];
+          if (parts.isNotEmpty) address = parts.join(', ');
+        }
+      } catch (_) {}
+
+      chatCubit.sendLocationMessage(position.latitude, position.longitude, address);
+    } catch (_) {}
   }
 
   Future<void> _handleAudio(BuildContext context) async {
@@ -204,61 +281,232 @@ class AttachmentSheetWidget extends StatelessWidget {
       TextEditingController(),
       TextEditingController(),
     ];
+    bool allowMultiple = false;
+
+    // Dark themed constants
+    const darkBg = Color(0xFF111111);
+    const darkCard = Color(0xFF1E1E1E);
 
     await showDialog(
       context: context,
+      useSafeArea: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('Create Poll'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: questionController,
-                    decoration: const InputDecoration(labelText: 'Question'),
-                  ),
-                  ...optionControllers.asMap().entries.map((entry) {
-                    return TextField(
-                      controller: entry.value,
-                      decoration: InputDecoration(
-                        labelText: 'Option ${entry.key + 1}',
-                      ),
-                    );
-                  }),
-                  TextButton(
-                    onPressed: () => setState(
-                      () => optionControllers.add(TextEditingController()),
+        builder: (ctx2, setState) {
+          return Dialog.fullscreen(
+            child: Scaffold(
+              backgroundColor: darkBg,
+              appBar: AppBar(
+                backgroundColor: darkBg,
+                elevation: 0,
+                leading: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
                     ),
-                    child: const Text('Add Option'),
+                  ),
+                ),
+                leadingWidth: 80,
+                title: const Text(
+                  'Create poll',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
+                ),
+                centerTitle: true,
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      final question = questionController.text.trim();
+                      final opts = optionControllers
+                          .map((c) => c.text.trim())
+                          .where((t) => t.isNotEmpty)
+                          .toList();
+                      if (question.isNotEmpty && opts.length >= 2) {
+                        Navigator.pop(ctx);
+                        ctx2.read<ChatCubit>().sendPollMessage(
+                          question,
+                          opts,
+                        );
+                      }
+                    },
+                    child: Text(
+                      'Send',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // QUESTION section
+                    Text(
+                      'QUESTION',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: TextField(
+                        controller: questionController,
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                        maxLines: 3,
+                        minLines: 1,
+                        decoration: InputDecoration(
+                          hintText: 'Ask a question…',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // OPTIONS section
+                    Text(
+                      'OPTIONS',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          ...optionControllers.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: entry.value,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: i < 2
+                                              ? 'Option ${i + 1}'
+                                              : 'Add',
+                                          hintStyle: TextStyle(
+                                            color: Colors.grey[600],
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: Icon(
+                                        Icons.drag_handle,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (i < optionControllers.length - 1)
+                                  Divider(
+                                    height: 1,
+                                    indent: 14,
+                                    color: Colors.grey[800],
+                                  ),
+                              ],
+                            );
+                          }),
+                          // "Add" placeholder row
+                          Divider(
+                            height: 1,
+                            indent: 14,
+                            color: Colors.grey[800],
+                          ),
+                          InkWell(
+                            onTap: () => setState(
+                              () => optionControllers.add(
+                                TextEditingController(),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'Add',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Allow multiple answers toggle
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text(
+                          'Allow multiple answers',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                        value: allowMultiple,
+                        activeColor: AppColors.primary,
+                        onChanged: (v) => setState(() => allowMultiple = v),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final question = questionController.text.trim();
-                  final options = optionControllers
-                      .map((c) => c.text.trim())
-                      .where((t) => t.isNotEmpty)
-                      .toList();
-                  if (question.isNotEmpty && options.length >= 2) {
-                    Navigator.pop(ctx);
-                    context.read<ChatCubit>().sendPollMessage(
-                      question,
-                      options,
-                    );
-                  }
-                },
-                child: const Text('Send'),
-              ),
-            ],
           );
         },
       ),
@@ -271,64 +519,399 @@ class AttachmentSheetWidget extends StatelessWidget {
 
     final titleController = TextEditingController();
     final descController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
+    final locationController = TextEditingController();
+    DateTime startDate = DateTime.now().add(const Duration(hours: 1));
+    DateTime endDate = DateTime.now().add(const Duration(hours: 3));
+    bool includeEndTime = true;
+    bool allowGuests = false;
+    bool callLink = false;
+    String reminder = '1 hour before';
+
+    const darkBg = Color(0xFF111111);
+    const darkCard = Color(0xFF1E1E1E);
+    final reminderOptions = [
+      'At time of event',
+      '5 minutes before',
+      '15 minutes before',
+      '30 minutes before',
+      '1 hour before',
+      '1 day before',
+    ];
+
+    String _fmtDate(DateTime d) {
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      return '${d.day} ${months[d.month - 1]} ${d.year}';
+    }
+
+    String _fmtTime(DateTime d) {
+      final h = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
+      final m = d.minute.toString().padLeft(2, '0');
+      final ampm = d.hour < 12 ? 'AM' : 'PM';
+      return '$h:$m $ampm';
+    }
 
     await showDialog(
       context: c,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Event'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Event Title'),
-            ),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: 'Description'),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              title: const Text('Select Date'),
-              subtitle: Text(selectedDate.toString()),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: c,
-                  initialDate: selectedDate,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-
-                if (!context.mounted) return;
-
-                if (date != null) {
-                  selectedDate = date;
+      useSafeArea: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setState) {
+          Future<void> pickDateTime(bool isStart) async {
+            final date = await showDatePicker(
+              context: ctx,
+              initialDate: isStart ? startDate : endDate,
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(const Duration(days: 730)),
+              builder: (ctx, child) => Theme(
+                data: ThemeData.dark(),
+                child: child!,
+              ),
+            );
+            if (date == null || !ctx.mounted) return;
+            final time = await showTimePicker(
+              context: ctx,
+              initialTime: TimeOfDay.fromDateTime(
+                isStart ? startDate : endDate,
+              ),
+              builder: (ctx, child) => Theme(
+                data: ThemeData.dark(),
+                child: child!,
+              ),
+            );
+            if (time == null) return;
+            final merged = DateTime(
+              date.year, date.month, date.day,
+              time.hour, time.minute,
+            );
+            setState(() {
+              if (isStart) {
+                startDate = merged;
+                if (endDate.isBefore(startDate)) {
+                  endDate = startDate.add(const Duration(hours: 2));
                 }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final title = titleController.text.trim();
-              if (title.isNotEmpty) {
-                Navigator.pop(ctx);
-                context.read<ChatCubit>().sendEventMessage(
-                  title,
-                  selectedDate,
-                  descController.text.trim(),
-                );
+              } else {
+                endDate = merged;
               }
-            },
-            child: const Text('Send'),
-          ),
-        ],
+            });
+          }
+
+          Widget _dateTimeChip(String label) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2A2A2A),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          );
+
+          return Dialog.fullscreen(
+            child: Scaffold(
+              backgroundColor: darkBg,
+              appBar: AppBar(
+                backgroundColor: darkBg,
+                elevation: 0,
+                leading: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+                leadingWidth: 80,
+                title: const Text(
+                  'Create event',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                  ),
+                ),
+                centerTitle: true,
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      final title = titleController.text.trim();
+                      if (title.isNotEmpty) {
+                        Navigator.pop(ctx);
+                        ctx2.read<ChatCubit>().sendEventMessage(
+                          title,
+                          startDate,
+                          descController.text.trim(),
+                        );
+                      }
+                    },
+                    child: const Text(
+                      'Send',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Name + description card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: titleController,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            decoration: InputDecoration(
+                              hintText: 'Add event name',
+                              hintStyle: TextStyle(color: Colors.grey[600]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12,
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, color: Colors.grey[800]),
+                          Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              TextField(
+                                controller: descController,
+                                style: const TextStyle(
+                                  color: Colors.white, fontSize: 14,
+                                ),
+                                maxLines: 4,
+                                maxLength: 2048,
+                                decoration: InputDecoration(
+                                  hintText: 'Add description (optional)',
+                                  hintStyle: TextStyle(color: Colors.grey[600]),
+                                  border: InputBorder.none,
+                                  counterStyle: TextStyle(
+                                    color: Colors.grey[600], fontSize: 11,
+                                  ),
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    14, 12, 14, 28,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Starts / Ends / Include end time card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          // Starts row
+                          InkWell(
+                            onTap: () => pickDateTime(true),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    'Starts',
+                                    style: TextStyle(
+                                      color: Colors.white, fontSize: 16,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  _dateTimeChip(_fmtDate(startDate)),
+                                  const SizedBox(width: 8),
+                                  _dateTimeChip(_fmtTime(startDate)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, indent: 14, color: Colors.grey[800]),
+                          // Ends row
+                          if (includeEndTime)
+                            Column(
+                              children: [
+                                InkWell(
+                                  onTap: () => pickDateTime(false),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 12,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Text(
+                                          'Ends',
+                                          style: TextStyle(
+                                            color: Colors.white, fontSize: 16,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        _dateTimeChip(_fmtDate(endDate)),
+                                        const SizedBox(width: 8),
+                                        _dateTimeChip(_fmtTime(endDate)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Divider(height: 1, indent: 14, color: Colors.grey[800]),
+                              ],
+                            ),
+                          // Include end time toggle
+                          SwitchListTile(
+                            title: const Text(
+                              'Include end time',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            value: includeEndTime,
+                            activeColor: AppColors.primary,
+                            onChanged: (v) => setState(() => includeEndTime = v),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Location + Call link card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: locationController,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            decoration: InputDecoration(
+                              hintText: 'Add location (optional)',
+                              hintStyle: TextStyle(color: Colors.grey[600]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12,
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, indent: 14, color: Colors.grey[800]),
+                          SwitchListTile(
+                            title: const Text(
+                              'Voice call link',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            value: callLink,
+                            activeColor: AppColors.primary,
+                            onChanged: (v) => setState(() => callLink = v),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Reminder card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            title: const Text(
+                              'Reminder',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            trailing: DropdownButton<String>(
+                              value: reminder,
+                              dropdownColor: const Color(0xFF2A2A2A),
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              underline: const SizedBox(),
+                              icon: const Icon(
+                                Icons.unfold_more,
+                                color: Colors.grey,
+                                size: 18,
+                              ),
+                              items: reminderOptions
+                                  .map(
+                                    (r) => DropdownMenuItem(
+                                      value: r,
+                                      child: Text(r),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                if (v != null) setState(() => reminder = v);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: 16, right: 16, bottom: 10,
+                            ),
+                            child: Text(
+                              'Guests also get notified at the time of the event.',
+                              style: TextStyle(
+                                color: Colors.grey[600], fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Allow guests card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: darkCard,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          SwitchListTile(
+                            title: const Text(
+                              'Allow guests',
+                              style: TextStyle(color: Colors.white, fontSize: 16),
+                            ),
+                            value: allowGuests,
+                            activeColor: AppColors.primary,
+                            onChanged: (v) => setState(() => allowGuests = v),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              left: 16, right: 16, bottom: 10,
+                            ),
+                            child: Text(
+                              'Allow people to bring one additional guest.',
+                              style: TextStyle(
+                                color: Colors.grey[600], fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

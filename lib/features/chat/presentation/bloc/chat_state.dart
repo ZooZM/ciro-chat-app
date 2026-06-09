@@ -54,11 +54,16 @@ class ChatRoomActive extends ChatState {
   /// IDs of users blocked by the current user. Part of state so the UI
   /// rebuilds reactively via [BlocBuilder] without any [ValueNotifier].
   final List<String> blockedUserIds;
+  /// FR-018: Pagination state for infinite scroll.
+  final bool isLoadingMore;
+  final bool hasMoreMessages;
 
   const ChatRoomActive(
     this.roomId,
     this.messages, {
     this.blockedUserIds = const [],
+    this.isLoadingMore = false,
+    this.hasMoreMessages = true,
   });
 
   /// Surgical update: copies the state, replacing only the provided fields.
@@ -68,16 +73,20 @@ class ChatRoomActive extends ChatState {
     String? roomId,
     List<Message>? messages,
     List<String>? blockedUserIds,
+    bool? isLoadingMore,
+    bool? hasMoreMessages,
   }) {
     return ChatRoomActive(
       roomId ?? this.roomId,
       messages ?? this.messages,
       blockedUserIds: blockedUserIds ?? this.blockedUserIds,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMoreMessages: hasMoreMessages ?? this.hasMoreMessages,
     );
   }
 
   @override
-  List<Object> get props => [roomId, messages, blockedUserIds];
+  List<Object> get props => [roomId, messages, blockedUserIds, isLoadingMore, hasMoreMessages];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

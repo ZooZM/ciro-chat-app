@@ -21,15 +21,19 @@ import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
+import '../../features/video_call/presentation/pages/group_call_screen.dart';
+import '../../features/video_call/presentation/pages/incoming_group_call_screen.dart';
+import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
 import '../di/injection.dart';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
 class AppRouterName {
   static const String splash = '/splash';
   static const String auth = '/auth';
-  static const String verify = '/auth/verify';
+  static const String verify = 'verify';
   static const String home = '/home';
   static const String createGroup = '/home/create_group';
   static const String chatRoom = '/chat_room';
@@ -39,9 +43,30 @@ class AppRouterName {
   static const String videoCall = '/video_call';
   static const String outgoingCall = '/outgoing_call';
   static const String voiceCall = '/voice_call';
+  static const String updates = '/updates';
+  static const String groupCall = '/group_call/:roomId';
+  static const String incomingGroupCall = '/incoming_group_call';
+  static const String recordings = '/recordings';
+}
+
+final GlobalKey<NavigatorState> globalNavigatorKey =
+    GlobalKey<NavigatorState>();
+
+/// Checks if the app was launched by tapping a push notification (terminated state).
+/// If so, navigates directly to the referenced chat room.
+Future<void> handleInitialNotification() async {
+  final message = await FirebaseMessaging.instance.getInitialMessage();
+  if (message == null) return;
+  final roomId = message.data['roomId'] as String?;
+  if (roomId == null) return;
+  final room = await getIt<ChatCubit>().getRoomById(roomId);
+  if (room != null) {
+    appRouter.push(AppRouterName.chatRoom, extra: room);
+  }
 }
 
 final GoRouter appRouter = GoRouter(
+  navigatorKey: globalNavigatorKey,
   initialLocation: AppRouterName.splash,
   // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
   // Every time AuthCubit emits a new state, the redirect guard below is re-run.
@@ -55,8 +80,10 @@ final GoRouter appRouter = GoRouter(
     final authState = getIt<AuthCubit>().state;
     final location = state.uri.toString();
 
-    final isAuthRoute = location == '/auth' || location.startsWith('/auth/');
-    final isSplash = location == '/splash';
+    final isAuthRoute =
+        location == AppRouterName.auth ||
+        location.startsWith('${AppRouterName.auth}/');
+    final isSplash = location == AppRouterName.splash;
 
     // ── RULE 1: Transient states — do NOT redirect ────────────────────────────
     // AuthLoading fires during OTP send, token refresh, and initial boot.
@@ -70,32 +97,32 @@ final GoRouter appRouter = GoRouter(
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
       await context.read<ChatCubit>().hydrateRooms();
-      if (isAuthRoute) return '/home';
+      if (isAuthRoute) return AppRouterName.home;
       return null;
     }
 
     // ── RULE 3: Unauthenticated or AuthError ──────────────────────────────────
     // Redirect to /auth only if not already there.
-    if (!isAuthRoute && !isSplash) return '/auth';
+    if (!isAuthRoute && !isSplash) return AppRouterName.auth;
     return null;
   },
   routes: [
     GoRoute(
-      path: '/splash',
+      path: AppRouterName.splash,
       builder: (context, state) => BlocProvider.value(
         value: getIt<AuthCubit>(),
         child: const SplashScreen(),
       ),
     ),
     GoRoute(
-      path: '/auth',
+      path: AppRouterName.auth,
       builder: (context, state) => BlocProvider.value(
         value: getIt<AuthCubit>(),
         child: const MobileNumberScreen(),
       ),
       routes: [
         GoRoute(
-          path: 'verify',
+          path: AppRouterName.verify,
           builder: (context, state) {
             final phone = state.extra as String? ?? '';
             return BlocProvider.value(
@@ -107,18 +134,7 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      path: '/video',
-      builder: (context, state) => Scaffold(
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () => context.push('/video_call'),
-            child: const Text('Launch Video Call UI'),
-          ),
-        ),
-      ),
-    ),
-    GoRoute(
-      path: '/home',
+      path: AppRouterName.home,
       builder: (context, state) => const ChatListScreen(),
       routes: [
         GoRoute(
@@ -128,23 +144,37 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      path: '/chat_room',
+      path: AppRouterName.chatRoom,
       builder: (context, state) {
-        final chat = state.extra as ChatSession;
+        // state.extra is null when GoRouter rebuilds this route without the
+        // original extra (deep link, router restore, rotation, or any push
+        // missing extra). Cast as nullable and redirect to home instead of
+        // throwing a TypeError.
+        final chat = state.extra as ChatSession?;
+        if (chat == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) context.go(AppRouterName.home);
+          });
+          return const Scaffold(body: SizedBox.shrink());
+        }
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
         return ChatRoomScreen(chatData: chat);
       },
     ),
     GoRoute(
-      path: '/group_chat',
-      builder: (context, state) => const GroupChatScreen(),
+      path: AppRouterName.groupChat,
+      builder: (context, state) {
+        final chat = state.extra as ChatSession?;
+        if (chat != null) return ChatRoomScreen(chatData: chat);
+        return const GroupChatScreen();
+      },
     ),
     GoRoute(
-      path: '/contacts',
+      path: AppRouterName.contacts,
       builder: (context, state) => const ContactsScreen(),
     ),
     GoRoute(
-      path: '/incoming_call',
+      path: AppRouterName.incomingCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return IncomingCallScreen(
@@ -156,7 +186,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/video_call',
+      path: AppRouterName.videoCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return VideoCallScreen(
@@ -167,7 +197,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/outgoing_call',
+      path: AppRouterName.outgoingCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return OutgoingCallScreen(
@@ -177,7 +207,7 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/voice_call',
+      path: AppRouterName.voiceCall,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
         return VoiceCallScreen(
@@ -185,26 +215,37 @@ final GoRouter appRouter = GoRouter(
           avatarInitials: data['avatarInitials'] as String? ?? '',
           livekitUrl: data['livekitUrl'] as String? ?? '',
           livekitToken: data['livekitToken'] as String? ?? '',
+          initialMicMuted: data['initialMicMuted'] as bool? ?? false,
+          initialSpeakerOn: data['initialSpeakerOn'] as bool? ?? false,
         );
       },
     ),
     GoRoute(
-      path: '/updates',
+      path: AppRouterName.updates,
       builder: (context, state) => const UpdatesScreen(),
     ),
     GoRoute(
-      path: '/status_creation',
+      path: '/group_call/:roomId',
       builder: (context, state) {
-        final mode = state.extra as StatusContentType? ?? StatusContentType.text;
-        return StatusCreationScreen(initialMode: mode);
+        final roomId = state.pathParameters['roomId'] ?? '';
+        return GroupCallScreen(roomId: roomId);
       },
     ),
     GoRoute(
-      path: '/story_viewer',
+      path: AppRouterName.incomingGroupCall,
       builder: (context, state) {
-        final status = state.extra as StatusEntity;
-        return StoryViewerScreen(status: status);
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return IncomingGroupCallScreen(
+          chatRoomId: data['chatRoomId'] as String? ?? '',
+          callerName: data['callerName'] as String? ?? 'Unknown',
+          groupName: data['groupName'] as String? ?? '',
+          isVideo: data['isVideo'] == true,
+        );
       },
+    ),
+    GoRoute(
+      path: AppRouterName.recordings,
+      builder: (context, state) => const RecordingsListPage(),
     ),
   ],
 );

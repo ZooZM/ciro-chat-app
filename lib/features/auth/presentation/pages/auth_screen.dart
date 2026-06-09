@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -180,7 +181,7 @@ class _AuthScreenState extends State<AuthScreen> {
               foregroundColor: Colors.white,
               minimumSize: const Size(220, 50),
             ),
-            onPressed: () => context.push('/video_call'),
+            onPressed: () => context.push(AppRouterName.videoCall),
             icon: const Icon(Icons.video_call),
             label: const Text('Go to Video Call'),
           ),
@@ -190,7 +191,7 @@ class _AuthScreenState extends State<AuthScreen> {
               foregroundColor: Colors.white,
               minimumSize: const Size(220, 50),
             ),
-            onPressed: () => context.push('/chat'),
+            onPressed: () => context.push(AppRouterName.home),
             icon: const Icon(Icons.chat),
             label: const Text('Go to Chat'),
           ),

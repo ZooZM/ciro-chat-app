@@ -76,6 +76,15 @@
 {}
 ```
 
+### `deleteForEveryone` (NEW — FR-022)
+```json
+{
+  "chatRoomId": "mongo_room_id",
+  "clientMessageId": "uuid-v4"
+}
+```
+**Server behavior**: Validates sender owns the message AND `createdAt` < 1 hour ago. Sets `isDeleted: true` on message doc. Broadcasts `messageDeleted` to all room participants.
+
 ---
 
 ## Server → Client Events
@@ -126,6 +135,16 @@ Full MongoDB Message document (populated).
   "readBy": "mongo_user_id"
 }
 ```
+
+### `messageDeleted` (NEW — FR-022)
+```json
+{
+  "chatRoomId": "mongo_room_id",
+  "clientMessageId": "uuid-v4",
+  "deletedBy": "mongo_user_id"
+}
+```
+**Client behavior**: Find message by `clientMessageId` in local SQLite. Set `is_deleted = 1`. Update in-memory state. Bubble renders "🚫 This message was deleted".
 
 ### `incomingCall`
 ```json
@@ -185,9 +204,10 @@ Full MongoDB Message document (populated).
 **Query**: `?limit=50&cursor=<message_id>`
 **Response**: Array of populated Message documents
 
-### `POST /chat/private/resolve`
-**Body**: `{ "userId": "mongo_user_id" }`
-**Response**: `{ "roomId": "...", "room": {...} }`
+### `POST /chat/private/resolve` (UPDATED — FR-021)
+**Body**: `{ "userId": "mongo_user_id", "firstMessage": { "content": "...", "clientMessageId": "uuid", "type": "text", "fileUrl?": "...", "metadata?": {} } }`
+**Response**: `{ "roomId": "...", "room": {...}, "message?": { "_id": "...", "clientMessageId": "...", "status": "sent", "createdAt": "..." } }`
+**Note**: `firstMessage` and response `message` are optional. See `contracts/atomic-resolve-api.md` for full details.
 
 ### `POST /chat/messages/sync-statuses`
 **Body**: `{ "clientMessageIds": ["uuid1", "uuid2"] }`

@@ -1,5 +1,7 @@
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:badges/badges.dart' as pk_badges;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
@@ -35,12 +37,16 @@ class ChatTileWidget extends StatelessWidget {
           CircleAvatar(
             radius: 28.resR,
             backgroundColor: AppColors.divider,
-            backgroundImage: chat.avatarUrl.isNotEmpty 
-                ? CachedNetworkImageProvider(chat.avatarUrl) 
+            backgroundImage: chat.avatarUrl.isNotEmpty
+                ? CachedNetworkImageProvider(
+                    UrlUtils.resolveMediaUrl(chat.avatarUrl),
+                  )
                 : null,
             child: chat.avatarUrl.isEmpty
                 ? Icon(
-                    chat.type == ChatRoomType.GROUP ? Icons.group : Icons.person,
+                    chat.type == ChatRoomType.GROUP
+                        ? Icons.group
+                        : Icons.person,
                     color: Colors.white,
                     size: 32.resR,
                   )
@@ -54,7 +60,7 @@ class ChatTileWidget extends StatelessWidget {
                 width: 14.resW,
                 height: 14.resW,
                 decoration: BoxDecoration(
-                  color: Colors.blue, // Same blue shown in mockups
+                  color: AppColors.info,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.surface, width: 2.resW),
                 ),
@@ -82,7 +88,7 @@ class ChatTileWidget extends StatelessWidget {
                   : Icons.done_all,
               size: 16.resW,
               color: chat.lastMessageStatus == MessageStatus.read
-                  ? Colors.blue
+                  ? AppColors.info
                   : AppColors.textSecondary,
             ),
             SizedBox(width: 4.resW),
@@ -93,11 +99,11 @@ class ChatTileWidget extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.body2.copyWith(
-                color: isTyping 
-                    ? AppColors.primary 
+                color: isTyping
+                    ? AppColors.primary
                     : (chat.unreadCount > 0
-                        ? Colors.black87
-                        : AppColors.textSecondary),
+                          ? Colors.black87
+                          : AppColors.textSecondary),
                 fontStyle: isTyping ? FontStyle.italic : null,
               ),
             ),
@@ -109,7 +115,7 @@ class ChatTileWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            DateFormat('h:mm a').format(chat.timestamp),
+            DateFormat('h:mm a').format(chat.timestamp.toLocal()),
             style: AppTypography.caption.copyWith(
               color: chat.unreadCount > 0
                   ? Colors.black

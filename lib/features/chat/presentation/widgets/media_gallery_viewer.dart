@@ -2,23 +2,10 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
-
-const _kBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-);
-
-String _resolveUrl(String? relativeOrAbsolute) {
-  if (relativeOrAbsolute == null || relativeOrAbsolute.isEmpty) return '';
-  if (relativeOrAbsolute.startsWith('http')) return relativeOrAbsolute;
-  final base = _kBaseUrl.endsWith('/') ? _kBaseUrl : '$_kBaseUrl/';
-  final path = relativeOrAbsolute.startsWith('/')
-      ? relativeOrAbsolute.substring(1)
-      : relativeOrAbsolute;
-  return '$base$path';
-}
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 
 class MediaGalleryViewer extends StatefulWidget {
   final List<Message> mediaMessages;
@@ -83,10 +70,9 @@ class _ImageGalleryItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
-    final url = _resolveUrl(fileUrl);
+    final url = message.resolvedFileUrl;
 
     return Center(
       child: InteractiveViewer(
@@ -111,6 +97,7 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isPlaying = false;
+  String? _initializationError;
 
   @override
   void initState() {
@@ -121,32 +108,41 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
   Future<void> _initVideo() async {
     final meta = widget.message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = widget.message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
 
     if (hasLocal) {
       _controller = VideoPlayerController.file(File(localPath));
     } else {
-      final url = _resolveUrl(fileUrl);
+      final url = widget.message.resolvedFileUrl;
       if (url.isNotEmpty) {
-        _controller = VideoPlayerController.networkUrl(Uri.parse(url));
+        final fileInfo = await DefaultCacheManager().getSingleFile(url);
+        _controller = VideoPlayerController.file(fileInfo);
       }
     }
 
     if (_controller != null) {
-      await _controller!.initialize();
-      _controller!.addListener(() {
+      try {
+        await _controller!.initialize();
+        _controller!.addListener(() {
+          if (mounted) {
+            setState(() {
+              _isPlaying = _controller!.value.isPlaying;
+            });
+          }
+        });
         if (mounted) {
           setState(() {
-            _isPlaying = _controller!.value.isPlaying;
+            _isInitialized = true;
           });
         }
-      });
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
+      } catch (e) {
+        debugPrint('[MediaGalleryViewer] Video initialize failed: $e');
+        if (mounted) {
+          setState(() {
+            _initializationError = 'Unable to play video: ${e.toString()}';
+          });
+        }
       }
     }
   }
@@ -168,8 +164,25 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
 
   @override
   Widget build(BuildContext context) {
+    if (_initializationError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, color: Colors.white, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _initializationError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (!_isInitialized || _controller == null) {
-      return const Center(child: CircularProgressIndicator());
+      return _ThumbnailPlaceholder(message: widget.message, showSpinner: true);
     }
 
     return Center(
@@ -199,6 +212,39 @@ class _VideoGalleryItemState extends State<_VideoGalleryItem> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ThumbnailPlaceholder extends StatelessWidget {
+  final Message message;
+  final bool showSpinner;
+
+  const _ThumbnailPlaceholder({required this.message, this.showSpinner = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = message.metadata ?? {};
+    final localThumb = meta['localThumbPath'] as String?;
+    final thumbUrl = meta['thumbnailUrl'] as String?;
+    final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
+    final hasRemoteThumb = thumbUrl != null && thumbUrl.isNotEmpty;
+
+    Widget background;
+    if (hasLocalThumb) {
+      background = Image.file(File(localThumb), fit: BoxFit.contain);
+    } else if (hasRemoteThumb) {
+      background = CachedNetworkImage(imageUrl: UrlUtils.resolveMediaUrl(thumbUrl), fit: BoxFit.contain);
+    } else {
+      background = const ColoredBox(color: Colors.black);
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox.expand(child: background),
+        if (showSpinner) const CircularProgressIndicator(color: Colors.white),
+      ],
     );
   }
 }

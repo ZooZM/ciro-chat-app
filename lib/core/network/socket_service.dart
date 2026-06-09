@@ -1,14 +1,15 @@
+import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
-import 'package:dio/dio.dart';
-import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
+import 'package:ciro_chat_app/core/error/revocation_exception.dart';
+import 'package:ciro_chat_app/core/services/token_refresh_service.dart';
 
 @lazySingleton
 class SocketService {
   IO.Socket? _socket;
-  bool _isRefreshing = false;
 
   // Exposes declarative binding for WhatsApp-style Connecting... banner
   final ValueNotifier<bool> isConnectedNotifier = ValueNotifier(false);
@@ -26,7 +27,12 @@ class SocketService {
   void Function(List<String> clientMessageIds)? onMessageDelivered;
 
   /// Fired when RECIPIENT read our message. delivered → read (2 blue ticks)
-  void Function(List<String> clientMessageIds)? onMessageRead;
+  /// [readByCount] and [participantCount] are present for GROUP rooms only.
+  void Function(
+    List<String> clientMessageIds, {
+    int? readByCount,
+    int? participantCount,
+  })? onMessageRead;
 
   /// Fired when WE receive a new message from another user.
   void Function(Map<String, dynamic> data)? onNewMessage;
@@ -48,8 +54,32 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
 
+  /// Fired when an admin updates the group name or avatar via PATCH /chat/group/:roomId.
+  void Function(Map<String, dynamic> data)? onChatRoomUpdated;
+
+  /// Fired when the current user is added to a brand-new chat room (e.g.
+  /// someone else created a group and included them). Payload: `{ room: {...} }`.
+  void Function(Map<String, dynamic> data)? onNewChatRoom;
+
+  // ── Group call callbacks (set by CallCubit) ───────────────────────────────
+  void Function(Map<String, dynamic> data)? onIncomingGroupCall;
+  void Function(Map<String, dynamic> data)? onGroupCallParticipantJoined;
+  void Function(Map<String, dynamic> data)? onGroupCallParticipantLeft;
+  void Function(Map<String, dynamic> data)? onGroupCallRecordingStateChanged;
+  // FR-038: active-call state for Join Call pill (also replayed on reconnect)
+  void Function(Map<String, dynamic> data)? onGroupCallActive;
+  void Function(Map<String, dynamic> data)? onGroupCallEnded;
+
+  // ── Screen share callbacks (set by CallCubit) ────────────────────────────
+  void Function(String chatRoomId, String userId, String userName, bool isSharing, bool withAudio)? onScreenShareStateChanged;
+  void Function(String chatRoomId)? onScreenShareAccepted;
+  void Function(String chatRoomId, String activeSharerUserId, String activeSharerName, String reason)? onScreenShareRejected;
+
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
+
+  /// FR-022: Fired when someone deletes a message for everyone.
+  void Function(String clientMessageId)? onMessageDeleted;
 
   /// Connects to the NestJS WebSocket Gateway.
   /// ONLY call this after the backend has definitively verified the token
@@ -66,13 +96,8 @@ class SocketService {
     // (e.g., during mid-session token refresh via DioClient).
     disconnect();
 
-    final url = const String.fromEnvironment(
-      'API_URL',
-      defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-    );
-
     _socket = IO.io(
-      url,
+      AppConstants.apiBaseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -85,7 +110,6 @@ class SocketService {
     _socket?.onConnect((_) {
       debugPrint('[SocketService] Connected');
       isConnectedNotifier.value = true;
-      _isRefreshing = false;
       // Notify Cubit so it can trigger the REST status sync for missed events.
       onReconnected?.call();
     });
@@ -115,85 +139,198 @@ class SocketService {
     });
 
     // ── Chat events ───────────────────────────────────────────────────────
+    // NOTE: socket.io-client (Dart) delivers event payloads as Map<dynamic,dynamic>,
+    // NOT Map<String,dynamic>. Never use `data as Map<String,dynamic>` or
+    // `data is Map<String,dynamic>` — both fail silently at runtime.
+    // Always guard with `data is! Map`, then use Map<String,dynamic>.from(data as Map).
 
     // SERVER confirmed storage: pending → sent (1 grey tick)
     _socket?.on('messageSent', (data) {
-      final map = data as Map<String, dynamic>;
-      final id = map['clientMessageId'] as String?;
-      final createdAtStr = map['createdAt'] as String?;
-      final createdAt = createdAtStr != null
-          ? DateTime.tryParse(createdAtStr)
-          : null;
-      if (id != null) onMessageSent?.call(id, createdAt);
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final id = map['clientMessageId']?.toString();
+      final createdAtStr = map['createdAt']?.toString();
+      final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+      if (id != null && id.isNotEmpty) onMessageSent?.call(id, createdAt);
     });
 
     // RECIPIENT device acknowledged receipt: sent → delivered (2 grey ticks)
     _socket?.on('messageDelivered', (data) {
       debugPrint('[SocketService] Message delivered: $data');
-      final ids =
-          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null)
-        onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final ids = map['clientMessageIds'] as List<dynamic>?;
+      if (ids != null) onMessageDelivered?.call(ids.map((e) => e.toString()).toList());
     });
 
     // RECIPIENT read the message: delivered → read (2 blue ticks)
     _socket?.on('messageRead', (data) {
       debugPrint('[SocketService] Message read: $data');
-
-      final ids =
-          (data as Map<String, dynamic>)['clientMessageIds'] as List<dynamic>?;
-      if (ids != null)
-        onMessageRead?.call(ids.map((e) => e.toString()).toList());
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final ids = map['clientMessageIds'] as List<dynamic>?;
+      if (ids != null) {
+        final readByCount = map['readByCount'] as int?;
+        final participantCount = map['participantCount'] as int?;
+        onMessageRead?.call(
+          ids.map((e) => e.toString()).toList(),
+          readByCount: readByCount,
+          participantCount: participantCount,
+        );
+      }
     });
 
     // Inbound message from another user.
     _socket?.on('receiveMessage', (data) {
-      onNewMessage?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onNewMessage?.call(Map<String, dynamic>.from(data));
     });
     // Legacy name — keep both until backend is fully migrated.
     _socket?.on('newMessage', (data) {
-      onNewMessage?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onNewMessage?.call(Map<String, dynamic>.from(data));
     });
 
     // Inbound typing indicator
     _socket?.on('userTyping', (data) {
-      debugPrint('[SocketService] userTyping: $data');
-      if (data != null && data is Map<String, dynamic>) {
-        final roomId = data['chatRoomId']?.toString() ?? '';
-        final userId = data['userId']?.toString() ?? '';
-        final phoneNumber = data['phoneNumber']?.toString() ?? '';
-        final isTyping = data['isTyping'] == true;
-        onUserTyping?.call(roomId, userId, phoneNumber, isTyping);
-      }
+      if (data == null || data is! Map) return;
+      final roomId = data['chatRoomId']?.toString() ?? '';
+      final userId = data['userId']?.toString() ?? '';
+      final phoneNumber = data['phoneNumber']?.toString() ?? '';
+      final isTyping = data['isTyping'] == true;
+      onUserTyping?.call(roomId, userId, phoneNumber, isTyping);
     });
 
     // ── Call signaling events ─────────────────────────────────────────────
     _socket?.on('incomingCall', (data) {
       debugPrint('[CALL] incomingCall: $data');
-      onIncomingCall?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onIncomingCall?.call(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('callAccepted', (data) {
       debugPrint('[CALL] callAccepted: $data');
-      onCallAccepted?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onCallAccepted?.call(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('callRejected', (data) {
       debugPrint('[CALL] callRejected: $data');
-      onCallRejected?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onCallRejected?.call(Map<String, dynamic>.from(data));
     });
+
     _socket?.on('userStatus', (data) {
-      if (data != null && data is Map<String, dynamic>) {
-        final userId = data['userId']?.toString() ?? '';
-        final isOnline = data['isOnline'] == true;
-        onUserStatusChanged?.call(userId, isOnline);
-      }
+      if (data == null || data is! Map) return;
+      final userId = data['userId']?.toString() ?? '';
+      final isOnline = data['isOnline'] == true;
+      if (userId.isNotEmpty) onUserStatusChanged?.call(userId, isOnline);
     });
 
     // ── Status events ─────────────────────────────────────────────────────
     _socket?.on('statusReceived', (data) {
       debugPrint('[STATUS] statusReceived: $data');
-      onStatusReceived?.call(data as Map<String, dynamic>);
+      if (data == null || data is! Map) return;
+      onStatusReceived?.call(Map<String, dynamic>.from(data));
+    });
+
+    // ── FR-022: Message deletion ──────────────────────────────────────────
+    _socket?.on('messageDeleted', (data) {
+      debugPrint('[DELETE] messageDeleted: $data');
+      if (data == null || data is! Map) return;
+      final clientMsgId = data['clientMessageId']?.toString() ?? '';
+      if (clientMsgId.isNotEmpty) onMessageDeleted?.call(clientMsgId);
+    });
+
+    // ── Group call signaling events ───────────────────────────────────────
+    _socket?.on('incomingGroupCall', (data) {
+      debugPrint('[GROUP CALL] incomingGroupCall: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onIncomingGroupCall?.call(map);
+    });
+
+    _socket?.on('groupCallParticipantJoined', (data) {
+      debugPrint('[GROUP CALL] participantJoined: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallParticipantJoined?.call(map);
+    });
+
+    _socket?.on('groupCallParticipantLeft', (data) {
+      debugPrint('[GROUP CALL] participantLeft: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallParticipantLeft?.call(map);
+    });
+
+    _socket?.on('groupCallRecordingStateChanged', (data) {
+      debugPrint('[GROUP CALL] recordingStateChanged: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      onGroupCallRecordingStateChanged?.call(map);
+    });
+
+    // FR-038: broadcast on call start + replayed on socket reconnect
+    _socket?.on('groupCallActive', (data) {
+      debugPrint('[GROUP CALL] groupCallActive: $data');
+      if (data == null || data is! Map) return;
+      onGroupCallActive?.call(Map<String, dynamic>.from(data));
+    });
+
+    // FR-038: broadcast when last participant leaves
+    _socket?.on('groupCallEnded', (data) {
+      debugPrint('[GROUP CALL] groupCallEnded: $data');
+      if (data == null || data is! Map) return;
+      onGroupCallEnded?.call(Map<String, dynamic>.from(data));
+    });
+
+    // ── Group/room metadata updates ───────────────────────────────────────────
+    _socket?.on('chatRoomUpdated', (data) {
+      debugPrint('[SocketService] chatRoomUpdated: $data');
+      if (data == null || data is! Map) return;
+      onChatRoomUpdated?.call(Map<String, dynamic>.from(data));
+    });
+
+    _socket?.on('newChatRoom', (data) {
+      debugPrint('[SocketService] newChatRoom: $data');
+      if (data == null || data is! Map) return;
+      onNewChatRoom?.call(Map<String, dynamic>.from(data));
+    });
+
+    // ── Screen share events (T007) ────────────────────────────────────────
+    _socket?.on('screenShareStateChanged', (data) {
+      debugPrint('[SCREEN SHARE] screenShareStateChanged: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      final userId = map['userId']?.toString() ?? '';
+      final userName = map['userName']?.toString() ?? '';
+      final isSharing = map['isSharing'] == true;
+      final withAudio = map['withAudio'] == true;
+      if (chatRoomId.isEmpty || userId.isEmpty) return;
+      onScreenShareStateChanged?.call(chatRoomId, userId, userName, isSharing, withAudio);
+    });
+
+    _socket?.on('screenShareAccepted', (data) {
+      debugPrint('[SCREEN SHARE] screenShareAccepted: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      if (chatRoomId.isEmpty) return;
+      onScreenShareAccepted?.call(chatRoomId);
+    });
+
+    _socket?.on('screenShareRejected', (data) {
+      debugPrint('[SCREEN SHARE] screenShareRejected: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final chatRoomId = map['chatRoomId']?.toString() ?? '';
+      final activeSharerUserId = map['activeSharerUserId']?.toString() ?? '';
+      final activeSharerName = map['activeSharerName']?.toString() ?? '';
+      final reason = map['reason']?.toString() ?? '';
+      if (chatRoomId.isEmpty) return;
+      onScreenShareRejected?.call(chatRoomId, activeSharerUserId, activeSharerName, reason);
     });
   }
 
@@ -229,8 +366,9 @@ class SocketService {
         'type': type,
       };
       if (fileUrl != null && fileUrl.isNotEmpty) payload['fileUrl'] = fileUrl;
-      if (metadata != null && metadata.isNotEmpty)
+      if (metadata != null && metadata.isNotEmpty) {
         payload['metadata'] = metadata;
+      }
 
       _socket!.emit('sendMessage', payload);
     } else {
@@ -285,6 +423,60 @@ class SocketService {
     _socket?.emit('endCall', {});
   }
 
+  // ── Group call emitters ───────────────────────────────────────────────────
+
+  /// Caller initiates a group call — backend fans out `incomingGroupCall` to room members.
+  void requestGroupCall({required String chatRoomId, required bool isVideo}) {
+    _socket?.emit('requestGroupCall', {'chatRoomId': chatRoomId, 'isVideo': isVideo});
+  }
+
+  /// Invited member accepts the group call — backend issues a LiveKit token.
+  void acceptGroupCall({required String chatRoomId}) {
+    _socket?.emit('acceptGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Member declines the invitation — no broadcast to others.
+  void declineGroupCall({required String chatRoomId}) {
+    _socket?.emit('declineGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Participant leaves an active group call.
+  void leaveGroupCall({required String chatRoomId}) {
+    _socket?.emit('leaveGroupCall', {'chatRoomId': chatRoomId});
+  }
+
+  /// Notifies all participants that this client started or stopped local recording.
+  /// [hasVideo] indicates whether this is a video recording (MP4) or audio only (M4A).
+  void emitGroupCallRecordingStateChanged({
+    required String chatRoomId,
+    required bool isRecording,
+    bool hasVideo = false,
+  }) {
+    _socket?.emit('groupCallRecordingStateChanged', {
+      'chatRoomId': chatRoomId,
+      'isRecording': isRecording,
+      'hasVideo': hasVideo,
+    });
+  }
+
+  // ── Screen share emitters (T008) ────────────────────────────────────────
+
+  void emitScreenShareStateChanged({
+    required String chatRoomId,
+    required String userId,
+    required String userName,
+    required bool isSharing,
+    required bool withAudio,
+  }) {
+    _socket?.emit('screenShareStateChanged', {
+      'chatRoomId': chatRoomId,
+      'userId': userId,
+      'userName': userName,
+      'isSharing': isSharing,
+      'withAudio': withAudio,
+    });
+  }
+
   // ── Status emitters ─────────────────────────────────────────────────────
   void uploadStatus(Map<String, dynamic> statusPayload) {
     _socket?.emit('uploadStatus', statusPayload);
@@ -294,6 +486,11 @@ class SocketService {
     _socket?.emit('statusViewed', {'statusId': statusId});
   }
 
+  // ── FR-022: Message Deletion ─────────────────────────────────────────────
+  void deleteMessageForEveryone(String clientMessageId) {
+    _socket?.emit('deleteForEveryone', {'clientMessageId': clientMessageId});
+  }
+
   void disconnect() {
     _socket?.disconnect();
     _socket?.dispose();
@@ -301,58 +498,30 @@ class SocketService {
   }
 
   Future<void> _handleTokenRefresh() async {
-    if (_isRefreshing) return;
-    _isRefreshing = true;
-
     debugPrint(
       '[SocketService] Token expired. Pausing reconnection and triggering refresh...',
     );
-    _socket
-        ?.disconnect(); // Ensure socket stops hammering the server while we cleanly HTTP refresh
-
-    final authLocal = getIt<AuthLocalDataSource>();
+    _socket?.disconnect();
 
     try {
-      final refreshToken = await authLocal.getRefreshToken();
-      if (refreshToken != null && refreshToken.isNotEmpty) {
-        // Launch isolated network payload identical to DioClient interceptor logic
-        final refreshDio = Dio(
-          BaseOptions(
-            baseUrl: const String.fromEnvironment(
-              'API_URL',
-              defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-            ),
-          ),
-        );
+      final newAccess = await getIt<TokenRefreshService>().refreshTokens();
 
-        final response = await refreshDio.post(
-          '/auth/refresh',
-          data: {'refreshToken': refreshToken},
-        );
-
-        final newAccess = response.data['accessToken'];
-        final newRefresh = response.data['refreshToken'] ?? refreshToken;
-
-        await authLocal.saveTokens(
-          accessToken: newAccess,
-          refreshToken: newRefresh,
-        );
-
-        debugPrint(
-          '[SocketService] Refresh successful. Resuming socket connection...',
-        );
-        if (_socket != null) {
-          _socket!.auth = {'token': newAccess};
-          _socket!.connect();
-        }
-      } else {
-        await authLocal.deleteTokens();
+      debugPrint(
+        '[SocketService] Refresh successful. Resuming socket connection...',
+      );
+      if (_socket != null) {
+        _socket!.auth = {'token': newAccess};
+        _socket!.connect();
       }
+    } on RevocationException catch (revoked) {
+      debugPrint('[SocketService] Session revoked: $revoked');
+      // Full V-A teardown runs inside globalOnUnauthorizedRedirect.
+      globalOnUnauthorizedRedirect?.call();
     } catch (e) {
-      debugPrint('[SocketService] Socket Token Refresh Failed: $e');
-      await authLocal.deleteTokens();
-    } finally {
-      _isRefreshing = false;
+      // Non-terminal failure: leave the socket disconnected; the next
+      // reconnect attempt (or a fresh HTTP request triggering DioClient's
+      // refresh path) will retry. Do NOT delete tokens here.
+      debugPrint('[SocketService] Socket refresh failed (non-terminal): $e');
     }
   }
 }

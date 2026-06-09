@@ -32,14 +32,19 @@ abstract class ChatLocalDataSource {
     Map<String, dynamic> metadata,
   );
 
-  Future<List<Message>> getRoomMessages(String roomId);
-  Stream<List<Message>> watchRoomMessages(String roomId);
+  Future<List<Message>> getRoomMessages(
+    String roomId, {
+    int limit = 30,
+    int offset = 0,
+  });
+  Stream<List<Message>> watchRoomMessages(String roomId, {int limit = 30});
   Future<void> saveRoom(ChatSession room);
   Stream<List<ChatSession>> watchRecentChats();
   Stream<List<ChatSession>> watchContacts();
   Future<void> upsertContacts(List<ChatSession> contacts);
   Future<void> resetUnreadCount(String roomId);
   void closeRoomStream(String roomId);
+  void setRoomDisplayLimit(String roomId, int limit); // T006 — BN-03
   Future<void> clearAllData();
 
   /// Returns all messages with [MessageStatus.pending], oldest-first.
@@ -47,6 +52,13 @@ abstract class ChatLocalDataSource {
 
   /// Returns all messages stuck in [pending] OR [sent] state, oldest-first.
   Future<List<Message>> getStuckMessages();
+
+  /// Returns the timestamp of the most-recent message stored for [roomId],
+  /// or null if the room has no messages locally. Used by offline recovery (BN-06).
+  Future<DateTime?> getLastMessageTimestamp(String roomId);
+
+  /// Returns a locally-cached [ChatSession] by its ID, or null if not found.
+  Future<ChatSession?> getRoomById(String roomId);
 
   /// Returns the current [MessageStatus] of a single message by its ID.
   Future<MessageStatus?> getMessageStatus(String messageId);
@@ -68,7 +80,24 @@ abstract class ChatLocalDataSource {
 
   Future<List<Message>> searchMessages(String roomId, String query);
   Future<List<Message>> getSharedMedia(String roomId);
+
+  /// FR-022: Soft-delete a message in local DB — sets is_deleted = 1.
+  Future<void> markMessageDeleted(String clientMessageId);
+
+  /// FR-024: Returns messages containing URLs (for Links tab).
+  Future<List<Message>> getSharedLinks(String roomId);
+
+  /// FR-024: Returns messages where type = 'file' (for Docs tab).
+  Future<List<Message>> getSharedDocs(String roomId);
+
+  /// FR-024: Returns photo/video count summary for ChatInfoScreen.
+  Future<Map<String, int>> getMediaCount(String roomId);
+
   Future<void> updateUserOnlineStatus(String userId, bool isOnline);
+
+  /// Exposes the underlying SQLite [Database] instance for use by other
+  /// datasources that share the same DB file (e.g., RecordingsLocalDataSource).
+  Database? get database;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,8 +115,8 @@ String _mediaPreview(MessageType type) {
       return '🎵 Audio';
     case MessageType.contact:
       return '👤 Contact';
-    case MessageType.system:
-      return 'ℹ️ System';
+    // case MessageType.system:
+    //   return 'ℹ️ System';
     case MessageType.location:
       return '📍 Location';
     case MessageType.poll:
@@ -98,6 +127,25 @@ String _mediaPreview(MessageType type) {
       return '🎬 Video';
     case MessageType.text:
       return '';
+    default:
+      return '';
+  }
+}
+
+/// Returns an integer rank for monotonic status promotion (FR-019).
+/// Higher rank = more "advanced" status. Updates are only allowed forward.
+int _statusRank(MessageStatus status) {
+  switch (status) {
+    case MessageStatus.pending:
+      return 0;
+    case MessageStatus.sent:
+      return 1;
+    case MessageStatus.delivered:
+      return 2;
+    case MessageStatus.read:
+      return 3;
+    case MessageStatus.error:
+      return -1;
   }
 }
 
@@ -107,12 +155,18 @@ String _mediaPreview(MessageType type) {
 class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   Database? _db;
 
+  @override
+  Database? get database => _db;
+
   final Map<String, StreamController<List<Message>>> _roomStreamControllers =
       {};
   final StreamController<List<ChatSession>> _recentChatsController =
       StreamController<List<ChatSession>>.broadcast();
   final StreamController<List<ChatSession>> _contactsController =
       StreamController<List<ChatSession>>.broadcast();
+  // T005 — BN-03: tracks the highest message count shown per room so that
+  // _dispatchUpdateForRoom never narrows a paginated-out list back to 30.
+  final Map<String, int> _roomDisplayLimits = {};
 
   // ── Schema helpers ──────────────────────────────────────────────────────────
 
@@ -122,12 +176,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       client_message_id TEXT,
       room_id           TEXT,
       sender_id         TEXT,
+      sender_phone      TEXT DEFAULT '',
+      sender_name       TEXT DEFAULT '',
       text              TEXT,
       timestamp         INTEGER,
       status            TEXT,
       type              TEXT DEFAULT 'text',
       file_url          TEXT DEFAULT '',
-      metadata          TEXT DEFAULT ''
+      metadata          TEXT DEFAULT '',
+      is_deleted        INTEGER DEFAULT 0
     )
   ''';
 
@@ -180,6 +237,37 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     )
   ''';
 
+  // T002 — BN-01: Secondary indexes for all hot query paths.
+  static const _indexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_msg_room_ts    ON messages(room_id, timestamp DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_msg_client_id  ON messages(client_message_id)',
+    'CREATE INDEX IF NOT EXISTS idx_msg_status     ON messages(status)',
+    'CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phoneNumber)',
+  ];
+
+  static const _recordingsSchema = '''
+    CREATE TABLE IF NOT EXISTS recordings (
+      id                TEXT PRIMARY KEY,
+      call_room_id      TEXT NOT NULL,
+      call_room_name    TEXT NOT NULL,
+      file_path         TEXT NOT NULL,
+      gallery_path      TEXT,
+      duration_ms       INTEGER NOT NULL DEFAULT 0,
+      has_video         INTEGER NOT NULL DEFAULT 0,
+      size_bytes        INTEGER NOT NULL DEFAULT 0,
+      created_at        INTEGER NOT NULL,
+      display_name      TEXT NOT NULL,
+      share_status      TEXT NOT NULL DEFAULT 'idle',
+      shared_message_id TEXT
+    )
+  ''';
+
+  static const _recordingsIndexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_recordings_created_at  ON recordings(created_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_call_room   ON recordings(call_room_id)',
+    'CREATE INDEX IF NOT EXISTS idx_recordings_share_status ON recordings(share_status)',
+  ];
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -190,12 +278,20 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
 
     _db = await openDatabase(
       path,
-      version: 11,
+      version:
+          16, // v16: add gallery_path, share_status, shared_message_id to recordings
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
         await db.execute(_statusesSchema);
+        await db.execute(_recordingsSchema);
+        for (final stmt in _indexStatements) {
+          await db.execute(stmt);
+        }
+        for (final stmt in _recordingsIndexStatements) {
+          await db.execute(stmt);
+        }
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 8) {
@@ -213,9 +309,15 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             debugPrint('Migration v8 error: $e');
           }
         }
+        // FR-020: Add last_message_id and last_message_sender_id columns.
         if (oldVersion < 9) {
           try {
-            await db.execute(_statusesSchema);
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN last_message_id TEXT DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE rooms ADD COLUMN last_message_sender_id TEXT DEFAULT ''",
+            );
           } catch (e) {
             debugPrint('Migration v9 error: $e');
           }
@@ -231,16 +333,68 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         }
         if (oldVersion < 11) {
           try {
-            await db.execute("ALTER TABLE statuses ADD COLUMN content_type TEXT DEFAULT 'image'");
-            await db.execute("ALTER TABLE statuses ADD COLUMN text_content TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN media_url TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN background_color TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN font_style TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN music_track_id TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN caption TEXT");
-            await db.execute("ALTER TABLE statuses ADD COLUMN privacy TEXT DEFAULT 'public'");
+            await db.execute(
+              'ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0',
+            );
           } catch (e) {
             debugPrint('Migration v11 error: $e');
+          }
+        }
+        // T004 — BN-01: add secondary indexes to existing installs
+        if (oldVersion < 12) {
+          for (final stmt in _indexStatements) {
+            try {
+              await db.execute(stmt);
+            } catch (e) {
+              debugPrint('Migration v12 index error: $e');
+            }
+          }
+        }
+        if (oldVersion < 13) {
+          try {
+            await db.execute(_recordingsSchema);
+            for (final stmt in _recordingsIndexStatements) {
+              await db.execute(stmt);
+            }
+          } catch (e) {
+            debugPrint('Migration v13 error: $e');
+          }
+        }
+        if (oldVersion < 14) {
+          try {
+            await db.execute(
+              "ALTER TABLE messages ADD COLUMN sender_phone TEXT DEFAULT ''",
+            );
+          } catch (e) {
+            debugPrint('Migration v14 error: $e');
+          }
+        }
+        if (oldVersion < 15) {
+          try {
+            await db.execute(
+              "ALTER TABLE messages ADD COLUMN sender_name TEXT DEFAULT ''",
+            );
+          } catch (e) {
+            debugPrint('Migration v15 error: $e');
+          }
+        }
+        // v16: add share-pipeline columns to recordings (FR-035, data-model.md §3)
+        if (oldVersion < 16) {
+          try {
+            await db.execute(
+              "ALTER TABLE recordings ADD COLUMN gallery_path TEXT",
+            );
+            await db.execute(
+              "ALTER TABLE recordings ADD COLUMN share_status TEXT NOT NULL DEFAULT 'idle'",
+            );
+            await db.execute(
+              "ALTER TABLE recordings ADD COLUMN shared_message_id TEXT",
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_recordings_share_status ON recordings(share_status)',
+            );
+          } catch (e) {
+            debugPrint('Migration v16 error: $e');
           }
         }
       },
@@ -260,10 +414,27 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
 
+    // FR-019: Idempotent insert — skip if clientMessageId already exists.
+    if (message.clientMessageId.isNotEmpty) {
+      final existing = await db.query(
+        'messages',
+        columns: ['id'],
+        where: 'client_message_id = ?',
+        whereArgs: [message.clientMessageId],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        debugPrint(
+          '[LocalData] Dedup: message with clientMessageId=${message.clientMessageId} already exists, skipping insert.',
+        );
+        return;
+      }
+    }
+
     await db.insert(
       'messages',
       message.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: ConflictAlgorithm.ignore,
     );
 
     // Determine a human-readable last-message preview for the inbox.
@@ -272,10 +443,11 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         : _mediaPreview(message.type);
 
     // GHOST CHAT FIX: UPSERT the room row so JIT rooms appear immediately.
+    // FR-020: Also track lastMessageId for scoped status.
     await db.rawInsert(
       '''
       INSERT OR REPLACE INTO rooms
-        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus, type, participants, admins)
+        (id, name, avatarUrl, phoneNumber, lastMessage, timestamp, unreadCount, isOnline, lastMessageSenderId, lastMessageStatus, type, participants, admins, lastMessageId)
       VALUES (
         ?,
         COALESCE((SELECT name          FROM rooms WHERE id = ?), ?),
@@ -289,7 +461,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         ?,
         COALESCE((SELECT type          FROM rooms WHERE id = ?), 'PRIVATE'),
         COALESCE((SELECT participants  FROM rooms WHERE id = ?), '[]'),
-        COALESCE((SELECT admins        FROM rooms WHERE id = ?), '[]')
+        COALESCE((SELECT admins        FROM rooms WHERE id = ?), '[]'),
+        ?
       )
       ''',
       [
@@ -306,6 +479,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         message.roomId, // type
         message.roomId, // participants
         message.roomId, // admins
+        message.id, // lastMessageId (FR-020)
       ],
     );
 
@@ -431,28 +605,76 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     final db = _db;
     if (db == null) throw Exception('Database not initialized');
 
+    // FR-019: Query by client_message_id for reliable lookup across
+    // socket reconnects where the MongoDB _id may not yet be known.
     final records = await db.query(
       'messages',
-      columns: ['room_id'],
-      where: 'id = ?',
+      columns: ['id', 'room_id', 'status'],
+      where: 'client_message_id = ?',
       whereArgs: [messageId],
+      limit: 1,
     );
+
+    // Fallback: try by primary id if client_message_id lookup fails.
+    final List<Map<String, dynamic>> effectiveRecords;
+    if (records.isEmpty) {
+      effectiveRecords = await db.query(
+        'messages',
+        columns: ['id', 'room_id', 'status'],
+        where: 'id = ?',
+        whereArgs: [messageId],
+        limit: 1,
+      );
+    } else {
+      effectiveRecords = records;
+    }
+
+    if (effectiveRecords.isEmpty) return;
+
+    final row = effectiveRecords.first;
+    final dbId = row['id'] as String;
+    final roomId = row['room_id'] as String;
+    final currentStatusStr = row['status'] as String?;
+
+    // FR-019: Monotonic status guard — never allow backward status changes.
+    if (currentStatusStr != null) {
+      final currentStatus = MessageStatus.values.firstWhere(
+        (e) => e.name == currentStatusStr,
+        orElse: () => MessageStatus.pending,
+      );
+      if (_statusRank(status) <= _statusRank(currentStatus)) {
+        debugPrint(
+          '[LocalData] Status guard: rejecting ${status.name} (rank ${_statusRank(status)}) '
+          '— current is ${currentStatus.name} (rank ${_statusRank(currentStatus)})',
+        );
+        return;
+      }
+    }
 
     final updateData = <String, dynamic>{'status': status.name};
     if (createdAt != null) {
       updateData['timestamp'] = createdAt.millisecondsSinceEpoch;
     }
 
-    await db.update(
-      'messages',
-      updateData,
+    await db.update('messages', updateData, where: 'id = ?', whereArgs: [dbId]);
+
+    // FR-020: Only update room status if this message is the room's latest.
+    final roomRows = await db.query(
+      'rooms',
+      columns: ['lastMessageId'],
       where: 'id = ?',
-      whereArgs: [messageId],
+      whereArgs: [roomId],
+      limit: 1,
     );
 
-    if (records.isNotEmpty) {
-      final roomId = records.first['room_id'] as String;
+    final roomLastMsgId = roomRows.isNotEmpty
+        ? (roomRows.first['lastMessageId'] as String? ?? '')
+        : '';
 
+    // Only update room status if this IS the latest message (or no tracking yet).
+    if (roomLastMsgId.isEmpty ||
+        roomLastMsgId == dbId ||
+        roomLastMsgId == messageId) {
       final roomUpdateData = <String, dynamic>{
         'lastMessageStatus': status.name,
       };
@@ -466,15 +688,20 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         where: 'id = ?',
         whereArgs: [roomId],
       );
-      await _dispatchUpdateForRoom(roomId);
-      await _dispatchRecentChatsUpdate();
     }
+
+    await _dispatchUpdateForRoom(roomId);
+    await _dispatchRecentChatsUpdate();
   }
 
   // ── getRoomMessages ─────────────────────────────────────────────────────────
 
   @override
-  Future<List<Message>> getRoomMessages(String roomId) async {
+  Future<List<Message>> getRoomMessages(
+    String roomId, {
+    int limit = 30,
+    int offset = 0,
+  }) async {
     final db = _db;
     if (db == null) return [];
 
@@ -483,7 +710,8 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       where: 'room_id = ?',
       whereArgs: [roomId],
       orderBy: 'timestamp DESC',
-      limit: 20,
+      limit: limit,
+      offset: offset,
     );
 
     return maps.map((e) => Message.fromMap(e)).toList().reversed.toList();
@@ -492,20 +720,31 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
   // ── watchRoomMessages ───────────────────────────────────────────────────────
 
   @override
-  Stream<List<Message>> watchRoomMessages(String roomId) {
+  Stream<List<Message>> watchRoomMessages(String roomId, {int limit = 30}) {
     if (!_roomStreamControllers.containsKey(roomId)) {
       _roomStreamControllers[roomId] =
           StreamController<List<Message>>.broadcast();
     }
     getRoomMessages(
       roomId,
+      limit: limit,
     ).then((msgs) => _roomStreamControllers[roomId]!.add(msgs));
     return _roomStreamControllers[roomId]!.stream;
   }
 
+  // T006 — BN-03: called by ChatCubit after loadMoreMessages to record the
+  // expanded window so _dispatchUpdateForRoom never shrinks it back to 30.
+  @override
+  void setRoomDisplayLimit(String roomId, int limit) {
+    _roomDisplayLimits[roomId] = limit;
+  }
+
+  // T007 — BN-03: use stored HWM so a new incoming message or status update
+  // doesn't reset a paginated list back to the default 30-item window.
   Future<void> _dispatchUpdateForRoom(String roomId) async {
     if (_roomStreamControllers.containsKey(roomId)) {
-      final messages = await getRoomMessages(roomId);
+      final limit = _roomDisplayLimits[roomId] ?? 30;
+      final messages = await getRoomMessages(roomId, limit: limit);
       _roomStreamControllers[roomId]!.add(messages);
     }
   }
@@ -538,6 +777,38 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp ASC',
     );
     return maps.map((e) => Message.fromMap(e)).toList();
+  }
+
+  // ── getLastMessageTimestamp ─────────────────────────────────────────────────
+
+  @override
+  Future<DateTime?> getLastMessageTimestamp(String roomId) async {
+    final db = _db;
+    if (db == null) return null;
+    final rows = await db.rawQuery(
+      'SELECT MAX(timestamp) AS ts FROM messages WHERE room_id = ?',
+      [roomId],
+    );
+    if (rows.isEmpty) return null;
+    final raw = rows.first['ts'];
+    if (raw == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(raw as int, isUtc: true);
+  }
+
+  // ── getRoomById ─────────────────────────────────────────────────────────────
+
+  @override
+  Future<ChatSession?> getRoomById(String roomId) async {
+    final db = _db;
+    if (db == null) return null;
+    final rows = await db.query(
+      'rooms',
+      where: 'id = ?',
+      whereArgs: [roomId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return ChatSession.fromMap(rows.first);
   }
 
   // ── getMessageStatus ────────────────────────────────────────────────────────
@@ -638,6 +909,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
         r.phoneNumber,
         r.lastMessageSenderId,
         r.lastMessageStatus,
+        r.lastMessageId,
         r.type,
         r.participants,
         r.admins
@@ -665,6 +937,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
               (st) => st.name == e['lastMessageStatus'],
               orElse: () => MessageStatus.pending,
             ),
+            lastMessageId: (e['lastMessageId'] as String?) ?? '',
             type: ChatRoomType.values.firstWhere(
               (t) => t.name == (e['type'] as String? ?? 'PRIVATE'),
               orElse: () => ChatRoomType.PRIVATE,
@@ -772,6 +1045,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       _roomStreamControllers[roomId]?.close();
       _roomStreamControllers.remove(roomId);
     }
+    _roomDisplayLimits.remove(roomId); // T008 — BN-03: clear HWM on room close
   }
 
   // ── clearAllData ────────────────────────────────────────────────────────────
@@ -856,5 +1130,83 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       orderBy: 'timestamp DESC',
     );
     return maps.map((map) => Message.fromMap(map)).toList();
+  }
+
+  // ── FR-022: Soft delete ──────────────────────────────────────────────────
+
+  @override
+  Future<void> markMessageDeleted(String clientMessageId) async {
+    final db = _db;
+    if (db == null) return;
+    await db.update(
+      'messages',
+      {'is_deleted': 1, 'text': ''},
+      where: 'client_message_id = ?',
+      whereArgs: [clientMessageId],
+    );
+    // Refresh stream for the affected room
+    final rows = await db.query(
+      'messages',
+      columns: ['room_id'],
+      where: 'client_message_id = ?',
+      whereArgs: [clientMessageId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final roomId = rows.first['room_id'] as String;
+      await _dispatchUpdateForRoom(roomId);
+    }
+  }
+
+  // ── FR-024: Shared links, docs & counts ─────────────────────────────────
+
+  @override
+  Future<List<Message>> getSharedLinks(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+    // Match messages whose text contains a URL
+    final maps = await db.query(
+      'messages',
+      where: "room_id = ? AND text LIKE '%http%' AND is_deleted = 0",
+      whereArgs: [roomId],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => Message.fromMap(m)).toList();
+  }
+
+  @override
+  Future<List<Message>> getSharedDocs(String roomId) async {
+    final db = _db;
+    if (db == null) return [];
+    final maps = await db.query(
+      'messages',
+      where: 'room_id = ? AND type = ? AND is_deleted = 0',
+      whereArgs: [roomId, MessageType.file.name],
+      orderBy: 'timestamp DESC',
+    );
+    return maps.map((m) => Message.fromMap(m)).toList();
+  }
+
+  @override
+  Future<Map<String, int>> getMediaCount(String roomId) async {
+    final db = _db;
+    if (db == null) return {'photos': 0, 'videos': 0};
+    final photoCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
+            [roomId, MessageType.image.name],
+          ),
+        ) ??
+        0;
+    final videoCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM messages WHERE room_id = ? AND type = ? AND is_deleted = 0",
+            [roomId, MessageType.video.name],
+          ),
+        ) ??
+        0;
+    return {'photos': photoCount, 'videos': videoCount};
   }
 }

@@ -1,7 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
@@ -20,11 +25,34 @@ class GroupInfoPage extends StatefulWidget {
 
 class _GroupInfoPageState extends State<GroupInfoPage> {
   late String _currentUserPhone;
+  bool _isUploadingAvatar = false;
 
   @override
   void initState() {
     super.initState();
     _currentUserPhone = context.read<ChatCubit>().currentUserPhone;
+  }
+
+  Future<void> _pickAvatar(ChatSession chat) async {
+    final cubit = context.read<ChatCubit>();
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+    if (!mounted) return;
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final url = await cubit.uploadGroupAvatar(File(picked.path));
+      if (!mounted) return;
+      if (url != null && url.isNotEmpty) {
+        await cubit.updateGroupAvatar(chat.id, url);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Avatar upload failed. Group photo not changed.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    }
   }
 
   void _showAddParticipants(ChatSession currentChatData) {
@@ -72,22 +100,29 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   void _leaveGroup(ChatSession currentChatData) {
+    final isLastAdmin = currentChatData.admins.length == 1 &&
+        currentChatData.admins.contains(_currentUserPhone);
+    final hasOtherMembers = currentChatData.participants.length > 1;
+    final body = isLastAdmin && hasOtherMembers
+        ? 'You will leave this group. The earliest-joining member will be promoted to admin.'
+        : 'Are you sure you want to leave this group?';
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Leave Group'),
-        content: const Text('Are you sure you want to leave this group?'),
+        content: Text(body),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel', style: TextStyle(color: AppColors.textPrimary)),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               context.read<ChatCubit>().leaveGroup(currentChatData.id);
-              context.go('/home');
+              context.go(AppRouterName.home);
             },
             child: Text('Leave', style: TextStyle(color: AppColors.error)),
           ),
@@ -97,29 +132,30 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   void _showEditDialog(BuildContext context, ChatSession chat) {
+    final cubit = context.read<ChatCubit>();
     final controller = TextEditingController(text: chat.name);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Group Name'),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Edit Group Name'),
         content: TextField(
           controller: controller,
-          decoration: InputDecoration(
-            hintText: 'Group Name',
-          ),
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Group Name'),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
-              // Not supported by backend yet, but we'll show UI for it
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Updating group name is not supported by the backend yet.')),
-              );
-              Navigator.pop(context);
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != chat.name) {
+                cubit.updateGroupName(chat.id, newName);
+              }
+              Navigator.pop(ctx);
             },
             child: Text('Save', style: TextStyle(color: AppColors.primary)),
           ),
@@ -192,17 +228,22 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   Widget _buildHeader(ChatSession chat) {
-    final initials = chat.name.isNotEmpty 
-        ? (chat.name.length >= 2 ? chat.name.substring(0, 2).toUpperCase() : chat.name[0].toUpperCase()) 
+    final isAdmin = chat.admins.contains(_currentUserPhone);
+    final initials = chat.name.isNotEmpty
+        ? (chat.name.length >= 2
+            ? chat.name.substring(0, 2).toUpperCase()
+            : chat.name[0].toUpperCase())
         : 'G';
 
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 45.resR,
-          backgroundColor: AppColors.primary,
-          backgroundImage: chat.avatarUrl.isNotEmpty ? NetworkImage(chat.avatarUrl) : null,
-          child: chat.avatarUrl.isEmpty
+    final avatar = CircleAvatar(
+      radius: 45.resR,
+      backgroundColor: AppColors.primary,
+      backgroundImage: chat.avatarUrl.isNotEmpty
+          ? CachedNetworkImageProvider(UrlUtils.resolveMediaUrl(chat.avatarUrl))
+          : null,
+      child: _isUploadingAvatar
+          ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+          : chat.avatarUrl.isEmpty
               ? Text(
                   initials,
                   style: TextStyle(
@@ -212,7 +253,29 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   ),
                 )
               : null,
-        ),
+    );
+
+    return Column(
+      children: [
+        isAdmin
+            ? GestureDetector(
+                onTap: () => _pickAvatar(chat),
+                child: Stack(
+                  children: [
+                    avatar,
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: CircleAvatar(
+                        radius: 13.resR,
+                        backgroundColor: AppColors.primary,
+                        child: Icon(Icons.camera_alt, color: Colors.white, size: 14.resR),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : avatar,
         SizedBox(height: 12.resH),
         Text(
           chat.name.isEmpty ? 'Unknown Group' : chat.name,

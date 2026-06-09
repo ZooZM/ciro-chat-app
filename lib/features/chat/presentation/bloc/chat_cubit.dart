@@ -11,6 +11,7 @@ import 'package:injectable/injectable.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/message.dart';
 import 'package:ciro_chat_app/features/chat/data/datasources/chat_local_data_source.dart';
 import 'package:ciro_chat_app/core/network/socket_service.dart';
@@ -21,6 +22,7 @@ import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/chat/domain/repositories/chat_repository.dart'; // Use repository
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/contacts/data/contacts_service.dart';
+import 'package:ciro_chat_app/features/chat/domain/value_objects/voice_waveform.dart';
 
 part 'chat_state.dart';
 
@@ -56,6 +58,8 @@ class ChatCubit extends Cubit<ChatState> {
 
   StreamSubscription<List<Message>>? _roomStreamSub;
   String? _activeRoomId;
+  bool _isDeliberatelyOpen = false;
+  final Map<String, VoiceWaveformGeometry> _voiceWaveformCache = {};
   ChatSession? _pendingContact;
   String currentUserId = '';
   String currentUserPhone = '';
@@ -63,6 +67,12 @@ class ChatCubit extends Cubit<ChatState> {
   final _uuid = const Uuid();
   // Block state is owned by ChatState (ChatBlockUpdated / ChatRoomActive.blockedUserIds).
   // Do NOT add mutable block fields here — emit() is the single source of truth.
+
+  // FR-018: Pagination state for infinite scroll.
+  static const int _pageSize = 30;
+  int _messageOffset = 0;
+  bool _hasMoreMessages = true;
+  bool _isLoadingMore = false;
 
   final _typingUsersController = StreamController<Set<String>>.broadcast();
   Stream<Set<String>> get typingUsersStream => _typingUsersController.stream;
@@ -75,7 +85,14 @@ class ChatCubit extends Cubit<ChatState> {
   Stream<Map<String, Set<String>>> get allTypingUsersStream =>
       _roomTypingController.stream;
 
+  // US2: Client-side typing debouncing and auto-reset.
+  Timer? _typingTimer;
+  final Map<String, Timer> _incomingTypingTimers = {};
+
   final ValueNotifier<List<Message>> searchResults = ValueNotifier([]);
+
+  // FR-038: rooms with an active group call → value is isVideo for that call
+  final ValueNotifier<Map<String, bool>> activeCallRoomIds = ValueNotifier({});
 
   /// Returns the current typing users for a given room.
   /// Used by [TypingIndicatorWidget] on first build before any [TypingUpdate]
@@ -136,18 +153,53 @@ class ChatCubit extends Cubit<ChatState> {
       }
     };
 
-    _socketService.onMessageRead = (clientMessageIds) {
-      for (final id in clientMessageIds) {
-        handleMessageStatusUpdate(id, MessageStatus.read);
+    _socketService.onMessageRead = (
+      clientMessageIds, {
+      int? readByCount,
+      int? participantCount,
+    }) {
+      // INV-2: For GROUP rooms, only promote to 'read' when all members have read.
+      // readByCount and participantCount are present only for GROUP rooms.
+      // For private chats (no counts), promote immediately (existing behaviour).
+      final shouldPromote = readByCount == null ||
+          participantCount == null ||
+          readByCount >= participantCount;
+      if (shouldPromote) {
+        for (final id in clientMessageIds) {
+          handleMessageStatusUpdate(id, MessageStatus.read);
+        }
       }
     };
 
     _socketService.onReconnected = () {
       debugPrint(
-        '[ChatCubit] Socket reconnected — triggering REST status sync + pending replay',
+        '[ChatCubit] Socket reconnected — triggering REST status sync + pending replay + missed-message recovery',
       );
       syncStatusesFromRest().ignore();
       syncPendingMessages().ignore();
+      _syncMissedMessages().ignore();
+    };
+
+    // FR-022: Recipient receives a "delete for everyone" notification.
+    _socketService.onMessageDeleted = (clientMessageId) {
+      _handleDeletedMessage(clientMessageId).ignore();
+    };
+
+    _socketService.onChatRoomUpdated = _onChatRoomUpdated;
+    _socketService.onNewChatRoom = _onNewChatRoom;
+
+    // FR-038: track active group calls so JoinCallAppBarAction can show/hide
+    _socketService.onGroupCallActive = (data) {
+      final roomId = data['chatRoomId']?.toString() ?? '';
+      if (roomId.isEmpty) return;
+      final isVideo = data['isVideo'] == true;
+      activeCallRoomIds.value = {...activeCallRoomIds.value, roomId: isVideo};
+    };
+    _socketService.onGroupCallEnded = (data) {
+      final roomId = data['chatRoomId']?.toString() ?? '';
+      if (roomId.isEmpty) return;
+      final updated = Map<String, bool>.from(activeCallRoomIds.value)..remove(roomId);
+      activeCallRoomIds.value = updated;
     };
 
     _socketService.onUserTyping = (roomId, userId, phoneNumber, isTyping) {
@@ -189,6 +241,29 @@ class ChatCubit extends Cubit<ChatState> {
     _socketService.onNewMessage = (data) async {
       final clientMsgId = data['clientMessageId'] ?? _uuid.v4();
       final mongoId = data['_id'] ?? data['id'] ?? _uuid.v4();
+      final incomingRoomId = data['chatRoomId'] as String? ?? '';
+
+      // FR-031: If the user has left this room (no local record), ignore
+      // any further socket traffic for it.
+      if (incomingRoomId.isNotEmpty) {
+        final knownRoom = await _localDataSource.getRoomById(incomingRoomId);
+        if (knownRoom == null) {
+          debugPrint('[ChatCubit] FR-031: ignoring message for unknown/left room $incomingRoomId');
+          return;
+        }
+      }
+
+      // FR-019: Dedup check — skip if this clientMessageId is already in
+      // the current in-memory message list (prevents duplicates on reconnect).
+      if (state is ChatRoomActive) {
+        final msgs = (state as ChatRoomActive).messages;
+        if (msgs.any((m) => m.clientMessageId == clientMsgId)) {
+          debugPrint(
+            '[ChatCubit] Dedup: $clientMsgId already in state, skipping.',
+          );
+          return;
+        }
+      }
 
       final rawType = data['type'] as String? ?? data['messageType'] as String?;
       final incomingFileUrl = data['fileUrl'] as String?;
@@ -210,11 +285,30 @@ class ChatCubit extends Cubit<ChatState> {
         }
       }
 
+      // Backend now populates senderId with { _id, name, phoneNumber } so the
+      // live socket payload matches the REST shape. Handle both — fall back to
+      // a bare string for older deployments.
+      final rawSender = data['senderId'];
+      final String senderId;
+      final String senderPhone;
+      final String senderName;
+      if (rawSender is Map) {
+        senderId = (rawSender['_id'] ?? '').toString();
+        senderPhone = (rawSender['phoneNumber'] ?? data['senderPhone'] ?? '').toString();
+        senderName = (rawSender['name'] ?? '').toString();
+      } else {
+        senderId = (rawSender ?? '').toString();
+        senderPhone = (data['senderPhone'] ?? '').toString();
+        senderName = (data['senderName'] ?? '').toString();
+      }
+
       final incoming = Message(
         id: mongoId,
         clientMessageId: clientMsgId,
         roomId: data['chatRoomId'] ?? 'unknown',
-        senderId: data['senderId'] ?? '',
+        senderId: senderId,
+        senderPhone: senderPhone,
+        senderName: senderName,
         text: data['content'] ?? '',
         timestamp: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
         status: MessageStatus.delivered,
@@ -236,15 +330,17 @@ class ChatCubit extends Cubit<ChatState> {
         messageIds: [incoming.clientMessageId],
       );
 
-      if (isActiveRoom) {
+      if (isActiveRoom && _isDeliberatelyOpen) {
         _socketService.markRead(
           roomId: incoming.roomId,
           messageIds: [incoming.clientMessageId],
         );
         await _localDataSource.updateMessageStatus(
-          incoming.id,
+          incoming.clientMessageId,
           MessageStatus.read,
         );
+      } else if (isActiveRoom && !_isDeliberatelyOpen) {
+        debugPrint('[ChatCubit] Suppressed auto-markRead for ${incoming.clientMessageId} in ${incoming.roomId} (deliberateOpen=false)');
       }
     };
 
@@ -257,50 +353,134 @@ class ChatCubit extends Cubit<ChatState> {
 
   // ── Room lifecycle ──────────────────────────────────────────────────────────
 
-  void openRoom(String roomId, {ChatSession? contact, ChatSession? room}) async {
+  void openRoom(
+    String roomId, {
+    ChatSession? contact,
+    ChatSession? room,
+  }) async {
+    // FR-018: Reset pagination state on room open.
+    _messageOffset = 0;
+    _hasMoreMessages = true;
+    _isLoadingMore = false;
+
     if (roomId.isEmpty) {
       _pendingContact = contact;
       _activeRoomId = null;
-      emit(ChatRoomActive('', const []));
+      emit(const ChatRoomActive('', []));
       return;
     }
-    if (_activeRoomId == roomId) return;
 
-    if (room != null && room.lastMessageId.isNotEmpty) {
-      final messages = await _localDataSource.getRoomMessages(roomId);
-      final localLastMsgId = messages.isNotEmpty ? messages.first.id : null;
-      
-      if (localLastMsgId != room.lastMessageId) {
-        _chatRepository.fetchRoomMessages(roomId).then((res) {
-          res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
-            for (final msg in newMsgs.reversed) {
-              await _localDataSource.saveMessage(msg, incrementUnread: false);
-            }
-          });
-        });
-      }
-    } else {
-      _chatRepository.fetchRoomMessages(roomId).then((res) {
-        res.fold((l) => debugPrint('Error fetching messages: ${l.message}'), (newMsgs) async {
-          for (final msg in newMsgs.reversed) {
-            await _localDataSource.saveMessage(msg, incrementUnread: false);
-          }
-        });
-      });
-    }
+    if (_activeRoomId == roomId) return;
 
     _pendingContact = null;
     _activeRoomId = roomId;
+    _isDeliberatelyOpen = true;
     _roomStreamSub?.cancel();
     _localDataSource.resetUnreadCount(roomId);
-    emit(ChatLoading());
 
-    _roomStreamSub = _localDataSource
-        .watchRoomMessages(roomId)
-        .listen(
-          (messages) => emit(ChatRoomActive(roomId, messages)),
-          onError: (e) => emit(ChatError(e.toString())),
+    // ── 1. Local-First: Load from SQLite immediately ──────────────────────────
+    final localMessages = await _localDataSource.getRoomMessages(roomId);
+    if (localMessages.isNotEmpty) {
+      emit(ChatRoomActive(roomId, localMessages));
+    } else {
+      // Only show spinner if we have absolutely nothing locally.
+      emit(ChatLoading());
+    }
+
+    // ── 2. Real-time Subscription ─────────────────────────────────────────────
+    _roomStreamSub = _localDataSource.watchRoomMessages(roomId).listen((
+      messages,
+    ) {
+      if (_activeRoomId == roomId) {
+        emit(ChatRoomActive(roomId, messages));
+      }
+    }, onError: (e) => emit(ChatError(e.toString())));
+
+    // ── 3. Background Sync ────────────────────────────────────────────────────
+    // Compare local tip with server state (if provided) or just fetch.
+    bool needsSync = true;
+    if (room != null &&
+        room.lastMessageId.isNotEmpty &&
+        localMessages.isNotEmpty) {
+      // Find the ID of the newest message in our list.
+      // (getRoomMessages returns them reversed, so first is newest)
+      final localLastMsgId = localMessages.first.id;
+      if (localLastMsgId == room.lastMessageId) {
+        needsSync = false;
+        debugPrint(
+          '[ChatCubit] Room $roomId is already up-to-date (tip matches)',
         );
+      }
+    }
+
+    if (needsSync) {
+      debugPrint('[ChatCubit] Room $roomId background sync started');
+      _chatRepository
+          .fetchRoomMessages(roomId)
+          .then((res) {
+            res.fold(
+              (failure) =>
+                  debugPrint('[ChatCubit] Background sync failed: $failure'),
+              (newMsgs) async {
+                if (newMsgs.isEmpty) return;
+                for (final msg in newMsgs.reversed) {
+                  await _localDataSource.saveMessage(
+                    msg,
+                    incrementUnread: false,
+                  );
+                }
+                debugPrint('[ChatCubit] Background sync complete for $roomId');
+              },
+            );
+          })
+          .catchError((e) {
+            debugPrint('[ChatCubit] Background sync error: $e');
+          });
+    }
+
+    await markRoomMessagesRead(roomId);
+  }
+
+  // ── FR-018: Infinite scroll pagination ─────────────────────────────────────
+
+  /// Loads the next page of older messages and prepends them to the state.
+  Future<void> loadMoreMessages() async {
+    if (_isLoadingMore || !_hasMoreMessages) return;
+    final roomId = _activeRoomId;
+    if (roomId == null || roomId.isEmpty) return;
+    if (state is! ChatRoomActive) return;
+
+    _isLoadingMore = true;
+    final activeState = state as ChatRoomActive;
+    emit(activeState.copyWith(isLoadingMore: true));
+
+    _messageOffset += _pageSize;
+    final olderMessages = await _localDataSource.getRoomMessages(
+      roomId,
+      limit: _pageSize,
+      offset: _messageOffset,
+    );
+
+    _isLoadingMore = false;
+    if (olderMessages.isEmpty || olderMessages.length < _pageSize) {
+      _hasMoreMessages = false;
+    }
+
+    if (state is ChatRoomActive) {
+      final currentState = state as ChatRoomActive;
+      // Prepend older messages (they come oldest-first from the reversed query).
+      final merged = [...olderMessages, ...currentState.messages];
+      // T009 — BN-03: record expanded window so _dispatchUpdateForRoom never
+      // narrows the list back to 30 when a new message or status update arrives.
+      _localDataSource.setRoomDisplayLimit(roomId, merged.length);
+      emit(
+        currentState.copyWith(
+          messages: merged,
+          isLoadingMore: false,
+          hasMoreMessages: _hasMoreMessages,
+        ),
+      );
+    }
   }
 
   void closeRoom() {
@@ -309,17 +489,31 @@ class ChatCubit extends Cubit<ChatState> {
       _roomStreamSub?.cancel();
       _activeRoomId = null;
     }
+    _isDeliberatelyOpen = false;
     _pendingContact = null;
     _currentTypingUsers.clear();
     _typingUsersController.add({});
+    _voiceWaveformCache.clear();
+  }
+
+  /// Clears the deliberate-open flag without tearing down the active room.
+  /// Called from main.dart's lifecycle observer on paused / inactive /
+  /// detached / hidden. Idempotent.
+  void suspendDeliberateOpen() {
+    _isDeliberatelyOpen = false;
   }
 
   Future<void> markRoomMessagesRead(String roomId) async {
+    if (!_isDeliberatelyOpen) {
+      debugPrint('[ChatCubit] Suppressed markRoomMessagesRead for $roomId (deliberateOpen=false)');
+      return;
+    }
     final messages = await _localDataSource.getRoomMessages(roomId);
     final idsToMark = <String>[];
     for (final msg in messages) {
       if (msg.senderId != currentUserId &&
-          msg.status == MessageStatus.delivered) {
+          (msg.status == MessageStatus.delivered ||
+              msg.status == MessageStatus.sent)) {
         idsToMark.add(msg.clientMessageId);
         await _localDataSource.updateMessageStatus(msg.id, MessageStatus.read);
       }
@@ -333,19 +527,40 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   void notifyTyping({required bool isTyping}) {
-    if (_activeRoomId != null) {
-      _socketService.emitTyping(_activeRoomId!, isTyping);
+    if (_activeRoomId == null) return;
+
+    if (isTyping) {
+      // 1. Debouncing: Only emit if we weren't already typing.
+      final wasTyping = _typingTimer?.isActive ?? false;
+      if (!wasTyping) {
+        _socketService.emitTyping(_activeRoomId!, true);
+      }
+
+      // 2. (Re)start the 3-second auto-reset timer.
+      _typingTimer?.cancel();
+      _typingTimer = Timer(const Duration(seconds: 3), () {
+        notifyTyping(isTyping: false);
+      });
+    } else {
+      // 3. Explicit stop: Cancel timer and emit stop event.
+      _typingTimer?.cancel();
+      _typingTimer = null;
+      _socketService.emitTyping(_activeRoomId!, false);
     }
   }
 
+  /// Returns the saved contact name for [phoneNumber] if it exists in the
+  /// local contacts table; otherwise returns an empty string so callers can
+  /// fall back to a server-provided display name + phone format.
   Future<String> getLocalContactName(String phoneNumber) async {
+    if (phoneNumber.isEmpty) return '';
     final contacts = await _localDataSource.watchContacts().first;
     for (final contact in contacts) {
       if (contact.phoneNumber == phoneNumber) {
         return contact.name;
       }
     }
-    return phoneNumber;
+    return '';
   }
 
   // ── JIT room guard (shared by all send methods) ─────────────────────────────
@@ -380,7 +595,7 @@ class ChatCubit extends Cubit<ChatState> {
         _pendingContact = null;
 
         _socketService.joinRoom(roomId);
-        await Future.delayed(const Duration(milliseconds: 300));
+        // FR-021: No artificial delay — socket join is synchronous registration.
 
         _localDataSource.resetUnreadCount(roomId);
         _roomStreamSub?.cancel();
@@ -573,14 +788,18 @@ class ChatCubit extends Cubit<ChatState> {
         // 3. Patch the optimistic bubble with the real fileUrl.
         await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
-        // 4. Transmit via socket.
+        // 4. Transmit via socket — omit local-device paths; CDN URLs only.
         _socketService.sendMessage(
           roomId: roomId,
           messageId: msgId,
           text: '📷 Photo',
           type: 'image',
           fileUrl: fileUrl,
-          metadata: meta,
+          metadata: {
+            'mimeType': serverMeta['mimeType'] ?? 'image/jpeg',
+            'fileName': serverMeta['fileName'] ?? picked.name,
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          },
         );
         debugPrint('[ChatCubit] Image sent: $fileUrl');
       },
@@ -685,13 +904,19 @@ class ChatCubit extends Cubit<ChatState> {
 
         await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
+        // Transmit via socket — omit local-device paths; CDN URLs only.
         _socketService.sendMessage(
           roomId: roomId,
           messageId: msgId,
           text: '🎬 Video',
           type: 'video',
           fileUrl: fileUrl,
-          metadata: meta,
+          metadata: {
+            if (thumbUrl.isNotEmpty) 'thumbnailUrl': thumbUrl,
+            'mimeType': serverMeta['mimeType'] ?? 'video/mp4',
+            'fileName': serverMeta['fileName'] ?? pickedFile.name,
+            'fileSize': serverMeta['fileSize'] ?? 0,
+          },
         );
         debugPrint('[ChatCubit] Video sent: $fileUrl');
       },
@@ -801,7 +1026,7 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> sendContactMessage(Contact contact) async {
     final contactName = contact.displayName;
     final contactPhone = contact.phones.isNotEmpty
-        ? (contact.phones.first.number ?? '')
+        ? contact.phones.first.number
         : '';
 
     await sendLocalMessage(
@@ -940,6 +1165,7 @@ class ChatCubit extends Cubit<ChatState> {
     BuildContext context,
     String localPath, {
     int durationSeconds = 0,
+    List<double> waveformSamples = const [],
   }) async {
     final pendingContact = _pendingContact;
     final roomCreated = await _ensureRoom(pendingContact);
@@ -958,7 +1184,11 @@ class ChatCubit extends Cubit<ChatState> {
       timestamp: DateTime.now(),
       status: MessageStatus.pending,
       type: MessageType.voiceNote,
-      metadata: {'localPath': localPath, 'duration': durationSeconds},
+      metadata: {
+        'localPath': localPath,
+        'duration': durationSeconds,
+        if (waveformSamples.isNotEmpty) 'waveformSamples': waveformSamples,
+      },
     );
     await _localDataSource.saveMessage(
       optimistic,
@@ -984,19 +1214,27 @@ class ChatCubit extends Cubit<ChatState> {
           'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
           'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',
           'fileSize': serverMeta['fileSize'] ?? 0,
+          if (waveformSamples.isNotEmpty) 'waveformSamples': waveformSamples,
         };
 
         // 3. Patch bubble.
         await _localDataSource.updateMessageMedia(msgId, fileUrl, meta);
 
         // 4. Transmit.
+        // Transmit via socket — omit local-device path; CDN URLs only.
         _socketService.sendMessage(
           roomId: roomId,
           messageId: msgId,
           text: '🎤 Voice note',
           type: 'voice_note',
           fileUrl: fileUrl,
-          metadata: meta,
+          metadata: {
+            'duration': durationSeconds,
+            'mimeType': serverMeta['mimeType'] ?? 'audio/m4a',
+            'fileName': serverMeta['fileName'] ?? 'voice_note.m4a',
+            'fileSize': serverMeta['fileSize'] ?? 0,
+            if (waveformSamples.isNotEmpty) 'waveformSamples': waveformSamples,
+          },
         );
         debugPrint('[ChatCubit] Voice note sent: $fileUrl');
       },
@@ -1094,6 +1332,39 @@ class ChatCubit extends Cubit<ChatState> {
       );
     } catch (e) {
       debugPrint('[ChatCubit] REST sync failed: $e');
+    }
+  }
+
+  // ── Offline message recovery ─────────────────────────────────────────────────
+
+  Future<void> _syncMissedMessages() async {
+    try {
+      final result = await _chatRepository.fetchRooms();
+      await result.fold(
+        (failure) {
+          debugPrint('[ChatCubit] Missed-message sync: fetchRooms failed: $failure');
+        },
+        (rooms) async {
+          for (final room in rooms) {
+            final localTs = await _localDataSource.getLastMessageTimestamp(room.id);
+            final serverTs = room.timestamp;
+            if (localTs != null && !serverTs.isAfter(localTs)) continue;
+
+            final msgResult = await _chatRepository.fetchRoomMessages(room.id);
+            msgResult.fold(
+              (f) => debugPrint('[ChatCubit] Missed-message fetch failed for ${room.id}: $f'),
+              (msgs) async {
+                for (final msg in msgs.reversed) {
+                  await _localDataSource.saveMessage(msg, incrementUnread: true);
+                }
+                debugPrint('[ChatCubit] Recovered ${msgs.length} message(s) for ${room.id}');
+              },
+            );
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[ChatCubit] Missed-message sync error: $e');
     }
   }
 
@@ -1230,10 +1501,14 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> hydrateRooms() async {
     try {
-      final result = await _chatRepository.fetchRooms();
+      // US9: Added 5-second timeout to prevent app hang on slow/unreachable network.
+      final result = await _chatRepository.fetchRooms().timeout(
+        const Duration(seconds: 5),
+      );
+
       await result.fold(
         (failure) {
-          debugPrint('[ChatCubit] Hydration silent fail: $failure');
+          debugPrint('[ChatCubit] Hydration failed (repository): $failure');
         },
         (rooms) async {
           for (final room in rooms) {
@@ -1245,21 +1520,41 @@ class ChatCubit extends Cubit<ChatState> {
         },
       );
     } catch (e) {
-      debugPrint('[ChatCubit] Hydration silent fail: $e');
+      debugPrint('[ChatCubit] Hydration failed or timed out: $e');
     } finally {
+      // Always complete hydration to allow user to see local data.
       isHydrationComplete = true;
       emit(ChatInitial());
     }
   }
+
+  // ── getRoomById ──────────────────────────────────────────────────────────────
+
+  Future<ChatSession?> getRoomById(String roomId) =>
+      _localDataSource.getRoomById(roomId);
 
   // ── reset ────────────────────────────────────────────────────────────────────
 
   void reset() {
     _roomStreamSub?.cancel();
     _activeRoomId = null;
+    _isDeliberatelyOpen = false;
+    _voiceWaveformCache.clear();
     currentUserId = '';
     isHydrationComplete = false;
     emit(ChatInitial());
+  }
+
+  /// Uploads [file] via the chat file endpoint and returns the server-relative
+  /// URL on success, or null on failure. Used by CreateGroupPage for avatar upload.
+  Future<String?> uploadGroupAvatar(File file) async {
+    final result = await _chatRepository.uploadFile(file);
+    return result.fold((_) => null, (meta) {
+      final raw = meta['fileUrl'] as String?;
+      if (raw == null || raw.isEmpty) return null;
+      // Backend createGroup DTO uses @IsUrl() which requires an absolute URL.
+      return UrlUtils.resolveMediaUrl(raw);
+    });
   }
 
   Future<void> createGroup(
@@ -1312,17 +1607,100 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> leaveGroup(String roomId) async {
     final result = await _chatRepository.leaveGroup(roomId);
-    result.fold((failure) => emit(ChatError(failure.message)), (_) async {
+    result.fold((failure) => emit(ChatError(failure.message)), (newAdmin) async {
+      // If a new admin was promoted, update the room's admins list in SQLite
+      // so any other participant on this device sees the correct state.
+      if (newAdmin != null && newAdmin.isNotEmpty) {
+        final room = await _localDataSource.getRoomById(roomId);
+        if (room != null) {
+          await _localDataSource.saveRoom(room.copyWith(admins: [newAdmin]));
+        }
+      }
       await _localDataSource.deleteRoom(roomId);
       hydrateRooms();
     });
   }
 
+  Future<void> updateGroupName(String roomId, String name) async {
+    final result = await _chatRepository.updateGroup(roomId, name: name);
+    result.fold(
+      (failure) => emit(ChatError(failure.message)),
+      (_) async {
+        // Optimistic update: patch local SQLite row before server echo.
+        final room = await _localDataSource.getRoomById(roomId);
+        if (room != null) {
+          await _localDataSource.saveRoom(room.copyWith(name: name));
+        }
+      },
+    );
+  }
+
+  Future<void> updateGroupAvatar(String roomId, String avatarUrl) async {
+    final result = await _chatRepository.updateGroup(
+      roomId,
+      avatarUrl: avatarUrl,
+    );
+    result.fold(
+      (failure) => emit(ChatError(failure.message)),
+      (_) async {
+        final room = await _localDataSource.getRoomById(roomId);
+        if (room != null) {
+          await _localDataSource.saveRoom(room.copyWith(avatarUrl: avatarUrl));
+        }
+      },
+    );
+  }
+
+  /// Called when the backend broadcasts `chatRoomUpdated` (e.g. admin changed
+  /// group name or avatar). Updates local SQLite so the stream re-emits.
+  void _onChatRoomUpdated(Map<String, dynamic> data) async {
+    final roomId = data['roomId'] as String?;
+    if (roomId == null || roomId.isEmpty) return;
+    final room = await _localDataSource.getRoomById(roomId);
+    if (room == null) return;
+
+    final newName = data['name'] as String?;
+    final newAvatar = data['avatarUrl'] as String?;
+    final updated = room.copyWith(
+      name: newName ?? room.name,
+      avatarUrl: newAvatar ?? room.avatarUrl,
+    );
+    await _localDataSource.saveRoom(updated);
+  }
+
+  /// Called when the backend notifies that the current user has been added to
+  /// a brand-new chat room (e.g. someone created a group including them).
+  /// Parses the room, saves it locally so the chat list updates immediately,
+  /// and joins the socket room so subsequent messages arrive in real time.
+  void _onNewChatRoom(Map<String, dynamic> data) async {
+    final raw = data['room'];
+    if (raw is! Map) return;
+    try {
+      final json = Map<String, dynamic>.from(raw);
+      final room = ChatSession.fromJson(json, currentUserPhone);
+      if (room.id.isEmpty) return;
+      await _localDataSource.saveRoom(room);
+      _socketService.joinRoom(room.id);
+    } catch (e) {
+      debugPrint('[ChatCubit] _onNewChatRoom parse error: $e');
+    }
+  }
+
+  /// Returns true if a group call is currently active for [roomId].
+  bool hasActiveCall(String roomId) => activeCallRoomIds.value.containsKey(roomId);
+
   @override
   Future<void> close() {
     _roomStreamSub?.cancel();
+    _typingTimer?.cancel();
+    for (final t in _incomingTypingTimers.values) {
+      t.cancel();
+    }
+    _incomingTypingTimers.clear();
     _typingUsersController.close();
     _roomTypingController.close();
+    activeCallRoomIds.dispose();
+    searchResults.dispose();
     return super.close();
   }
 
@@ -1352,7 +1730,6 @@ class ChatCubit extends Cubit<ChatState> {
 
     if (state is ChatRoomActive) {
       final activeState = state as ChatRoomActive;
-      final currentRoomId = activeState.roomId;
       final currentMessages = activeState.messages;
 
       final messageIndex = currentMessages.indexWhere(
@@ -1409,6 +1786,19 @@ class ChatCubit extends Cubit<ChatState> {
     return _localDataSource.saveWaveformCache(messageId, samples);
   }
 
+  // ── In-Memory Waveform Cache (per conversation session, FR-010) ─────────────
+  // Feature 010: Cache waveform geometry in memory to prevent re-extraction
+  // on parent-list rebuilds. Cleared when room closes.
+
+  VoiceWaveformGeometry? getSessionWaveformCache(String messageId) {
+    return _voiceWaveformCache[messageId];
+  }
+
+  void cacheSessionWaveform(VoiceWaveformGeometry geometry) {
+    _voiceWaveformCache[geometry.messageId] = geometry;
+    debugPrint('[ChatCubit] Cached waveform for message ${geometry.messageId}');
+  }
+
   // ── Block Management ────────────────────────────────────────────────────────
   // Block state is owned exclusively by the Cubit's emitted state:
   //   - ChatRoomActive.blockedUserIds  (carried while in an active room)
@@ -1429,10 +1819,12 @@ class ChatCubit extends Cubit<ChatState> {
 
   /// Reads the current blocked list from state (safe fallback to empty).
   List<String> get _currentBlockedIds {
-    if (state is ChatRoomActive)
+    if (state is ChatRoomActive) {
       return (state as ChatRoomActive).blockedUserIds;
-    if (state is ChatBlockUpdated)
+    }
+    if (state is ChatBlockUpdated) {
       return (state as ChatBlockUpdated).blockedUserIds;
+    }
     return const [];
   }
 
@@ -1498,5 +1890,41 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<List<Message>> getSharedMedia(String roomId) async {
     return _localDataSource.getSharedMedia(roomId);
+  }
+
+  Future<List<Message>> getSharedLinks(String roomId) async {
+    return _localDataSource.getSharedLinks(roomId);
+  }
+
+  Future<List<Message>> getSharedDocs(String roomId) async {
+    return _localDataSource.getSharedDocs(roomId);
+  }
+
+  Future<Map<String, int>> getMediaCount(String roomId) async {
+    return _localDataSource.getMediaCount(roomId);
+  }
+
+  // ── FR-022: Message Deletion ─────────────────────────────────────────────
+
+  /// Deletes a message locally only ("Delete for me").
+  Future<void> deleteMessageForMe(String clientMessageId) async {
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Stream refresh is triggered inside markMessageDeleted.
+  }
+
+  /// Deletes a message for everyone — emits socket event and marks locally.
+  /// Only works within 1 hour of the message timestamp.
+  Future<void> deleteMessageForEveryone(String clientMessageId) async {
+    // Optimistic local update first.
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Emit socket event so the server + recipient are notified.
+    _socketService.deleteMessageForEveryone(clientMessageId);
+  }
+
+  /// Called when we receive a `messageDeleted` socket event from the server.
+  /// Marks the message as deleted in local DB and updates state.
+  Future<void> _handleDeletedMessage(String clientMessageId) async {
+    await _localDataSource.markMessageDeleted(clientMessageId);
+    // Stream watcher will auto-emit new state.
   }
 }

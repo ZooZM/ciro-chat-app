@@ -1,0 +1,308 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:video_player/video_player.dart';
+
+import '../../../../core/di/injection.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../domain/entities/recording.dart';
+import '../bloc/call_recording_cubit.dart';
+
+class RecordingsListPage extends StatefulWidget {
+  const RecordingsListPage({super.key});
+
+  @override
+  State<RecordingsListPage> createState() => _RecordingsListPageState();
+}
+
+class _RecordingsListPageState extends State<RecordingsListPage> {
+  List<Recording> _recordings = [];
+  bool _loading = true;
+  String? _playingId;
+  final AudioPlayer _player = AudioPlayer();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecordings();
+    _player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        if (mounted) setState(() => _playingId = null);
+      }
+    });
+  }
+
+  Future<void> _loadRecordings() async {
+    final list = await getIt<CallRecordingCubit>().listRecordings();
+    if (mounted) setState(() { _recordings = list; _loading = false; });
+  }
+
+  Future<void> _togglePlay(Recording rec) async {
+    if (rec.hasVideo) {
+      _openVideoPlayer(rec);
+      return;
+    }
+    if (_playingId == rec.id) {
+      await _player.stop();
+      setState(() => _playingId = null);
+      return;
+    }
+    setState(() => _playingId = rec.id);
+    try {
+      await _player.stop();
+      await _player.setFilePath(rec.filePath);
+      await _player.play();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _playingId = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cannot play: $e')),
+        );
+      }
+    }
+  }
+
+  void _openVideoPlayer(Recording rec) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _VideoPlayerScreen(filePath: rec.filePath, title: rec.displayName),
+      ),
+    );
+  }
+
+  Future<void> _delete(Recording rec) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete recording?'),
+        content: Text(rec.displayName),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await getIt<CallRecordingCubit>().deleteRecording(rec.id);
+    if (_playingId == rec.id) await _player.stop();
+    await _loadRecordings();
+  }
+
+  Future<void> _rename(Recording rec) async {
+    final controller = TextEditingController(text: rec.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Rename'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty) return;
+    await getIt<CallRecordingCubit>().renameRecording(rec.id, newName);
+    await _loadRecordings();
+  }
+
+  Future<void> _retryShare(Recording rec) async {
+    await getIt<CallRecordingCubit>().retryShare(rec);
+    await _loadRecordings();
+  }
+
+  String _formatDuration(int ms) {
+    final d = Duration(milliseconds: ms);
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.year}-${dt.month.toString().padLeft(2,'0')}-${dt.day.toString().padLeft(2,'0')} '
+        '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+  }
+
+  Widget _shareStatusIcon(Recording rec) {
+    switch (rec.shareStatus) {
+      case ShareStatus.uploading:
+        return const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      case ShareStatus.shared:
+        return const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20);
+      case ShareStatus.failed:
+        return IconButton(
+          icon: const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+          tooltip: 'Retry share',
+          onPressed: () => _retryShare(rec),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        );
+      case ShareStatus.idle:
+        return const SizedBox.shrink();
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<CallRecordingCubit, CallRecordingState>(
+      listener: (context, state) {
+        if (state is RecordingSaved) _loadRecordings();
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Recordings')),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _recordings.isEmpty
+                ? const Center(child: Text('No recordings yet'))
+                : ListView.separated(
+                    itemCount: _recordings.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final rec = _recordings[i];
+                      final isPlaying = _playingId == rec.id;
+                      return ListTile(
+                        leading: IconButton(
+                          icon: Icon(
+                            rec.hasVideo
+                                ? Icons.play_circle_outline
+                                : isPlaying
+                                    ? Icons.stop
+                                    : Icons.play_arrow,
+                          ),
+                          onPressed: () => _togglePlay(rec),
+                        ),
+                        title: Text(rec.displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          '${rec.hasVideo ? '🎬' : '🎙️'}  '
+                          '${_formatDuration(rec.durationMs)}  ·  '
+                          '${_formatSize(rec.sizeBytes)}  ·  '
+                          '${_formatDate(rec.createdAt)}'
+                          '${rec.galleryPath != null ? '  · saved' : ''}',
+                        ),
+                        trailing: _shareStatusIcon(rec),
+                        onTap: () => _togglePlay(rec),
+                        onLongPress: () => _showActions(rec),
+                      );
+                    },
+                  ),
+      ),
+    );
+  }
+
+  void _showActions(Recording rec) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename'),
+              onTap: () { Navigator.pop(context); _rename(rec); },
+            ),
+            if (rec.shareStatus == ShareStatus.failed)
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('Retry share to group'),
+                onTap: () { Navigator.pop(context); _retryShare(rec); },
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('Delete', style: TextStyle(color: Colors.red)),
+              onTap: () { Navigator.pop(context); _delete(rec); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Inline video player screen ─────────────────────────────────────────────────
+
+class _VideoPlayerScreen extends StatefulWidget {
+  const _VideoPlayerScreen({required this.filePath, required this.title});
+  final String filePath;
+  final String title;
+
+  @override
+  State<_VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
+  late final VideoPlayerController _ctrl;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = VideoPlayerController.file(File(widget.filePath))
+      ..initialize().then((_) {
+        if (mounted) setState(() => _initialized = true);
+        _ctrl.play();
+      });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(widget.title, style: const TextStyle(fontSize: 14)),
+      ),
+      body: Center(
+        child: _initialized
+            ? AspectRatio(
+                aspectRatio: _ctrl.value.aspectRatio,
+                child: VideoPlayer(_ctrl),
+              )
+            : const CircularProgressIndicator(),
+      ),
+      floatingActionButton: _initialized
+          ? FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  _ctrl.value.isPlaying ? _ctrl.pause() : _ctrl.play();
+                });
+              },
+              child: Icon(_ctrl.value.isPlaying ? Icons.pause : Icons.play_arrow),
+            )
+          : null,
+    );
+  }
+}

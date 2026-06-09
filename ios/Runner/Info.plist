@@ -53,7 +53,17 @@
 		<string>We need your location to send location messages in chats.</string>
 		<key>NSLocationAlwaysUsageDescription</key>
 		<string>We need your location to send location messages in chats.</string>
+		<key>NSContactsUsageDescription</key>
+		<string>We need access to your contacts to help you find friends to chat with.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>We need access to your photo library to allow you to send photos and videos in chats.</string>
+		<key>NSAppleMusicUsageDescription</key>
+		<string>We need access to your media library to allow you to send media files in chats.</string>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>RTCScreenSharingExtension</key>
+		<string>com.cirochat.zeyad.ciroChat.ScreenShareBroadcast</string>
+		<key>RTCAppGroupIdentifier</key>
+		<string>group.com.cirochat.zeyad.shared</string>
 	</dict>
 </plist>

@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.cloudwebrtc.webrtc">
+  <application>
+    <service
+      android:name="com.cloudwebrtc.webrtc.ScreenCaptureService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection" />
+  </application>
+</manifest>

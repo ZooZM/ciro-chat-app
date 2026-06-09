@@ -1,35 +1,35 @@
-# Implementation Plan: Optimize Chat Lifecycle (Expanded)
+# Implementation Plan: Optimize Chat Lifecycle (P2P Focus)
 
-**Branch**: `003-optimize-chat-lifecycle` | **Date**: April 27, 2026 | **Spec**: [spec.md](spec.md)
+**Branch**: `003-optimize-chat-lifecycle` | **Date**: 2026-04-30 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `specs/003-optimize-chat-lifecycle/spec.md`
 
 ## Summary
 
-Expand the chat lifecycle optimization with 7 new user stories: audio waveform caching (US11), video message support (US12), failed message resend (US13), block/unblock user (US14), in-chat search (US15), ChatInfoScreen full logic (US16), and splash screen chat preload (US17). This builds on the existing 10 user stories (US1–US10) which are already implemented. The approach prioritizes stability fixes first, then new features, following Clean Architecture and the offline-first constitution.
+Refactor the P2P chat module to achieve WhatsApp-grade reliability and UX. The scope covers 5 critical infrastructure fixes (infinite scroll pagination, message idempotency, scoped inbox status, atomic JIT room creation, dual-mode message deletion), 3 UI improvements (Poll/Event bubble refactors, SharedMediaScreen, voice waveform optimization), and ensures alignment with the project's offline-first constitution. All changes target the existing Clean Architecture layers without requiring schema migrations beyond adding `is_deleted` and `last_message_id` columns.
 
 ## Technical Context
 
-**Language/Version**: Dart 3.x / Flutter 3.x (frontend), TypeScript / NestJS (backend)
-**Primary Dependencies**: flutter_bloc, audio_waveforms, geolocator, geocoding, google_maps_flutter, cached_network_image, video_player, sqflite, socket_io_client, get_it
-**Storage**: SQLite (sqflite) for messages/rooms, SharedPreferences for simple boolean flags/preferences, Hive for secure tokens/complex documents, MongoDB (backend)
-**Testing**: flutter_test, manual device testing
-**Target Platform**: Android (primary), iOS (secondary)
-**Project Type**: mobile-app (Flutter) + web-service (NestJS backend)
-**Performance Goals**: 60fps chat scroll, <500ms splash-to-chatlist, <1s in-chat search
-**Constraints**: Offline-capable, <200ms message send latency on LAN, memory-leak-free
-**Scale/Scope**: ~17 screens, ~8 Cubits, 2 data sources per feature
+**Language/Version**: Dart 3.x / Flutter 3.x
+**Primary Dependencies**: `flutter_bloc` (Cubit), `sqflite`, `socket.io-client`, `dio`, `audio_waveforms`, `cached_network_image`, `get_it`/`injectable`
+**Storage**: SQLite (`ciro_chat.db_v1`) — tables: `messages`, `rooms`, `contacts`, `statuses`
+**Testing**: `flutter test`, manual device testing, `flutter analyze`
+**Target Platform**: Android (primary), iOS
+**Project Type**: Mobile app (Flutter)
+**Performance Goals**: Chat list renders <500ms, message pagination loads 30 messages per batch, waveform renders without extraction delay
+**Constraints**: Offline-capable, <200ms p95 for local SQLite queries, socket reconnect resilience
+**Scale/Scope**: ~50 screens, single-user app, message history up to 10,000 per room
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] **I. Clean Architecture**: All new features split into `presentation`, `domain`, and `data` layers. BlockUser adds backend REST endpoints + frontend Cubit methods. Video/Search/Resend extend existing `ChatCubit`.
-- [x] **II. State Management**: All state via `Cubit`. New states extend `Equatable`. Search results emitted as a distinct `ChatState` subclass.
-- [x] **III. Offline-First**: Waveform cache stored in SQLite `metadata`. Search queries SQLite locally. Block list synced to local storage. Failed messages queued with `pending` status.
-- [x] **IV. Socket.io**: Singleton `SocketService`. Block guard implemented server-side. Video messages use existing socket emit pattern. All events idempotent via `clientMessageId`.
-- [x] **V. Teardown**: `PlayerController.dispose()` intentionally skipped (audio_waveforms bug). Listeners/subscriptions cancelled. Search state cleared on room exit. Block state reset on logout.
-- [x] **Code Quality**: Strict linting. `snake_case` files. `AppColors`/`AppConstants` exclusively.
-- [x] **Error Handling**: Upload failures mapped to `Failure`. Resend mechanism catches and retries. Location errors handled by centralized `LocationService`.
+- [x] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers? ✅ All changes follow existing layer boundaries.
+- [x] **II. State Management**: Uses `flutter_bloc` (Cubit preferred)? States extend `Equatable`? ✅ ChatCubit is the single state manager.
+- [x] **III. Offline-First**: Relational data uses `sqflite`? Key-value uses `Hive`? ✅ All message/room data persisted to SQLite first.
+- [x] **IV. Socket.io**: Real-time logic uses singleton `SocketService`? Events are idempotent? ✅ FR-019 specifically adds idempotency guards.
+- [x] **V. Teardown**: Proper `dispose`/`cancel` implemented? Logout sequence handled? ✅ All new StreamControllers will follow existing disposal pattern.
+- [x] **Code Quality**: Strict linting followed? Naming conventions (snake_case files) met? ✅
+- [x] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer? ✅
 
 ## Project Structure
 
@@ -38,15 +38,15 @@ Expand the chat lifecycle optimization with 7 new user stories: audio waveform c
 ```text
 specs/003-optimize-chat-lifecycle/
 ├── plan.md              # This file
-├── spec.md              # Feature specification (17 user stories)
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output
-│   └── block-user-api.md
-├── checklists/
-│   └── requirements.md
-└── tasks.md             # Phase 2 output (generated by /speckit.tasks)
+├── research.md          # Phase 0 output (updated)
+├── data-model.md        # Phase 1 output (updated)
+├── quickstart.md        # Phase 1 output (updated)
+├── contracts/
+│   ├── block-user-api.md       # Existing
+│   ├── socket-events.md        # Existing (updated)
+│   ├── pagination-api.md       # NEW: Pagination query contracts
+│   └── atomic-resolve-api.md   # NEW: Atomic room creation endpoint
+└── tasks.md             # Phase 2 output (/speckit.tasks command)
 ```
 
 ### Source Code (repository root)
@@ -57,131 +57,312 @@ lib/
 │   ├── bloc/
 │   ├── di/
 │   ├── helpers/
-│   ├── network/
+│   ├── network/          # SocketService singleton
 │   ├── routing/
-│   ├── services/
-│   │   └── location_service.dart     # [DONE] Centralized location handler
-│   └── theme/
-│       ├── app_colors.dart
-│       ├── app_constants.dart
-│       └── app_typography.dart
+│   ├── services/          # LocationService
+│   └── theme/             # AppColors, AppTypography, AppConstants
 └── features/
-    ├── chat/
-    │   ├── data/
-    │   │   ├── datasources/
-    │   │   │   ├── chat_local_data_source.dart   # Add: searchMessages(), getSharedMedia(), waveformCache
-    │   │   │   └── chat_remote_data_source.dart   # Add: blockUser(), unblockUser(), getBlockList()
-    │   │   └── repositories/
-    │   ├── domain/
-    │   │   └── entities/
-    │   │       ├── message.dart                   # Add: MessageType.video
-    │   │       └── chat_session.dart
-    │   └── presentation/
-    │       ├── bloc/
-    │       │   ├── chat_cubit.dart                # Add: resendMessage(), searchMessages(), blockUser(), sendVideoMessage()
-    │       │   └── voice_note_controller.dart
-    │       ├── pages/
-    │       │   ├── chat_room_screen.dart           # [DONE] PopScope audio safety
-    │       │   ├── chat_info_screen.dart           # [DONE] AppColors migration. TODO: wire actions
-    │       │   └── group_info_page.dart
-    │       └── widgets/
-    │           ├── message_bubble_widget.dart      # [DONE] Safe dispose. TODO: add VideoBubble, resend icon
-    │           ├── attachment_sheet_widget.dart     # [DONE] LocationService. TODO: add Video option
-    │           ├── chat_search_bar.dart            # [NEW] Search overlay widget
-    │           └── media_gallery_viewer.dart       # [NEW] Full-screen swipe gallery
-    └── splash/
+    └── chat/
+        ├── data/
+        │   ├── datasources/   # ChatLocalDataSource, ChatRemoteDataSource
+        │   ├── models/
+        │   └── repositories/
+        ├── domain/
+        │   ├── entities/      # Message, ChatSession
+        │   └── repositories/
         └── presentation/
-            └── pages/
-                └── splash_screen.dart             # TODO: preload chat list
-
-E:\zeyad\chat-app-backend\src\modules\chat/
-├── chat.service.ts                                # Add: blockUser(), unblockUser(), isBlocked() guard
-├── chat.controller.ts                             # Add: POST/DELETE /chat/block, GET /chat/block-list
-├── chat.gateway.ts                                # Add: block guard in message handler
-└── schemas/
-    ├── message.schema.ts                          # Add: VIDEO to MessageType enum
-    └── user.schema.ts                             # Add: blockedUsers: [ObjectId] field
+            ├── bloc/          # ChatCubit, VoiceNoteController
+            ├── pages/         # ChatRoomScreen, ChatInfoScreen, SharedMediaScreen (NEW)
+            └── widgets/       # MessageBubble, ChatInputBar, ChatTileWidget
 ```
 
-**Structure Decision**: Extends the existing Clean Architecture feature structure. No new feature modules needed — all changes fit within `chat/` and `core/services/`. Backend changes are confined to the `chat` module.
+**Structure Decision**: All new code fits within the existing `lib/features/chat/` feature folder. One new page (`SharedMediaScreen`) and two new dialog widgets (`CreatePollDialog`, `CreateEventDialog`) are added. No new feature directories needed.
 
-## Implementation Phases (New Features Only)
+## Detailed Change Plan
 
-### Phase A: Stability & Caching (US11 — Waveform Persistence)
+### Phase A — Message Idempotency & Status Fixes (FR-019, FR-020)
 
-**Files**: `message_bubble_widget.dart`, `chat_local_data_source.dart`
+**Priority: P0 (Critical — must ship first)**
 
-1. After `preparePlayer(shouldExtractWaveform: true)` completes, extract waveform samples from the `PlayerController`
-2. Serialize waveform data as `List<double>` and store in the message's `metadata` column in SQLite (key: `waveformSamples`)
-3. On subsequent renders, check if `metadata['waveformSamples']` exists — if yes, pass pre-extracted data to `PlayerController` without re-extracting
+These are data-integrity bugs that affect every message exchange.
 
-### Phase B: Video Messages (US12)
+#### A1: `ChatLocalDataSource` — Idempotent Insert + Monotonic Status
 
-**Files**: `message.dart`, `message_bubble_widget.dart`, `attachment_sheet_widget.dart`, `chat_cubit.dart`, `media_gallery_viewer.dart` (NEW), backend `message.schema.ts`
+**File**: `lib/features/chat/data/datasources/chat_local_data_source.dart`
 
-1. Add `video` to `MessageType` enum (frontend + backend)
-2. Add `_VideoBubble` widget — renders thumbnail + play icon overlay
-3. Add `sendVideoMessage()` to `ChatCubit` — pick via `image_picker`, upload via existing endpoint
-4. Create `MediaGalleryViewer` — full-screen `PageView` with all media (images + videos) for horizontal swipe
-5. Add `video_player` dependency for inline playback
+| Change | Description |
+|--------|-------------|
+| `saveMessage()` | Before `INSERT OR REPLACE`, query by `clientMessageId`. If row exists, skip insert (return early). |
+| `updateMessageStatus()` | Change query from `WHERE id = ?` to `WHERE client_message_id = ?`. Add monotonic guard: fetch current status rank, compare with incoming rank, skip if incoming ≤ current. |
+| `updateMessageStatus()` | Before updating `rooms.lastMessageStatus`, compare `messageId` with `rooms.last_message_id`. Only update room if they match. |
+| Schema helper | Add `_statusRank()` method: `pending=0, sent=1, delivered=2, read=3`. |
 
-### Phase C: Resend Failed Messages (US13)
+#### A2: `ChatCubit` — Fix Status Handler
 
-**Files**: `message_bubble_widget.dart`, `chat_cubit.dart`
+**File**: `lib/features/chat/presentation/bloc/chat_cubit.dart`
 
-1. In `MessageBubbleWidget`, detect `MessageStatus.error` and render a resend icon (circular arrow) adjacent to the bubble
-2. Add `resendMessage(String clientMessageId)` to `ChatCubit` — re-emits the original message via socket with the same `clientMessageId` for idempotency
-3. On tap: transition status `error` → `pending`, attempt re-send, handle success/failure
+| Change | Description |
+|--------|-------------|
+| `handleMessageStatusUpdate()` | Pass `clientMessageId` instead of `id` to `updateMessageStatus()`. |
+| `_handleIncomingMessage()` | Add dedup check: if `clientMessageId` already in current `state.messages`, skip. |
 
-### Phase D: Block User (US14) — Backend + Frontend
+#### A3: `rooms` Schema — Add `last_message_id` + `last_message_sender_id`
 
-**Backend files**: `chat.service.ts`, `chat.controller.ts`, `chat.gateway.ts`, `user.schema.ts` (or new `block.schema.ts`)
+**File**: `lib/features/chat/data/datasources/chat_local_data_source.dart`
 
-1. **Schema**: Add `blockedUsers: [{ type: ObjectId, ref: 'User' }]` to User schema
-2. **REST**: `POST /chat/block/:userId` — adds to blockedUsers array. `DELETE /chat/block/:userId` — removes. `GET /chat/block-list` — returns blocked user IDs
-3. **Socket guard**: In `chat.gateway.ts` message handler, check if sender is in recipient's `blockedUsers` — if yes, silently drop the message
-4. **Frontend**: Add `blockUser()`, `unblockUser()`, `isUserBlocked()` to `ChatCubit`. Wire to ChatInfoScreen "Block user" tile with confirmation dialog
+| Change | Description |
+|--------|-------------|
+| `_roomsSchema` | Add `last_message_id TEXT DEFAULT ''` and `last_message_sender_id TEXT DEFAULT ''` columns. |
+| `initDB()` | Add `ALTER TABLE` migration for existing DBs. |
+| `saveMessage()` | Set `last_message_id` and `last_message_sender_id` during room upsert. |
 
-### Phase E: Search in Chat Room (US15)
+#### A4: `ChatTileWidget` — Sender-Scoped Ticks
 
-**Files**: `chat_search_bar.dart` (NEW), `chat_room_screen.dart`, `chat_cubit.dart`, `chat_local_data_source.dart`
+**File**: `lib/features/chat/presentation/widgets/chat_tile_widget.dart` (or equivalent inbox widget)
 
-1. Add `searchMessages(String roomId, String query)` to `ChatLocalDataSource` — SQL `LIKE` query on `text` column
-2. Add `searchMessages()` to `ChatCubit` — emits search results as a state
-3. Create `ChatSearchBar` widget — overlay at top of chat room, shows results as a scrollable list
-4. Tapping a result scrolls `ListView` to that message index and briefly highlights it
+| Change | Description |
+|--------|-------------|
+| Tick icon rendering | Only show tick icons when `lastMessageSenderId == currentUserId`. Hide for received messages. |
 
-### Phase F: ChatInfoScreen Full Logic (US16)
+---
 
-**Files**: `chat_info_screen.dart`, `chat_cubit.dart`, `chat_local_data_source.dart`
+### Phase B — Infinite Scroll Pagination (FR-018)
 
-1. Wire "Video call" and "Voice call" quick actions to `CallCubit.initiateCall()`
-2. Wire "Search" quick action to open search overlay (from Phase E)
-3. Add `getSharedMedia(String roomId)` to `ChatLocalDataSource` — queries messages with `type IN ('image', 'video', 'file')`
-4. Replace static media grid with real shared media from the database
-5. Wire "Block user" to Phase D logic
-6. Wire mute/lock toggles to SharedPreferences-persisted preferences
+**Priority: P0 (Critical — data loss prevention)**
 
-### Phase G: Splash Preload (US17)
+#### B1: `ChatLocalDataSource` — Offset-Based Query
 
-**Files**: `splash_screen.dart`, `chat_cubit.dart`
+| Change | Description |
+|--------|-------------|
+| `getRoomMessages()` | Add `{int limit = 30, int offset = 0}` parameters. SQL: `ORDER BY timestamp DESC LIMIT ? OFFSET ?` |
+| `watchRoomMessages()` | Accept `limit` param. Initial emission uses `LIMIT 30`. Subsequent triggers append. |
 
-1. In `SplashScreen.initState()`, after `verifyAuthStatus()` resolves successfully, call `ChatCubit.loadRecentChats()`
-2. Wait for both auth verification and chat list load before navigating to home
-3. The home screen `BlocBuilder` renders the pre-loaded chat list immediately
+#### B2: `ChatCubit` — Pagination State
 
-## Dependency Graph
+| Change | Description |
+|--------|-------------|
+| New fields | `int _messageOffset = 0`, `bool _hasMoreMessages = true`, `bool _isLoadingMore = false` |
+| `loadMoreMessages()` | New method: if `_hasMoreMessages && !_isLoadingMore`, fetch next 30, append to state, increment offset. If <30 returned, set `_hasMoreMessages = false`. |
+| `_dispatchRecentChatsUpdate()` | Review and remove hardcoded `LIMIT 20` if present. |
 
-```
-Phase A (Waveform Cache) ── independent
-Phase B (Video Messages) ── independent
-Phase C (Resend Failed)  ── independent
-Phase D (Block User)     ── independent
-Phase E (Search)         ── independent
-Phase F (ChatInfoScreen) ── depends on Phase D (block), Phase E (search)
-Phase G (Splash Preload) ── independent
-```
+#### B3: `ChatRoomScreen` — Scroll Listener
+
+| Change | Description |
+|--------|-------------|
+| `ScrollController` | Add scroll listener: when `position.extentAfter < 200`, call `cubit.loadMoreMessages()`. |
+| Loading indicator | Show `CircularProgressIndicator` at top of list when `_isLoadingMore`. |
+
+---
+
+### Phase C — Atomic JIT Room Creation (FR-021)
+
+**Priority: P1 (Important — eliminates race condition)**
+
+#### C1: Backend — Update `POST /chat/private/resolve`
+
+**File**: Backend `chat.service.ts` / `chat.controller.ts`
+
+| Change | Description |
+|--------|-------------|
+| Request body | Accept optional `firstMessage: { content, clientMessageId, type, fileUrl?, metadata? }` |
+| Handler | If `firstMessage` present: create room → join socket → persist message → emit to recipient → return `{ roomId, message }` |
+
+#### C2: `ChatRemoteDataSource` — Update Resolve Call
+
+| Change | Description |
+|--------|-------------|
+| `createPrivateChatRoom()` | Accept optional `firstMessage` parameter. Include in POST body if present. Parse response for both `roomId` and `message`. |
+
+#### C3: `ChatCubit` — Remove 300ms Delay
+
+| Change | Description |
+|--------|-------------|
+| `_ensureRoom()` | Remove `Future.delayed(const Duration(milliseconds: 300))`. For first message, use the atomic resolve endpoint. For subsequent messages, use normal socket flow. |
+| `sendMessage()` | If `roomId` is empty (JIT), call atomic resolve with first message. Use response to set roomId and mark message as sent. |
+
+---
+
+### Phase D — Message Deletion (FR-022)
+
+**Priority: P1 (Important — user expectation)**
+
+#### D1: `Message` Entity — Add `isDeleted` Field
+
+| Change | Description |
+|--------|-------------|
+| `message.dart` | Add `final bool isDeleted` field, default `false`. |
+| SQLite schema | Add `is_deleted INTEGER DEFAULT 0` column. Migration in `initDB()`. |
+
+#### D2: Backend — Delete For Everyone Event
+
+| Change | Description |
+|--------|-------------|
+| `ChatGateway` | New event handler: `deleteForEveryone` → set `isDeleted: true` on message doc → broadcast `messageDeleted` to room. |
+| Time limit | Check `message.createdAt` — reject if >1 hour old. |
+
+#### D3: `ChatCubit` — Delete Methods
+
+| Change | Description |
+|--------|-------------|
+| `deleteMessageForMe()` | Existing local delete + confirmation dialog. |
+| `deleteMessageForEveryone()` | Emit socket event → local update → UI refresh. |
+
+#### D4: `MessageBubble` — Deleted State
+
+| Change | Description |
+|--------|-------------|
+| Bubble rendering | If `message.isDeleted`, show "🚫 This message was deleted" in italic grey. |
+| Long-press menu | Show "Delete for Me" always. Show "Delete for Everyone" only if `isMine && withinOneHour`. |
+
+---
+
+### Phase E — UI Refactoring (FR-023)
+
+**Priority: P2 (Enhancement)**
+
+#### E1: Create Poll Dialog
+
+**File**: `lib/features/chat/presentation/widgets/create_poll_dialog.dart`
+
+Match `images_ui/create_poll.jpeg` layout with `AppColors`:
+- Dark background modal, QUESTION section, OPTIONS with drag-reorder handles
+- "Allow multiple answers" toggle, Cancel/Send actions
+
+#### E2: Create Event Dialog
+
+**File**: `lib/features/chat/presentation/widgets/create_event_dialog.dart`
+
+Match `images_ui/create_event.jpeg` layout with `AppColors`:
+- Event name, description (2048 char limit), date-time pickers
+- "Include end time" toggle, location field, reminder dropdown, "Allow guests" toggle
+
+#### E3: Poll Message Bubble
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+Match `images_ui/poll_msg.jpeg` with `AppColors`:
+- Question title, hint text, radio/checkbox options, vote counts, progress bars
+- "View votes" action button
+
+#### E4: Event Message Bubble
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+Match `images_ui/event_msg_in_chat.jpeg` with `AppColors`:
+- Calendar icon, event title, date range, description
+- "Join call" and "Add to calendar" action buttons
+
+---
+
+### Phase F — Shared Media Screen (FR-024)
+
+**Priority: P2 (Enhancement)**
+
+#### F1: New `SharedMediaScreen` Page
+
+**File**: `lib/features/chat/presentation/pages/shared_media_screen.dart`
+
+- 3 tabs: Media, Links, Docs
+- Grid layout for Media (4 columns), list for Links/Docs
+- Footer with count summary
+- "Select" button for multi-select
+- Instant load from SQLite — no loading spinner
+
+#### F2: `ChatInfoScreen` Navigation
+
+**File**: `lib/features/chat/presentation/pages/chat_info_screen.dart`
+
+| Change | Description |
+|--------|-------------|
+| Media header | Wrap in `GestureDetector` → navigate to `SharedMediaScreen`. |
+
+#### F3: `ChatLocalDataSource` — Media Queries
+
+| Change | Description |
+|--------|-------------|
+| `getSharedLinks()` | New method: query messages where `text` contains URLs. |
+| `getSharedDocs()` | New method: query messages where `type = 'file'`. |
+| `getMediaCount()` | New method: return `{photos: int, videos: int}` counts. |
+
+---
+
+### Phase G — Voice Waveform Optimization (FR-025)
+
+**Priority: P1 (Important — performance)**
+
+#### G1: Sender-Side Extraction
+
+**File**: `lib/features/chat/presentation/widgets/chat_input_bar.dart`
+
+| Change | Description |
+|--------|-------------|
+| `_stopAndSendRecording()` | After recording stops, extract waveform (50 samples) immediately. Pass `waveformSamples` in message metadata to `sendVoiceNote()`. |
+
+#### G2: Socket Payload
+
+**File**: `lib/features/chat/presentation/bloc/chat_cubit.dart`
+
+| Change | Description |
+|--------|-------------|
+| `sendVoiceNote()` | Include `metadata.waveformSamples` in the socket `sendMessage` event payload. |
+
+#### G3: Receiver-Side Rendering
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+| Change | Description |
+|--------|-------------|
+| `_VoiceBubble._preparePlayer()` | Always call `preparePlayer(shouldExtractWaveform: false)`. Read waveform from `message.metadata['waveformSamples']` directly. Never call `extractWaveformData()`. |
+
+---
+
+### Phase H — Media Bubble Display Refactor (FR-026)
+
+**Priority: P2 (Enhancement — visual polish)**
+
+Reference: `images_ui/display_media_inside_chatroom.mp4`
+
+#### H1: `_ImageBubble` — Overlay Timestamp on Media
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+| Change | Description |
+|--------|-------------|
+| Layout | Move the `footer` (timestamp + ticks) from BELOW the image to INSIDE the image, overlaid at the bottom-right corner. |
+| Gradient | Add a semi-transparent dark gradient (`LinearGradient` from transparent to `Colors.black54`) at the bottom of the media to ensure text readability. |
+| Border radius | Increase to `16.resR` (WhatsApp standard). |
+| Footer style | White text, smaller font, positioned with `Positioned(bottom: 6, right: 8)` inside a `Stack`. |
+
+#### H2: `_VideoBubble` — Overlay Timestamp + Duration
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart`
+
+| Change | Description |
+|--------|-------------|
+| Layout | Same overlay pattern as `_ImageBubble` — timestamp + ticks inside the media. |
+| Play button | White triangle inside a semi-transparent dark circle (`Colors.black.withOpacity(0.5)`), centered on the thumbnail. Already partially implemented — verify styling. |
+| Duration label | Add video duration (e.g., "0:14") at the bottom-left of the thumbnail, white text with dark background chip. |
+
+#### H3: `MediaGalleryViewer` — Full-Screen Refactor
+
+**File**: `lib/features/chat/presentation/widgets/message_bubble_widget.dart` (or dedicated file)
+
+| Change | Description |
+|--------|-------------|
+| Background | Solid black (`Colors.black`). |
+| Header | Sender name + date/time (e.g., "25/04/2026, 2:01 AM"). |
+| Actions | Top-right: share, star (favorite), delete icons. |
+| Reply button | Bottom center: "Reply" button to reply directly while viewing media. |
+| Voice notes | When viewing a voice note, show white waveform centered on black background with progress bar at the top. |
 
 ## Complexity Tracking
 
-No constitution violations. All features follow established patterns.
+> No constitution violations. All changes follow Clean Architecture, use `sqflite` for persistence, and integrate through the existing `ChatCubit` Cubit pattern.
+
+| Aspect | Assessment |
+|--------|------------|
+| Schema migration | Low — 2 new columns (`is_deleted`, `last_message_id`), handled via `ALTER TABLE` in `initDB()` |
+| Backend changes | Medium — FR-021 (atomic resolve) and FR-022 (delete for everyone) require backend modifications |
+| UI complexity | Medium-High — 4 bubble/dialog refactors (FR-023), media bubble overlay refactor (FR-026), 1 new screen (FR-024), full-screen viewer polish (FR-026) |
+| Risk areas | JIT atomic resolve (C1-C3), pagination scroll listener edge cases (B3), media overlay layout on different screen sizes (H1-H2) |
+

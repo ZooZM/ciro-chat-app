@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:equatable/equatable.dart';
 
 enum MessageStatus { pending, sent, delivered, read, error }
@@ -82,6 +83,12 @@ class Message extends Equatable {
   final String clientMessageId;
   final String roomId;
   final String senderId;
+  /// Phone number of the sender — used to resolve the display name in group chats.
+  final String senderPhone;
+  /// Registered display name of the sender (from User.name on the backend).
+  /// Used as the fallback label in group bubbles when the phone is not in the
+  /// local contacts ("+phone ~SenderName").
+  final String senderName;
   final String text;
   final DateTime timestamp;
   final MessageStatus status;
@@ -101,17 +108,27 @@ class Message extends Equatable {
   ///   contact    : { contactName, contactPhone }
   final Map<String, dynamic>? metadata;
 
+  /// FR-022: True if this message has been soft-deleted ("This message was deleted").
+  final bool isDeleted;
+
+  /// US3: Returns the absolute URL for media files, resolving relative paths
+  /// against the API base URL.
+  String get resolvedFileUrl => UrlUtils.resolveMediaUrl(fileUrl);
+
   const Message({
     required this.id,
     required this.clientMessageId,
     required this.roomId,
     required this.senderId,
+    this.senderPhone = '',
+    this.senderName = '',
     required this.text,
     required this.timestamp,
     this.status = MessageStatus.pending,
     this.type = MessageType.text,
     this.fileUrl,
     this.metadata,
+    this.isDeleted = false,
   });
 
   Message copyWith({
@@ -119,24 +136,30 @@ class Message extends Equatable {
     String? clientMessageId,
     String? roomId,
     String? senderId,
+    String? senderPhone,
+    String? senderName,
     String? text,
     DateTime? timestamp,
     MessageStatus? status,
     MessageType? type,
     String? fileUrl,
     Map<String, dynamic>? metadata,
+    bool? isDeleted,
   }) {
     return Message(
       id: id ?? this.id,
       clientMessageId: clientMessageId ?? this.clientMessageId,
       roomId: roomId ?? this.roomId,
       senderId: senderId ?? this.senderId,
+      senderPhone: senderPhone ?? this.senderPhone,
+      senderName: senderName ?? this.senderName,
       text: text ?? this.text,
       timestamp: timestamp ?? this.timestamp,
       status: status ?? this.status,
       type: type ?? this.type,
       fileUrl: fileUrl ?? this.fileUrl,
       metadata: metadata ?? this.metadata,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
@@ -146,12 +169,15 @@ class Message extends Equatable {
       'client_message_id': clientMessageId,
       'room_id': roomId,
       'sender_id': senderId,
+      'sender_phone': senderPhone,
+      'sender_name': senderName,
       'text': text,
       'timestamp': timestamp.millisecondsSinceEpoch,
       'status': status.name,
       'type': messageTypeToString(type),
       'file_url': fileUrl ?? '',
       'metadata': metadata != null ? jsonEncode(metadata) : '',
+      'is_deleted': isDeleted ? 1 : 0,
     };
   }
 
@@ -171,6 +197,8 @@ class Message extends Equatable {
       clientMessageId: map['client_message_id'] ?? map['id'] ?? '',
       roomId: map['room_id'] ?? '',
       senderId: map['sender_id'] ?? '',
+      senderPhone: map['sender_phone'] as String? ?? '',
+      senderName: map['sender_name'] as String? ?? '',
       text: map['text'] ?? '',
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
       status: MessageStatus.values.firstWhere(
@@ -182,24 +210,42 @@ class Message extends Equatable {
           ? map['file_url'] as String
           : null,
       metadata: parsedMeta,
+      isDeleted: (map['is_deleted'] as int? ?? 0) == 1,
     );
   }
   factory Message.fromNetworkMap(Map<String, dynamic> map) {
     Map<String, dynamic>? parsedMeta;
-    final rawMeta = map['metadata'] as String?;
-    if (rawMeta != null && rawMeta.isNotEmpty) {
+    final metaDataField = map['metadata'];
+
+    if (metaDataField is Map) {
+      parsedMeta = Map<String, dynamic>.from(metaDataField);
+    } else if (metaDataField is String && metaDataField.isNotEmpty) {
       try {
-        parsedMeta = jsonDecode(rawMeta) as Map<String, dynamic>;
+        parsedMeta = jsonDecode(metaDataField) as Map<String, dynamic>;
       } catch (_) {
         parsedMeta = null;
       }
     }
-    Map<String, dynamic> sender = map['senderId'];
+    final rawSender = map['senderId'];
+    final String senderId;
+    final String senderPhone;
+    final String senderName;
+    if (rawSender is Map) {
+      senderId = (rawSender['_id'] ?? '').toString();
+      senderPhone = (rawSender['phoneNumber'] ?? '').toString();
+      senderName = (rawSender['name'] ?? '').toString();
+    } else {
+      senderId = (rawSender ?? '').toString();
+      senderPhone = (map['senderPhone'] ?? '').toString();
+      senderName = (map['senderName'] ?? '').toString();
+    }
     return Message(
       id: map['_id'] ?? '',
       clientMessageId: map['clientMessageId'] ?? map['id'] ?? '',
       roomId: map['chatRoomId'] ?? '',
-      senderId: sender['_id'] ?? '',
+      senderId: senderId,
+      senderPhone: senderPhone,
+      senderName: senderName,
       text: map['content'] ?? '',
       timestamp: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
       status: MessageStatus.values.firstWhere(
@@ -219,11 +265,14 @@ class Message extends Equatable {
     clientMessageId,
     roomId,
     senderId,
+    senderPhone,
+    senderName,
     text,
     timestamp,
     status,
     type,
     fileUrl,
     metadata,
+    isDeleted,
   ];
 }

@@ -80,8 +80,17 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
-  Future<Either<Failure, void>> leaveGroup(String roomId) {
+  Future<Either<Failure, String?>> leaveGroup(String roomId) {
     return remoteDataSource.leaveGroup(roomId);
+  }
+
+  @override
+  Future<Either<Failure, void>> updateGroup(
+    String roomId, {
+    String? name,
+    String? avatarUrl,
+  }) {
+    return remoteDataSource.updateGroup(roomId, name: name, avatarUrl: avatarUrl);
   }
 
   @override

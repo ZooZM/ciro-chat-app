@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -52,7 +53,7 @@ class _MobileNumberScreenState extends State<MobileNumberScreen>
           );
         } else if (state is Unauthenticated && _phoneNumber.isNotEmpty) {
           // Send OTP was successful natively.
-          context.push('/auth/verify', extra: _phoneNumber);
+          context.push('${AppRouterName.auth}/${AppRouterName.verify}', extra: _phoneNumber);
         }
       },
       builder: (context, state) {

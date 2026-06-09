@@ -7,33 +7,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import '../bloc/voice_note_controller.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../domain/entities/message.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
+import '../../domain/value_objects/voice_waveform.dart';
 import 'media_gallery_viewer.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Base URL constant — same default as DioClient to avoid an extra import.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const _kBaseUrl = String.fromEnvironment(
-  'API_URL',
-  defaultValue: 'https://firstly-perforative-jaylah.ngrok-free.dev',
-);
-
-String _resolveUrl(String? relativeOrAbsolute) {
-  if (relativeOrAbsolute == null || relativeOrAbsolute.isEmpty) return '';
-  if (relativeOrAbsolute.startsWith('http')) return relativeOrAbsolute;
-  final base = _kBaseUrl.endsWith('/') ? _kBaseUrl : '$_kBaseUrl/';
-  final path = relativeOrAbsolute.startsWith('/')
-      ? relativeOrAbsolute.substring(1)
-      : relativeOrAbsolute;
-  return '$base$path';
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main bubble widget
@@ -53,7 +37,37 @@ class MessageBubbleWidget extends StatelessWidget {
 
   bool get _isMine => message.senderId == currentUserId;
 
-  Color get _bgColor => _isMine ? AppColors.primaryLight : AppColors.surface;
+  /// Image & video bubbles have their own ClipRRect — the outer container
+  /// must be transparent and have no padding so the media fills edge-to-edge.
+  bool get _isMediaBubble =>
+      message.type == MessageType.image || message.type == MessageType.video;
+
+  /// Group-chat sender label: if the phone is saved in local contacts, show
+  /// the saved name; otherwise show `+phone ~ServerName` (or just `+phone` /
+  /// `ServerName` / `senderId` depending on what we have).
+  Future<String> _resolveGroupSenderLabel(BuildContext context) async {
+    final phone = message.senderPhone;
+    if (phone.isNotEmpty) {
+      final contactName = await context.read<ChatCubit>().getLocalContactName(phone);
+      if (contactName.isNotEmpty && contactName != phone) return contactName;
+      if (message.senderName.isNotEmpty) return '$phone ~${message.senderName}';
+      return phone;
+    }
+    if (message.senderName.isNotEmpty) return message.senderName;
+    return message.senderId;
+  }
+
+  String _fallbackSenderLabel() {
+    if (message.senderPhone.isNotEmpty) {
+      return message.senderName.isNotEmpty
+          ? '${message.senderPhone} ~${message.senderName}'
+          : message.senderPhone;
+    }
+    return message.senderName.isNotEmpty ? message.senderName : message.senderId;
+  }
+
+  Color get _bgColor =>
+      _isMediaBubble ? Colors.transparent : (_isMine ? AppColors.primaryLight : AppColors.surface);
 
   BorderRadius _borderRadius() {
     final r = Radius.circular(12.resR);
@@ -112,6 +126,36 @@ class MessageBubbleWidget extends StatelessWidget {
       return _buildSystemBubble(context);
     }
 
+    // FR-022: Render deleted placeholder instead of content.
+    if (message.isDeleted) {
+      return Align(
+        alignment: _isMine ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
+          padding: EdgeInsets.symmetric(horizontal: 14.resW, vertical: 10.resH),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: _borderRadius(),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, size: 14.resW, color: AppColors.textSecondary),
+              SizedBox(width: 6.resW),
+              Text(
+                'This message was deleted',
+                style: AppTypography.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final bubble = Container(
       margin: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 4.resH),
       constraints: BoxConstraints(
@@ -119,14 +163,16 @@ class MessageBubbleWidget extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: _bgColor,
-        borderRadius: _borderRadius(),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 2.resR,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        borderRadius: _isMediaBubble ? null : _borderRadius(),
+        boxShadow: _isMediaBubble
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 2.resR,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,12 +186,10 @@ class MessageBubbleWidget extends StatelessWidget {
                 top: 8.resH,
               ),
               child: FutureBuilder<String>(
-                future: context.read<ChatCubit>().getLocalContactName(
-                  message.senderId,
-                ),
+                future: _resolveGroupSenderLabel(context),
                 builder: (context, snapshot) {
                   return Text(
-                    snapshot.data ?? message.senderId,
+                    snapshot.data ?? _fallbackSenderLabel(),
                     style: AppTypography.caption.copyWith(
                       color: AppColors.primary,
                       fontWeight: FontWeight.bold,
@@ -161,7 +205,7 @@ class MessageBubbleWidget extends StatelessWidget {
       ),
     );
 
-    return Align(
+    final aligned = Align(
       alignment: _isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: _isMine && message.status == MessageStatus.error
           ? Row(
@@ -172,13 +216,66 @@ class MessageBubbleWidget extends StatelessWidget {
                   icon: const Icon(Icons.refresh),
                   color: AppColors.error,
                   onPressed: () {
-                    context.read<ChatCubit>().resendMessage(message.clientMessageId);
+                    context.read<ChatCubit>().resendMessage(
+                      message.clientMessageId,
+                    );
                   },
                 ),
                 bubble,
               ],
             )
           : bubble,
+    );
+
+    // FR-022: Long-press menu for delete options.
+    return GestureDetector(
+      onLongPress: () => _showDeleteMenu(context),
+      child: aligned,
+    );
+  }
+
+  void _showDeleteMenu(BuildContext context) {
+    final cubit = context.read<ChatCubit>();
+    final canDeleteForEveryone = _isMine &&
+        DateTime.now().difference(message.timestamp).inHours < 1;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: const Text('Delete for me'),
+                onTap: () {
+                  Navigator.pop(context);
+                  cubit.deleteMessageForMe(message.clientMessageId);
+                },
+              ),
+              if (canDeleteForEveryone)
+                ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Delete for everyone'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    cubit.deleteMessageForEveryone(message.clientMessageId);
+                  },
+                ),
+              ListTile(
+                leading: Icon(Icons.cancel_outlined, color: AppColors.textSecondary),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -326,58 +423,79 @@ class _ImageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final localPath = meta['localPath'] as String?;
-    final fileUrl = message.fileUrl;
 
     final hasLocal = localPath != null && File(localPath).existsSync();
-    final url = _resolveUrl(fileUrl);
+    final url = message.resolvedFileUrl;
     final isUploading = !hasLocal && url.isEmpty;
 
-    return Column(
-      crossAxisAlignment: isMine
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.resR),
-          child: isUploading
-              ? _UploadingPlaceholder()
-              : GestureDetector(
-                  onTap: () => _openMediaGallery(context, message),
-                  child: hasLocal
-                      ? Image.file(
-                          File(localPath),
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: url,
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => _UploadingPlaceholder(),
-                          errorWidget: (_, __, ___) => Container(
-                            width: 220.resW,
-                            height: 180.resH,
-                            color: AppColors.surfaceVariant,
-                            child: const Icon(
-                              Icons.broken_image_outlined,
-                              color: AppColors.textSecondary,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16.resR),
+      child: SizedBox(
+        width: 220.resW,
+        height: 180.resH,
+        child: isUploading
+            ? _UploadingPlaceholder()
+            : GestureDetector(
+                onTap: () => _openMediaGallery(context, message),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Image
+                    hasLocal
+                        ? Image.file(
+                            File(localPath),
+                            fit: BoxFit.cover,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => _UploadingPlaceholder(),
+                            errorWidget: (_, __, ___) => Container(
+                              color: AppColors.surfaceVariant,
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
+                    // T155: Footer overlay — dark gradient at bottom-right
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: EdgeInsets.only(
+                          left: 8.resW,
+                          right: 6.resW,
+                          top: 18.resH,
+                          bottom: 6.resH,
                         ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.55),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.bottomRight,
+                          child: DefaultTextStyle(
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.resSp,
+                            ),
+                            child: footer,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-        ),
-        Padding(
-          padding: EdgeInsets.only(
-            left: 8.resW,
-            right: 8.resW,
-            bottom: 6.resH,
-            top: 4.resH,
-          ),
-          child: footer,
-        ),
-      ],
+              ),
+      ),
     );
   }
 
@@ -385,14 +503,15 @@ class _ImageBubble extends StatelessWidget {
     final state = context.read<ChatCubit>().state;
     if (state is ChatRoomActive) {
       final mediaMessages = state.messages
-          .where((m) =>
-              m.type == MessageType.image || m.type == MessageType.video)
+          .where(
+            (m) => m.type == MessageType.image || m.type == MessageType.video,
+          )
           .toList()
           .reversed
-          .toList(); // Reverse to chronological order if they are newest-first
-      
+          .toList();
+
       final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
-      
+
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => MediaGalleryViewer(
@@ -431,9 +550,6 @@ class _UploadingPlaceholder extends StatelessWidget {
   }
 }
 
-// We don't need _FullScreenImageViewer anymore since we have MediaGalleryViewer.
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Video bubble
 // ─────────────────────────────────────────────────────────────────────────────
@@ -454,50 +570,109 @@ class _VideoBubble extends StatelessWidget {
     final meta = message.metadata ?? {};
     final localThumb = meta['localThumbPath'] as String?;
     final thumbUrl = meta['thumbnailUrl'] as String?;
+    final durationSec = meta['duration'] as int?;
+    final durationLabel = durationSec != null
+        ? '${durationSec ~/ 60}:${(durationSec % 60).toString().padLeft(2, '0')}'
+        : null;
 
     final hasLocalThumb = localThumb != null && File(localThumb).existsSync();
-    final url = _resolveUrl(thumbUrl);
-    final isUploading = !hasLocalThumb && url.isEmpty;
+    final url = UrlUtils.resolveMediaUrl(thumbUrl);
+    // Only show uploading state if we have no local thumb AND no CDN URL AND no fileUrl.
+    // A video with a fileUrl but no thumbnail is still watchable — show a play tile.
+    final hasFileUrl = message.fileUrl != null && message.fileUrl!.isNotEmpty;
+    final isUploading = !hasLocalThumb && url.isEmpty && !hasFileUrl;
 
-    return Column(
-      crossAxisAlignment: isMine
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.resR),
-          child: isUploading
-              ? _UploadingPlaceholder()
-              : GestureDetector(
-                  onTap: () => _openMediaGallery(context, message),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (hasLocalThumb)
-                        Image.file(
-                          File(localThumb),
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                        )
-                      else
-                        CachedNetworkImage(
-                          imageUrl: url,
-                          width: 220.resW,
-                          height: 180.resH,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => _UploadingPlaceholder(),
-                          errorWidget: (_, __, ___) => Container(
-                            width: 220.resW,
-                            height: 180.resH,
-                            color: AppColors.surfaceVariant,
-                            child: const Icon(
-                              Icons.broken_image_outlined,
-                              color: AppColors.textSecondary,
-                            ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16.resR),
+      child: SizedBox(
+        width: 220.resW,
+        height: 180.resH,
+        child: isUploading
+            ? _UploadingPlaceholder()
+            : GestureDetector(
+                onTap: () => _openMediaGallery(context, message),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Thumbnail — local first, CDN next, plain dark fallback
+                    if (hasLocalThumb)
+                      Image.file(File(localThumb), fit: BoxFit.cover)
+                    else if (url.isNotEmpty)
+                      CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _UploadingPlaceholder(),
+                        errorWidget: (_, __, ___) => Container(
+                          color: AppColors.surfaceVariant,
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: AppColors.textSecondary,
                           ),
                         ),
-                      Container(
+                      )
+                    else
+                      Container(color: const Color(0xFF1A1A2E)),
+                    // Dark gradient overlay
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: EdgeInsets.only(
+                          left: 8.resW,
+                          right: 6.resW,
+                          top: 18.resH,
+                          bottom: 6.resH,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.6),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // T156: Duration chip bottom-left
+                            if (durationLabel != null)
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 5.resW,
+                                  vertical: 2.resH,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(4.resR),
+                                ),
+                                child: Text(
+                                  durationLabel,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.resSp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            const Spacer(),
+                            // Footer overlay bottom-right
+                            DefaultTextStyle(
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10.resSp,
+                              ),
+                              child: footer,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // T156: Centered play button
+                    Center(
+                      child: Container(
                         width: 48.resW,
                         height: 48.resW,
                         decoration: BoxDecoration(
@@ -505,25 +680,16 @@ class _VideoBubble extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          Icons.play_arrow,
+                          Icons.play_arrow_rounded,
                           color: Colors.white,
                           size: 32.resW,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-        ),
-        Padding(
-          padding: EdgeInsets.only(
-            left: 8.resW,
-            right: 8.resW,
-            bottom: 6.resH,
-            top: 4.resH,
-          ),
-          child: footer,
-        ),
-      ],
+              ),
+      ),
     );
   }
 
@@ -531,14 +697,15 @@ class _VideoBubble extends StatelessWidget {
     final state = context.read<ChatCubit>().state;
     if (state is ChatRoomActive) {
       final mediaMessages = state.messages
-          .where((m) =>
-              m.type == MessageType.image || m.type == MessageType.video)
+          .where(
+            (m) => m.type == MessageType.image || m.type == MessageType.video,
+          )
           .toList()
           .reversed
           .toList();
-      
+
       final index = mediaMessages.indexWhere((m) => m.id == tappedMsg.id);
-      
+
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => MediaGalleryViewer(
@@ -667,18 +834,24 @@ class _VoiceBubble extends StatefulWidget {
   State<_VoiceBubble> createState() => _VoiceBubbleState();
 }
 
-class _VoiceBubbleState extends State<_VoiceBubble> {
+class _VoiceBubbleState extends State<_VoiceBubble>
+    with SingleTickerProviderStateMixin {
   late final PlayerController _playerController;
   StreamSubscription<PlayerState>? _playerStateSubscription;
+  late final AnimationController _shimmerController;
   bool _isPlaying = false;
   bool _isPrepared = false;
   bool _isPreparing = false;
-  List<double>? _cachedWaveformData;
 
   @override
   void initState() {
     super.initState();
     _playerController = PlayerController();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat();
+
     _playerStateSubscription = _playerController.onPlayerStateChanged.listen((
       state,
     ) {
@@ -716,29 +889,17 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
     if (localPath != null && File(localPath).existsSync()) {
       path = localPath;
     } else if (fileUrl != null && fileUrl.isNotEmpty) {
-      path = _resolveUrl(fileUrl);
+      path = widget.message.resolvedFileUrl;
     }
 
     if (path != null) {
       try {
-        final cached = await context.read<ChatCubit>().getWaveformCache(widget.message.clientMessageId);
-        
         await _playerController.preparePlayer(
           path: path,
-          shouldExtractWaveform: cached == null,
+          shouldExtractWaveform: false,
           noOfSamples: 50,
           volume: 1.0,
         );
-
-        if (cached == null) {
-          final extracted = await _playerController.waveformExtraction.extractWaveformData(path: path, noOfSamples: 50);
-          if (extracted.isNotEmpty) {
-            await context.read<ChatCubit>().saveWaveformCache(widget.message.clientMessageId, extracted);
-            _cachedWaveformData = extracted;
-          }
-        } else {
-          _cachedWaveformData = cached;
-        }
 
         if (mounted) {
           setState(() {
@@ -747,9 +908,10 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
           });
         }
       } catch (e) {
-        debugPrint('[VoiceBubble] prepare error: $e');
+        debugPrint('[VoiceBubble] prepare error (non-fatal, voice will play without waveform): $e');
         if (mounted) {
           setState(() {
+            _isPrepared = true;
             _isPreparing = false;
           });
         }
@@ -770,6 +932,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
 
   @override
   void dispose() {
+    _shimmerController.dispose();
     VoiceNoteController().currentlyPlayingIdNotifier.removeListener(
       _onCurrentlyPlayingChanged,
     );
@@ -853,34 +1016,18 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
               ),
               SizedBox(width: 8.resW),
 
-              // Waveform
+              // Waveform (cached, doesn't rebuild on playback state changes)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
+                    _CachedVoiceWaveformDisplay(
+                      message: widget.message,
+                      playerController: _isPrepared ? _playerController : null,
+                      isLoading: _isPreparing,
+                      shimmerController: _shimmerController,
                       height: 36.resH,
-                      child: _isPrepared
-                          ? AudioFileWaveforms(
-                              size: Size(
-                                MediaQuery.of(context).size.width * 0.4,
-                                36.resH,
-                              ),
-                              playerController: _playerController,
-                              waveformData: _cachedWaveformData ?? const [],
-                              enableSeekGesture: true,
-                              waveformType: WaveformType.fitWidth,
-                              playerWaveStyle: PlayerWaveStyle(
-                                fixedWaveColor: Colors.grey.shade400,
-                                liveWaveColor: AppColors.primary,
-                                spacing: 5,
-                                waveThickness: 2.resW,
-                              ),
-                            )
-                          : Container(
-                              height: 2.resH,
-                              color: Colors.grey.shade300,
-                            ),
+                      width: MediaQuery.of(context).size.width * 0.4,
                     ),
                     SizedBox(height: 4.resH),
                     Text(
@@ -891,18 +1038,6 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
                       ),
                     ),
                   ],
-                ),
-              ),
-              SizedBox(width: 8.resW),
-
-              // Avatar placeholder (optional)
-              CircleAvatar(
-                radius: 18.resR,
-                backgroundColor: AppColors.divider,
-                child: Icon(
-                  Icons.person,
-                  color: AppColors.surface,
-                  size: 20.resW,
                 ),
               ),
             ],
@@ -1059,10 +1194,22 @@ class _LocationBubble extends StatelessWidget {
     required this.footer,
   });
 
+  Future<void> _openMaps(double lat, double lng) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
     final address = meta['address'] as String? ?? 'Shared Location';
+    final lat = (meta['latitude'] as num?)?.toDouble();
+    final lng = (meta['longitude'] as num?)?.toDouble();
+    final hasCoords = lat != null && lng != null;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
@@ -1071,14 +1218,18 @@ class _LocationBubble extends StatelessWidget {
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 150.resH,
-            width: 250.resW,
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(12.resR),
-            ),
-            child: Center(
+          GestureDetector(
+            onTap: hasCoords ? () => _openMaps(lat, lng) : null,
+            child: Container(
+              height: 150.resH,
+              width: 250.resW,
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12.resR),
+                border: hasCoords
+                    ? Border.all(color: AppColors.primary.withValues(alpha: 0.3))
+                    : null,
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1095,6 +1246,16 @@ class _LocationBubble extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (hasCoords) ...[
+                    SizedBox(height: 6.resH),
+                    Text(
+                      'Tap to open in Maps',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1187,48 +1348,137 @@ class _PollBubble extends StatelessWidget {
     final meta = message.metadata ?? {};
     final question = meta['question'] as String? ?? 'Poll';
     final options = (meta['options'] as List<dynamic>?)?.cast<String>() ?? [];
+    final votes = (meta['votes'] as Map?)?.cast<String, List>() ?? {};
+    final totalVotes = votes.values.fold<int>(0, (sum, list) => sum + list.length);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
-      child: Column(
-        crossAxisAlignment: isMine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Text(
-            '📊 $question',
-            style: AppTypography.body1.copyWith(
-              fontWeight: FontWeight.bold,
-              color: isMine ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 8.resH),
-          ...options.map(
-            (opt) => Padding(
-              padding: EdgeInsets.only(bottom: 4.resH),
-              child: Container(
-                width: 200.resW,
-                padding: EdgeInsets.symmetric(
-                  vertical: 6.resH,
-                  horizontal: 12.resW,
+    // Poll bubble uses the same green bubble background as regular messages.
+    final textColor = AppColors.textPrimary;
+    final dimColor = AppColors.textSecondary;
+    final accentColor = AppColors.primaryDark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(14.resW, 12.resH, 14.resW, 4.resH),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Question
+              Text(
+                question,
+                style: AppTypography.body1.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                  fontSize: 15.resSp,
                 ),
-                decoration: BoxDecoration(
-                  color: isMine ? Colors.white24 : AppColors.divider,
-                  borderRadius: BorderRadius.circular(8.resR),
-                ),
-                child: Text(
-                  opt,
-                  style: AppTypography.caption.copyWith(
-                    color: isMine ? Colors.white : AppColors.textPrimary,
+              ),
+              SizedBox(height: 4.resH),
+              // "Select one or more" hint
+              Row(
+                children: [
+                  Icon(
+                    Icons.checklist_rounded,
+                    size: 14.resW,
+                    color: dimColor,
                   ),
+                  SizedBox(width: 4.resW),
+                  Text(
+                    'Select one or more',
+                    style: AppTypography.caption.copyWith(
+                      color: dimColor,
+                      fontSize: 12.resSp,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 10.resH),
+              // Options with progress bars
+              ...options.asMap().entries.map((entry) {
+                final opt = entry.value;
+                final optVotes = votes[opt]?.length ?? 0;
+                final frac = totalVotes > 0 ? optVotes / totalVotes : 0.0;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 10.resH),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 20.resW,
+                            height: 20.resW,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: dimColor,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10.resW),
+                          Expanded(
+                            child: Text(
+                              opt,
+                              style: AppTypography.body2.copyWith(
+                                color: textColor,
+                                fontSize: 15.resSp,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$optVotes',
+                            style: AppTypography.caption.copyWith(
+                              color: dimColor,
+                              fontSize: 13.resSp,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 5.resH),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3.resR),
+                        child: LinearProgressIndicator(
+                          value: frac,
+                          minHeight: 3.resH,
+                          backgroundColor: accentColor.withOpacity(0.2),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            accentColor.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              SizedBox(height: 2.resH),
+              footer,
+              SizedBox(height: 4.resH),
+            ],
+          ),
+        ),
+        // Divider + View votes button
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 11.resH,
+              horizontal: 14.resW,
+            ),
+            child: Center(
+              child: Text(
+                'View votes',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
                 ),
               ),
             ),
           ),
-          SizedBox(height: 4.resH),
-          footer,
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -1248,6 +1498,37 @@ class _EventBubble extends StatelessWidget {
     required this.footer,
   });
 
+  String _formatEventDateRange(DateTime? start) {
+    if (start == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final now = DateTime.now();
+    String fmtDay(DateTime d) {
+      if (d.year == now.year && d.month == now.month && d.day == now.day) {
+        return 'Today';
+      }
+      final tomorrow = now.add(const Duration(days: 1));
+      if (d.year == tomorrow.year &&
+          d.month == tomorrow.month &&
+          d.day == tomorrow.day) {
+        return 'Tomorrow';
+      }
+      return '${d.day} ${months[d.month - 1]}';
+    }
+
+    final h = start.hour == 0 ? 12 : (start.hour > 12 ? start.hour - 12 : start.hour);
+    final m = start.minute.toString().padLeft(2, '0');
+    final ampm = start.hour < 12 ? 'AM' : 'PM';
+    // Show end as 2 hours later by default
+    final end = start.add(const Duration(hours: 2));
+    final eh = end.hour == 0 ? 12 : (end.hour > 12 ? end.hour - 12 : end.hour);
+    final em = end.minute.toString().padLeft(2, '0');
+    final eampm = end.hour < 12 ? 'AM' : 'PM';
+    return '${fmtDay(start)}, $h:$m $ampm - ${fmtDay(end)}, $eh:$em $eampm';
+  }
+
   @override
   Widget build(BuildContext context) {
     final meta = message.metadata ?? {};
@@ -1256,59 +1537,318 @@ class _EventBubble extends StatelessWidget {
     final desc = meta['description'] as String? ?? '';
 
     DateTime? date;
-    if (dateStr != null) {
-      date = DateTime.tryParse(dateStr);
-    }
+    if (dateStr != null) date = DateTime.tryParse(dateStr);
+    final dateLabel = _formatEventDateRange(date);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 8.resH),
-      child: Column(
-        crossAxisAlignment: isMine
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+    final accentColor = AppColors.primaryDark;
+    final textColor = AppColors.textPrimary;
+    final dimColor = AppColors.textSecondary;
+    const iconBg = Color(0xFF2D5A1B);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(14.resW, 14.resH, 14.resW, 8.resH),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.calendar_today,
-                color: isMine ? Colors.white : AppColors.primary,
-                size: 20.resW,
+              // Circular calendar icon
+              Container(
+                width: 44.resW,
+                height: 44.resW,
+                decoration: const BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  color: Colors.white,
+                  size: 24.resW,
+                ),
               ),
-              SizedBox(width: 8.resW),
-              Flexible(
-                child: Text(
-                  title,
-                  style: AppTypography.body1.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isMine ? Colors.white : AppColors.textPrimary,
-                  ),
+              SizedBox(width: 12.resW),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.body1.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                        fontSize: 15.resSp,
+                      ),
+                    ),
+                    if (dateLabel.isNotEmpty) ...[
+                      SizedBox(height: 2.resH),
+                      Text(
+                        dateLabel,
+                        style: AppTypography.caption.copyWith(
+                          color: textColor,
+                          fontSize: 13.resSp,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (desc.isNotEmpty) ...[
+                      SizedBox(height: 2.resH),
+                      Text(
+                        desc,
+                        style: AppTypography.caption.copyWith(
+                          color: dimColor,
+                          fontSize: 13.resSp,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    SizedBox(height: 6.resH),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 10.resR,
+                          backgroundColor: AppColors.primary.withOpacity(0.3),
+                          child: Icon(
+                            Icons.person,
+                            size: 12.resW,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        SizedBox(width: 6.resW),
+                        Text(
+                          '1 Going',
+                          style: AppTypography.caption.copyWith(
+                            color: dimColor,
+                            fontSize: 12.resSp,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 6.resH),
+                    footer,
+                  ],
                 ),
               ),
             ],
           ),
-          if (date != null) ...[
-            SizedBox(height: 4.resH),
-            Text(
-              DateFormat('MMM d, yyyy • h:mm a').format(date),
-              style: AppTypography.caption.copyWith(
-                color: isMine ? Colors.white70 : AppColors.textSecondary,
+        ),
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 11.resH),
+            child: Center(
+              child: Text(
+                'Join call',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
+                ),
               ),
             ),
-          ],
-          if (desc.isNotEmpty) ...[
-            SizedBox(height: 4.resH),
-            Text(
-              desc,
-              style: AppTypography.caption.copyWith(
-                color: isMine ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+        Divider(height: 1, color: AppColors.divider.withOpacity(0.6)),
+        InkWell(
+          onTap: () {},
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 11.resH),
+            child: Center(
+              child: Text(
+                'Add to calendar',
+                style: AppTypography.body2.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14.resSp,
+                ),
               ),
             ),
-          ],
-          SizedBox(height: 4.resH),
-          footer,
-        ],
-      ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 010: Cached Voice Waveform Display
+// Isolates waveform caching from playback state changes to prevent rebuilds
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CachedVoiceWaveformDisplay extends StatefulWidget {
+  final Message message;
+  final PlayerController? playerController;
+  final bool isLoading;
+  final AnimationController shimmerController;
+  final double height;
+  final double width;
+
+  const _CachedVoiceWaveformDisplay({
+    required this.message,
+    required this.playerController,
+    required this.isLoading,
+    required this.shimmerController,
+    required this.height,
+    required this.width,
+  });
+
+  @override
+  State<_CachedVoiceWaveformDisplay> createState() =>
+      _CachedVoiceWaveformDisplayState();
+}
+
+class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay> {
+  List<double>? _waveformSamples;
+  bool _isExtracting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWaveformData();
+  }
+
+  Future<void> _loadWaveformData() async {
+    if (_isExtracting) return;
+    _isExtracting = true;
+
+    try {
+      final cubit = context.read<ChatCubit>();
+      final meta = widget.message.metadata ?? {};
+
+      // T010: Prefer sender-provided waveform data
+      final rawSamples = meta['waveformSamples'];
+      if (rawSamples is List && rawSamples.isNotEmpty) {
+        final samples =
+            rawSamples.whereType<num>().map((e) => e.toDouble()).toList();
+        if (mounted) {
+          setState(() => _waveformSamples = samples);
+          cubit.cacheSessionWaveform(
+            VoiceWaveformGeometry(
+              messageId: widget.message.id,
+              samples: samples,
+              duration: meta['duration'] as int?,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check in-memory session cache
+      final sessionCached = cubit.getSessionWaveformCache(widget.message.id);
+      if (sessionCached != null) {
+        if (mounted) {
+          setState(() {
+            _waveformSamples = sessionCached.samples;
+          });
+          debugPrint('[VoiceWaveformDisplay] Cache hit for message ${widget.message.id}');
+        }
+        return;
+      }
+
+      // Check persistent cache as fallback
+      final persistentCached = await cubit.getWaveformCache(
+        widget.message.clientMessageId,
+      );
+      if (persistentCached != null && persistentCached.isNotEmpty) {
+        if (mounted) {
+          setState(() => _waveformSamples = persistentCached);
+        }
+        cubit.cacheSessionWaveform(
+          VoiceWaveformGeometry(
+            messageId: widget.message.id,
+            samples: persistentCached,
+            duration: meta['duration'] as int?,
+          ),
+        );
+        return;
+      }
+
+      // Extract from audio file if no cached data
+      final localPath = meta['localPath'] as String?;
+      final fileUrl = widget.message.fileUrl;
+      String? path;
+      if (localPath != null && File(localPath).existsSync()) {
+        path = localPath;
+      } else if (fileUrl != null && fileUrl.isNotEmpty) {
+        path = widget.message.resolvedFileUrl;
+      }
+
+      if (path != null && widget.playerController != null) {
+        try {
+          final extracted =
+              await widget.playerController!.waveformExtraction
+                  .extractWaveformData(path: path, noOfSamples: 50);
+
+          if (extracted.isNotEmpty) {
+            if (mounted) {
+              setState(() => _waveformSamples = extracted);
+            }
+
+            // Save to both caches
+            await cubit.saveWaveformCache(
+              widget.message.clientMessageId,
+              extracted,
+            );
+            cubit.cacheSessionWaveform(
+              VoiceWaveformGeometry(
+                messageId: widget.message.id,
+                samples: extracted,
+                duration: meta['duration'] as int?,
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint(
+              '[VoiceWaveformDisplay] Extraction failed (waveform will show as empty): $e');
+        }
+      }
+    } finally {
+      _isExtracting = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: widget.height,
+      child: _waveformSamples != null && _waveformSamples!.isNotEmpty && widget.playerController != null
+          ? AudioFileWaveforms(
+              size: Size(widget.width, widget.height),
+              playerController: widget.playerController!,
+              waveformData: _waveformSamples!,
+              enableSeekGesture: true,
+              waveformType: WaveformType.fitWidth,
+              playerWaveStyle: PlayerWaveStyle(
+                fixedWaveColor: Colors.grey.shade400,
+                liveWaveColor: AppColors.primary,
+                spacing: 5,
+                waveThickness: 2.resW,
+              ),
+            )
+          : widget.isLoading
+              ? AnimatedBuilder(
+                  animation: widget.shimmerController,
+                  builder: (context, _) {
+                    final opacity =
+                        0.3 + (0.7 * widget.shimmerController.value);
+                    return Container(
+                      height: 2.resH,
+                      width: widget.width,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300
+                            .withValues(alpha: opacity),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    );
+                  },
+                )
+              : Container(
+                  height: 2.resH,
+                  color: Colors.grey.shade300,
+                ),
     );
   }
 }

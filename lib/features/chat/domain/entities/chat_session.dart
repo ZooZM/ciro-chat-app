@@ -18,7 +18,7 @@ class ChatSession extends Equatable {
   final String phoneNumber;
   final String lastMessageSenderId;
   final MessageStatus lastMessageStatus;
-  final String lastMessageId; // New field
+  final String lastMessageId; // FR-020: tracks the latest message for scoped status
   final ChatRoomType type; // New field
   final List<String> participants; // New field for group chat
   final List<String> admins; // New field

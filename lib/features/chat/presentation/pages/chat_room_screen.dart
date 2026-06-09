@@ -1,3 +1,6 @@
+import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
@@ -16,6 +19,7 @@ import '../bloc/voice_note_controller.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../widgets/chat_input_bar.dart';
 import '../widgets/chat_search_bar.dart';
+import '../widgets/join_call_app_bar_action.dart';
 import 'chat_info_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
@@ -53,6 +57,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
     cubit = context.read<ChatCubit>();
 
+    // FR-018: Listen for scroll-to-top (older messages) in reversed ListView.
+    _scrollController.addListener(_onScroll);
+
     if (widget.chatData.id.isEmpty) {
       // No room exists yet — entering from ContactsScreen. JIT room will be
       // created on the first Send press. Pass the contact metadata so the
@@ -64,6 +71,40 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       // Fire-and-forget: the StreamBuilder will reactively update the UI.
       cubit.markRoomMessagesRead(widget.chatData.id).ignore();
     }
+  }
+
+  void _showGroupCallSheet(BuildContext context) {
+    final callCubit = context.read<CallCubit>();
+    final roomId = widget.chatData.id;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.phone_outlined),
+              title: const Text('Voice Call'),
+              onTap: () {
+                Navigator.pop(context);
+                callCubit.startGroupCall(chatRoomId: roomId, isVideo: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Video Call'),
+              onTap: () {
+                Navigator.pop(context);
+                callCubit.startGroupCall(chatRoomId: roomId, isVideo: true);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showAttachmentSheet(BuildContext context) {
@@ -118,6 +159,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         });
       }
     });
+  }
+
+  // FR-018: Trigger pagination when scrolling towards older messages.
+  // In a reversed ListView, scrolling "up" (older) means approaching maxScrollExtent.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      context.read<ChatCubit>().loadMoreMessages();
+    }
   }
 
   PopupMenuItem<String> _buildMenuItem(
@@ -182,7 +233,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             icon: Icon(Icons.arrow_back, color: Colors.black, size: 24.resW),
             onPressed: () {
               _safeStopAllAudio();
-              context.go('/home');
+              context.go(AppRouterName.home);
             },
           ),
           title: InkWell(
@@ -243,6 +294,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 },
               ),
             ],
+            if (widget.chatData.type == ChatRoomType.GROUP) ...[
+              JoinCallAppBarAction(
+                roomId: widget.chatData.id,
+                onJoin: (isVideo) => context.read<CallCubit>().joinActiveGroupCall(
+                  roomId: widget.chatData.id,
+                  isVideo: isVideo,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.call_outlined,
+                  color: AppColors.textSecondary,
+                  size: 24.resW,
+                ),
+                onPressed: () => _showGroupCallSheet(context),
+              ),
+            ],
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.more_vert,
@@ -281,19 +349,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   'block',
                   Icons.person_off_outlined,
                   'Block user',
-                  Colors.red,
+                  AppColors.error,
                 ),
                 _buildMenuItem(
                   'report',
                   Icons.flag_outlined,
                   'Report',
-                  Colors.red,
+                  AppColors.error,
                 ),
                 _buildMenuItem(
                   'delete',
                   Icons.delete_outline,
                   'Delete chat',
-                  Colors.red,
+                  AppColors.error,
                 ),
               ],
             ),
@@ -344,10 +412,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               true, // Forces keyboard constraints up correctly (WhatsApp spec)
                           controller: _scrollController,
                           padding: EdgeInsets.symmetric(vertical: 16.resH),
-                          itemCount: displayMessages.length,
+                          // +1 for the loading indicator at the top (end in reversed list)
+                          itemCount: displayMessages.length + 1,
                           itemBuilder: (context, index) {
+                            // FR-018: Last item (top of screen) shows loading indicator.
+                            if (index == displayMessages.length) {
+                              if (state is ChatRoomActive &&
+                                  state.isLoadingMore) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Center(
+                                    child: CupertinoActivityIndicator(),
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }
                             final msg = displayMessages[index];
                             return Container(
+                              key: ValueKey(msg.clientMessageId),
                               color: _highlightMessageId == msg.id
                                   ? AppColors.primary.withOpacity(0.2)
                                   : Colors.transparent,
@@ -423,7 +506,9 @@ class ChatRoomIcon extends StatelessWidget {
               radius: 18.resR,
               backgroundColor: AppColors.divider,
               backgroundImage: chatData.avatarUrl.isNotEmpty
-                  ? CachedNetworkImageProvider(chatData.avatarUrl)
+                  ? CachedNetworkImageProvider(
+                      UrlUtils.resolveMediaUrl(chatData.avatarUrl),
+                    )
                   : null,
               child: chatData.avatarUrl.isEmpty
                   ? (chatData.type == ChatRoomType.GROUP
@@ -446,7 +531,7 @@ class ChatRoomIcon extends StatelessWidget {
                   width: 10.resW,
                   height: 10.resW,
                   decoration: BoxDecoration(
-                    color: Colors.blue,
+                    color: AppColors.info,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 1.5.resW),
                   ),
@@ -465,6 +550,7 @@ class ChatRoomIcon extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              SizedBox(height: 4.resH),
               TypingIndicatorWidget(
                 roomId: chatData.id,
                 roomType: chatData.type,

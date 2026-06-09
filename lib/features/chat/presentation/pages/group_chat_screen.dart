@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
 class GroupChatScreen extends StatelessWidget {
@@ -283,7 +284,7 @@ class _MyMessageBubble extends StatelessWidget {
                           : Icons.check,
                       size: 14.resW,
                       color: data.status == _MessageStatus.read
-                          ? Colors.blue
+                          ? AppColors.secondary
                           : Colors.grey[600],
                     ),
                   ],
