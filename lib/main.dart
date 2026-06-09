@@ -18,6 +18,7 @@ import 'features/chat/presentation/widgets/call_overlay.dart';
 import 'features/status/presentation/bloc/status_cubit.dart';
 import 'features/video_call/presentation/bloc/call_cubit.dart';
 import 'features/call_recording/presentation/bloc/call_recording_cubit.dart';
+import 'features/map/presentation/bloc/map_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -121,6 +122,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             ),
             BlocProvider<StatusCubit>(
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
+            ),
+            BlocProvider<MapCubit>(
+              create: (_) => MapCubit(),
             ),
           ],
           // CallOverlay centralizes all call navigation via GoRouter so the

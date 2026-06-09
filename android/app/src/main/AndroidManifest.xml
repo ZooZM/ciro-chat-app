@@ -71,7 +71,7 @@
         
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="${GOOGLE_MAPS_API_KEY}" />
+            android:value="AIzaSyBBw0N96bf9SGTOf8mCwfHyzPtc7WKYR-A" />
 
         <!-- Screen share foreground service (T032) -->
         <service

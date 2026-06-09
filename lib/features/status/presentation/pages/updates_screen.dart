@@ -6,6 +6,7 @@ import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dar
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_tile.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_search_bar.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/reels_viewer_screen.dart';
 import 'dart:io';
 import 'package:ciro_chat_app/features/status/presentation/widgets/add_status_bottom_sheet.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/music_selector_sheet.dart';
@@ -97,6 +98,39 @@ class _UpdatesViewState extends State<_UpdatesView> {
                         },
                       ),
                     ),
+                    SizedBox(width: 8.resW),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ReelsViewerScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.play_circle_outline,
+                                color: Colors.white, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              'map_explore'.tr(),
+                              style: AppTypography.caption.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -175,11 +209,13 @@ class _UpdatesViewState extends State<_UpdatesView> {
                           ),
                         ),
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const StoryViewerScreen(),
-                            ),
-                          );
+                          if (myStatus != null) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => StoryViewerScreen(status: myStatus),
+                              ),
+                            );
+                          }
                         },
                       ),
                     ),
@@ -243,7 +279,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                               // Already viewed — navigate to story viewer
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const StoryViewerScreen(),
+                                  builder: (_) => StoryViewerScreen(status: status),
                                 ),
                               );
                             },

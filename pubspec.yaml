@@ -47,7 +47,7 @@ dependencies:
   path_provider: ^2.1.5
   audio_waveforms: ^2.0.2
   fpdart: ^1.1.0
-  google_maps_flutter: ^2.17.0
+  google_maps_flutter: ^2.17.1
   geolocator: ^14.0.2
   geocoding: ^4.0.0
   flutter_dotenv: ^6.0.1
@@ -63,6 +63,8 @@ dependencies:
   gal: ^2.3.0
   flutter_screen_recording: ^2.0.0
   easy_localization: ^3.0.8
+  latlong2: ^0.9.1
+  widget_to_marker: ^1.0.6
 
 dev_dependencies:
   flutter_test:

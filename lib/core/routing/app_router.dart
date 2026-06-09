@@ -13,6 +13,7 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/group_chat_screen
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
+import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -44,6 +45,9 @@ class AppRouterName {
   static const String outgoingCall = '/outgoing_call';
   static const String voiceCall = '/voice_call';
   static const String updates = '/updates';
+  static const String map = '/map';
+  static const String calls = '/calls';
+  static const String profile = '/profile';
   static const String groupCall = '/group_call/:roomId';
   static const String incomingGroupCall = '/incoming_group_call';
   static const String recordings = '/recordings';
