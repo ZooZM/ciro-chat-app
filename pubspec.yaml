@@ -8,7 +8,6 @@ environment:
 
 dependencies:
   dio: ^5.9.2
-  easy_localization: ^3.0.7
   equatable: ^2.0.8
   flutter:
     sdk: flutter
@@ -88,5 +87,11 @@ dependency_overrides:
   device_info_plus: '10.1.2'
   flutter_screen_recording:
     path: packages/flutter_screen_recording
+  # Vendored fork of flutter_webrtc 1.4.1 patched to start a ScreenCaptureService
+  # (FGS, type=mediaProjection) before calling MediaProjectionManager.getMediaProjection().
+  # Without this, screen sharing crashes on Android 14 (API 34) with
+  # SecurityException "Media projections require a foreground service of type
+  # FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION". The upstream plugin has not
+  # shipped a fix as of 1.4.1.
   flutter_webrtc:
     path: packages/flutter_webrtc

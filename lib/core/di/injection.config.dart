@@ -50,14 +50,23 @@ import '../../features/payment/data/repositories/payment_repository_impl.dart'
 import '../../features/payment/domain/repositories/payment_repository.dart'
     as _i639;
 import '../../features/payment/presentation/bloc/payment_cubit.dart' as _i420;
+import '../../features/status/data/datasources/music_remote_data_source.dart'
+    as _i1015;
 import '../../features/status/data/datasources/status_local_data_source.dart'
     as _i137;
 import '../../features/status/data/datasources/status_remote_data_source.dart'
     as _i483;
+import '../../features/status/data/repositories/music_repository_impl.dart'
+    as _i95;
 import '../../features/status/data/repositories/status_repository_impl.dart'
     as _i539;
+import '../../features/status/domain/repositories/music_repository.dart'
+    as _i289;
 import '../../features/status/domain/repositories/status_repository.dart'
     as _i171;
+import '../../features/status/presentation/bloc/music_cubit.dart' as _i208;
+import '../../features/status/presentation/bloc/status_creation_cubit.dart'
+    as _i451;
 import '../../features/status/presentation/bloc/status_cubit.dart' as _i484;
 import '../../features/video_call/data/datasources/video_call_remote_data_source.dart'
     as _i5;
@@ -120,8 +129,14 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i785.TokenRefreshService>(
       () => _i785.TokenRefreshService(gh<_i852.AuthLocalDataSource>()),
     );
+    gh.lazySingleton<_i1015.MusicRemoteDataSource>(
+      () => _i1015.MusicRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
     gh.lazySingleton<_i483.StatusRemoteDataSource>(
-      () => _i483.StatusRemoteDataSourceImpl(gh<_i917.SocketService>()),
+      () => _i483.StatusRemoteDataSourceImpl(
+        gh<_i917.SocketService>(),
+        gh<_i667.DioClient>(),
+      ),
     );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
@@ -166,6 +181,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i804.VideoCallCubit>(
       () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
     );
+    gh.lazySingleton<_i289.MusicRepository>(
+      () => _i95.MusicRepositoryImpl(gh<_i1015.MusicRemoteDataSource>()),
+    );
     gh.lazySingleton<_i420.ChatRepository>(
       () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
     );
@@ -174,6 +192,9 @@ extension GetItInjectableX on _i174.GetIt {
         localDataSource: gh<_i137.StatusLocalDataSource>(),
         remoteDataSource: gh<_i483.StatusRemoteDataSource>(),
       ),
+    );
+    gh.factory<_i208.MusicCubit>(
+      () => _i208.MusicCubit(gh<_i289.MusicRepository>()),
     );
     gh.lazySingleton<_i189.CallRecordingCubit>(
       () => _i189.CallRecordingCubit(
@@ -200,6 +221,12 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i852.AuthLocalDataSource>(),
         gh<_i420.ChatRepository>(),
         gh<_i850.ContactsService>(),
+      ),
+    );
+    gh.factory<_i451.StatusCreationCubit>(
+      () => _i451.StatusCreationCubit(
+        statusRepository: gh<_i171.StatusRepository>(),
+        authCubit: gh<_i52.AuthCubit>(),
       ),
     );
     return this;
