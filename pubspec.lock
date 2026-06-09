@@ -999,10 +999,10 @@ packages:
     dependency: "direct main"
     description:
       name: google_maps_flutter
-      sha256: fc714bf8072e2c121d4277cb6dca23bbfae954b6c7b5d6dd73f1bc8d09762921
+      sha256: f4040715c2998144a46cfc0fd91ee83226655af069dfed3d2b84552dc5e4facb
       url: "https://pub.dev"
     source: hosted
-    version: "2.17.0"
+    version: "2.17.1"
   google_maps_flutter_android:
     dependency: transitive
     description:
@@ -1275,6 +1275,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.4.16"
+  latlong2:
+    dependency: "direct main"
+    description:
+      name: latlong2
+      sha256: "98227922caf49e6056f91b6c56945ea1c7b166f28ffcd5fb8e72fc0b453cc8fe"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.1"
   leak_tracker:
     dependency: transitive
     description:
@@ -2280,6 +2288,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.1"
+  widget_to_marker:
+    dependency: "direct main"
+    description:
+      name: widget_to_marker
+      sha256: badc36f23c76f3ca9d43d7780058096be774adf0f661bdb6eb6f6b893f648ab9
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.6"
   win32:
     dependency: transitive
     description:
