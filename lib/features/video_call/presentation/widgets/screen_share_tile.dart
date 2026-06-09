@@ -23,7 +23,12 @@ class ScreenShareTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // Match _ParticipantTile's AspectRatio so the tile self-sizes when placed
+    // in a Row that doesn't constrain its height (compact grid in
+    // group_call_screen.dart). Without this, StackFit.expand below blows up.
+    return AspectRatio(
+      aspectRatio: 0.9,
+      child: Container(
       color: const Color(0xFF1A1A2E),
       child: Stack(
         fit: StackFit.expand,
@@ -91,6 +96,7 @@ class ScreenShareTile extends StatelessWidget {
               ),
             ),
         ],
+      ),
       ),
     );
   }

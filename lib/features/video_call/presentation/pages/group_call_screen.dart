@@ -11,6 +11,7 @@ import 'package:ciro_chat_app/core/helpers/permission_service.dart';
 import '../bloc/call_cubit.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
+import '../widgets/screen_share_tile.dart';
 import '../widgets/screen_share_toggle_sheet.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 
@@ -71,8 +72,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     final authState = getIt<AuthCubit>().state;
     if (authState is Authenticated) {
-      _localUserId = authState.userData?['id']?.toString() ?? '';
-      _localUserName = authState.userData?['phoneNumber']?.toString() ?? '';
+      // verifyOtp returns the user under a nested 'user' map (MongoDB
+      // convention: '_id'). Fall back to the top-level map and to 'id' for
+      // safety if the backend shape ever flattens.
+      final user =
+          (authState.userData?['user'] as Map<String, dynamic>?) ??
+          authState.userData;
+      _localUserId =
+          (user?['_id'] ?? user?['id'])?.toString() ?? '';
+      _localUserName = user?['phoneNumber']?.toString() ?? '';
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -248,12 +256,14 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           final router = GoRouter.of(context);
           final canPop = context.canPop();
           _room?.disconnect().then((_) {
-            if (mounted) {
-              if (canPop) {
-                router.pop();
-              } else {
-                router.go('/home');
-              }
+            if (!mounted) return;
+            // _endCall and this listener can both fire for the same CallIdle —
+            // whichever pops second hits "nothing to pop". Guard with try/catch
+            // and fall back to /home if the stack has already unwound.
+            if (canPop) {
+              try { router.pop(); } catch (_) { router.go('/home'); }
+            } else {
+              router.go('/home');
             }
           });
         }
@@ -519,23 +529,64 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     required bool isSharing,
     required VideoTrack? localShareTrack,
   }) {
-    final total = remoteParticipants.length + 1; // +1 local
+    final remoteShareExtra = showRemoteTile ? 1 : 0;
+    final localShareExtra = isSharing ? 1 : 0;
+    final total =
+        remoteParticipants.length + 1 + remoteShareExtra + localShareExtra;
 
-    // ≤ 5 participants: 2-column grid, last item centered
     if (total <= 5) {
-      return _buildCompactGrid(remoteParticipants);
+      return _buildCompactGrid(
+        remoteParticipants,
+        showRemoteTile: showRemoteTile,
+        remoteShareTrack: remoteShareTrack,
+        remoteSharerName: remoteSharerName,
+        remoteSharerUserId: remoteSharerUserId,
+        remoteSharerHasAudio: remoteSharerHasAudio,
+        isMutedLocally: isMutedLocally,
+        isSharing: isSharing,
+        localShareTrack: localShareTrack,
+      );
     }
-
-    // 6+ participants: standard 2-column scrollable grid
-    return _buildScrollableGrid(remoteParticipants);
+    return _buildScrollableGrid(
+      remoteParticipants,
+      showRemoteTile: showRemoteTile,
+      remoteShareTrack: remoteShareTrack,
+      remoteSharerName: remoteSharerName,
+      remoteSharerUserId: remoteSharerUserId,
+      remoteSharerHasAudio: remoteSharerHasAudio,
+      isMutedLocally: isMutedLocally,
+      isSharing: isSharing,
+      localShareTrack: localShareTrack,
+    );
   }
 
   /// 2-column grid with special centering for odd last tile (≤5 participants)
-  Widget _buildCompactGrid(List<RemoteParticipant> remoteParticipants) {
+  Widget _buildCompactGrid(
+    List<RemoteParticipant> remoteParticipants, {
+    required bool showRemoteTile,
+    required VideoTrack? remoteShareTrack,
+    required String remoteSharerName,
+    required String remoteSharerUserId,
+    required bool remoteSharerHasAudio,
+    required bool isMutedLocally,
+    required bool isSharing,
+    required VideoTrack? localShareTrack,
+  }) {
     final all = <Widget>[
       for (int i = 0; i < remoteParticipants.length; i++)
         _buildRemoteTile(remoteParticipants[i], i),
       _buildLocalTile(),
+      if (showRemoteTile)
+        ScreenShareTile(
+          videoTrack: remoteShareTrack,
+          participantName: remoteSharerName,
+          hasAudio: remoteSharerHasAudio,
+          isMutedLocally: isMutedLocally,
+          onMuteToggle: () => context
+              .read<CallCubit>()
+              .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+        ),
+      if (isSharing) _LocalShareTile(localShareTrack: localShareTrack),
     ];
 
     // Build rows of 2; last item centered if alone
@@ -566,7 +617,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       if (i + 2 < all.length) rows.add(SizedBox(height: 10.resH));
     }
 
-    return Padding(
+    // Wrap in a SingleChildScrollView so adding the screen-share tile (which
+    // pushes total height past the available space by ~10–20px on some
+    // devices) doesn't produce a yellow overflow stripe.
+    return SingleChildScrollView(
       padding: EdgeInsets.symmetric(horizontal: 10.resW, vertical: 8.resH),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -576,7 +630,22 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   /// Standard 2-column scrollable grid (6+ participants)
-  Widget _buildScrollableGrid(List<RemoteParticipant> remoteParticipants) {
+  Widget _buildScrollableGrid(
+    List<RemoteParticipant> remoteParticipants, {
+    required bool showRemoteTile,
+    required VideoTrack? remoteShareTrack,
+    required String remoteSharerName,
+    required String remoteSharerUserId,
+    required bool remoteSharerHasAudio,
+    required bool isMutedLocally,
+    required bool isSharing,
+    required VideoTrack? localShareTrack,
+  }) {
+    final remoteShareExtra = showRemoteTile ? 1 : 0;
+    final localShareExtra = isSharing ? 1 : 0;
+    final total =
+        remoteParticipants.length + 1 + remoteShareExtra + localShareExtra;
+
     return GridView.builder(
       padding: EdgeInsets.symmetric(horizontal: 10.resW, vertical: 8.resH),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -585,12 +654,31 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
-      itemCount: remoteParticipants.length + 1,
+      itemCount: total,
       itemBuilder: (context, i) {
+        // Order: remote cameras → local camera → remote share → local share.
         if (i < remoteParticipants.length) {
           return _buildRemoteTile(remoteParticipants[i], i);
         }
-        return _buildLocalTile();
+        var idx = i - remoteParticipants.length; // 0..(1+remoteShare+localShare-1)
+        if (idx == 0) return _buildLocalTile();
+        idx -= 1;
+        if (showRemoteTile && idx == 0) {
+          return ScreenShareTile(
+            videoTrack: remoteShareTrack,
+            participantName: remoteSharerName,
+            hasAudio: remoteSharerHasAudio,
+            isMutedLocally: isMutedLocally,
+            onMuteToggle: () => context
+                .read<CallCubit>()
+                .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+          );
+        }
+        if (showRemoteTile) idx -= 1;
+        if (isSharing && idx == 0) {
+          return _LocalShareTile(localShareTrack: localShareTrack);
+        }
+        return const SizedBox.shrink();
       },
     );
   }
@@ -955,6 +1043,83 @@ class _RecordingBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Local screen-share preview tile ────────────────────────────────────────────
+// Shown to the sharer themselves so they can confirm what's being broadcast.
+// Renders the actual screen-share video track when published; otherwise a
+// "Sharing your screen" placeholder while iOS / Android finishes publishing.
+class _LocalShareTile extends StatelessWidget {
+  final VideoTrack? localShareTrack;
+  const _LocalShareTile({required this.localShareTrack});
+
+  @override
+  Widget build(BuildContext context) {
+    // Match _ParticipantTile so the tile self-sizes when placed in a Row
+    // inside _buildCompactGrid (which doesn't constrain height). Without
+    // this AspectRatio, StackFit.expand below blows up with infinite height.
+    return AspectRatio(
+      aspectRatio: 0.9,
+      child: Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (localShareTrack != null)
+            VideoTrackRenderer(localShareTrack!)
+          else
+            const ColoredBox(
+              color: Colors.black87,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.screen_share, color: Colors.white, size: 36),
+                    SizedBox(height: 8),
+                    Text(
+                      'Sharing\nyour screen',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.screen_share_outlined,
+                    color: Colors.white70,
+                    size: 14,
+                  ),
+                  SizedBox(width: 4),
+                  Text(
+                    'You • Screen',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       ),
     );
   }

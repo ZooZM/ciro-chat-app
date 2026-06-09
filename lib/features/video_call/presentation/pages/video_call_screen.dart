@@ -49,8 +49,15 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     // Resolve local user identity for screen share metadata
     final authState = getIt<AuthCubit>().state;
     if (authState is Authenticated) {
-      _localUserId = authState.userData?['id']?.toString() ?? '';
-      _localUserName = authState.userData?['phoneNumber']?.toString() ?? '';
+      // verifyOtp returns the user under a nested 'user' map (MongoDB
+      // convention: '_id'). Fall back to the top-level map and to 'id' for
+      // safety if the backend shape ever flattens.
+      final user =
+          (authState.userData?['user'] as Map<String, dynamic>?) ??
+          authState.userData;
+      _localUserId =
+          (user?['_id'] ?? user?['id'])?.toString() ?? '';
+      _localUserName = user?['phoneNumber']?.toString() ?? '';
     }
 
     if (widget.livekitToken.trim().isEmpty || widget.livekitUrl.trim().isEmpty) {

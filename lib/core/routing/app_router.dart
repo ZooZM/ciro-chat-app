@@ -140,7 +140,17 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.chatRoom,
       builder: (context, state) {
-        final chat = state.extra as ChatSession;
+        // state.extra is null when GoRouter rebuilds this route without the
+        // original extra (deep link, router restore, rotation, or any push
+        // missing extra). Cast as nullable and redirect to home instead of
+        // throwing a TypeError.
+        final chat = state.extra as ChatSession?;
+        if (chat == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) context.go(AppRouterName.home);
+          });
+          return const Scaffold(body: SizedBox.shrink());
+        }
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
         return ChatRoomScreen(chatData: chat);
       },
