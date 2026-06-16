@@ -1,8 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/status_avatar_preview.dart';
 import 'package:flutter/material.dart';
 
 class StatusTile extends StatelessWidget {
@@ -47,18 +47,7 @@ class StatusTile extends StatelessWidget {
           ),
         ),
         padding: EdgeInsets.all(2.resW),
-        child: CircleAvatar(
-          backgroundColor: Colors.grey[200],
-          backgroundImage: status.authorAvatar.isNotEmpty
-              ? CachedNetworkImageProvider(status.authorAvatar)
-              : null,
-          child: status.authorAvatar.isEmpty
-              ? Text(
-                  status.authorName.isNotEmpty ? status.authorName[0].toUpperCase() : '?',
-                  style: AppTypography.subtitle1.copyWith(color: Colors.grey[600]),
-                )
-              : null,
-        ),
+        child: StatusAvatarPreview(status: status, size: 52.resW),
       ),
       title: Text(
         status.authorName,

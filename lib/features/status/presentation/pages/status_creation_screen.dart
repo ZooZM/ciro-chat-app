@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_constants.dart';
@@ -18,8 +20,13 @@ import 'package:go_router/go_router.dart';
 
 class StatusCreationScreen extends StatefulWidget {
   final StatusContentType initialMode;
+  final String? initialMediaPath;
 
-  const StatusCreationScreen({super.key, required this.initialMode});
+  const StatusCreationScreen({
+    super.key,
+    required this.initialMode,
+    this.initialMediaPath,
+  });
 
   @override
   State<StatusCreationScreen> createState() => _StatusCreationScreenState();
@@ -42,6 +49,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
     super.initState();
     _cubit = getIt<StatusCreationCubit>();
     _cubit.initDraft(widget.initialMode);
+    if (widget.initialMediaPath != null) {
+      _cubit.attachMedia(widget.initialMediaPath!, widget.initialMode);
+    }
   }
 
   void _cycleFont() {
@@ -87,6 +97,8 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
           } else if (state is StatusCreationUploading) {
             draft = state.draft;
             isUploading = true;
+          } else if (state is StatusCreationError) {
+            draft = state.draft;
           } else {
             return const SizedBox.shrink();
           }
@@ -183,14 +195,19 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(left: AppConstants.spacingMd),
-                              child: ModeSwitcherBar(
-                                activeMode: draft.contentType,
-                                onModeChanged: (mode) {
-                                  _cubit.switchMode(mode);
-                                  setState(() => _showColorPalette = false);
-                                },
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: AppConstants.spacingMd,
+                                  right: AppConstants.spacingSm,
+                                ),
+                                child: ModeSwitcherBar(
+                                  activeMode: draft.contentType,
+                                  onModeChanged: (mode) {
+                                    _cubit.switchMode(mode);
+                                    setState(() => _showColorPalette = false);
+                                  },
+                                ),
                               ),
                             ),
                             Padding(
@@ -226,6 +243,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
           fontStyle: draft.fontStyle ?? '',
         );
       case StatusContentType.image:
+        return draft.mediaUrl != null
+            ? Center(child: Image.file(File(draft.mediaUrl!), fit: BoxFit.contain))
+            : Center(child: Text('status.image'.tr(), style: const TextStyle(color: Colors.white)));
       case StatusContentType.video:
         return Center(child: Text('status.image'.tr(), style: const TextStyle(color: Colors.white))); // Placeholder for media
       case StatusContentType.voice:

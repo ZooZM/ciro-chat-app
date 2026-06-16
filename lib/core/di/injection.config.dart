@@ -68,6 +68,16 @@ import '../../features/status/presentation/bloc/music_cubit.dart' as _i208;
 import '../../features/status/presentation/bloc/status_creation_cubit.dart'
     as _i451;
 import '../../features/status/presentation/bloc/status_cubit.dart' as _i484;
+import '../../features/translation/data/datasources/translation_data_channel_datasource.dart'
+    as _i934;
+import '../../features/translation/data/datasources/translation_socket_datasource.dart'
+    as _i907;
+import '../../features/translation/data/repositories/translation_repository_impl.dart'
+    as _i645;
+import '../../features/translation/domain/repositories/translation_repository.dart'
+    as _i683;
+import '../../features/translation/presentation/bloc/translation_cubit.dart'
+    as _i601;
 import '../../features/video_call/data/datasources/video_call_remote_data_source.dart'
     as _i5;
 import '../../features/video_call/data/repositories/livekit_video_call_repository_impl.dart'
@@ -91,6 +101,9 @@ extension GetItInjectableX on _i174.GetIt {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
     final appModule = _$AppModule();
     final storageModule = _$StorageModule();
+    gh.factory<_i934.TranslationDataChannelDataSource>(
+      () => _i934.TranslationDataChannelDataSource(),
+    );
     gh.lazySingleton<_i361.Dio>(() => appModule.dio);
     gh.lazySingleton<_i558.FlutterSecureStorage>(
       () => storageModule.secureStorage,
@@ -138,6 +151,9 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i667.DioClient>(),
       ),
     );
+    gh.factory<_i907.TranslationSocketDataSource>(
+      () => _i907.TranslationSocketDataSource(gh<_i917.SocketService>()),
+    );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
     );
@@ -172,6 +188,21 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
     );
+    gh.lazySingleton<_i171.StatusRepository>(
+      () => _i539.StatusRepositoryImpl(
+        localDataSource: gh<_i137.StatusLocalDataSource>(),
+        remoteDataSource: gh<_i483.StatusRemoteDataSource>(),
+        authLocalDataSource: gh<_i852.AuthLocalDataSource>(),
+        socketService: gh<_i917.SocketService>(),
+        chatLocalDataSource: gh<_i94.ChatLocalDataSource>(),
+      ),
+    );
+    gh.lazySingleton<_i683.TranslationRepository>(
+      () => _i645.TranslationRepositoryImpl(
+        gh<_i934.TranslationDataChannelDataSource>(),
+        gh<_i907.TranslationSocketDataSource>(),
+      ),
+    );
     gh.lazySingleton<_i104.CallCubit>(
       () => _i104.CallCubit(
         gh<_i917.SocketService>(),
@@ -187,12 +218,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i420.ChatRepository>(
       () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
     );
-    gh.lazySingleton<_i171.StatusRepository>(
-      () => _i539.StatusRepositoryImpl(
-        localDataSource: gh<_i137.StatusLocalDataSource>(),
-        remoteDataSource: gh<_i483.StatusRemoteDataSource>(),
-      ),
-    );
     gh.factory<_i208.MusicCubit>(
       () => _i208.MusicCubit(gh<_i289.MusicRepository>()),
     );
@@ -204,6 +229,9 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i772.GallerySaverService>(),
         gh<_i420.ChatRepository>(),
       ),
+    );
+    gh.factory<_i601.TranslationCubit>(
+      () => _i601.TranslationCubit(gh<_i683.TranslationRepository>()),
     );
     gh.factory<_i484.StatusCubit>(
       () => _i484.StatusCubit(gh<_i171.StatusRepository>()),

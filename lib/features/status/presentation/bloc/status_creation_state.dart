@@ -31,10 +31,11 @@ class StatusCreationUploading extends StatusCreationState {
 class StatusCreationSuccess extends StatusCreationState {}
 
 class StatusCreationError extends StatusCreationState {
+  final StatusEntity draft;
   final String message;
 
-  const StatusCreationError(this.message);
+  const StatusCreationError(this.draft, this.message);
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [draft, message];
 }

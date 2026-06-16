@@ -1,22 +1,18 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/status_creation_screen.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/add_status_bottom_sheet.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/status_avatar_preview.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_tile.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_search_bar.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
-import 'package:ciro_chat_app/features/status/presentation/pages/reels_viewer_screen.dart';
-import 'dart:io';
-import 'package:ciro_chat_app/features/status/presentation/widgets/add_status_bottom_sheet.dart';
-import 'package:ciro_chat_app/features/status/presentation/widgets/music_selector_sheet.dart';
-import 'package:ciro_chat_app/features/status/presentation/widgets/ai_image_generator_sheet.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
-import 'package:ciro_chat_app/core/di/injection.dart';
-import 'package:ciro_chat_app/features/status/presentation/bloc/music_cubit.dart';
-import 'package:ciro_chat_app/features/status/presentation/bloc/status_creation_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class UpdatesScreen extends StatelessWidget {
@@ -42,10 +38,6 @@ class _UpdatesViewState extends State<_UpdatesView> {
       backgroundColor: Colors.white,
       body: BlocBuilder<StatusCubit, StatusState>(
         builder: (context, state) {
-          if (state is StatusLoading || state is StatusInitial) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
           if (state is StatusError) {
             return Center(
               child: Text(
@@ -55,22 +47,33 @@ class _UpdatesViewState extends State<_UpdatesView> {
             );
           }
 
+          final isConnecting = state is StatusLoading || state is StatusInitial;
           final loaded = state is StatusLoaded ? state : null;
           final query = loaded?.searchQuery.toLowerCase() ?? '';
-          final recentStatuses = loaded?.recentStatuses ?? [];
-          final viewedStatuses = loaded?.viewedStatuses ?? [];
-          final myStatus = loaded?.myStatus;
+          final myStatuses = loaded?.myStatuses ?? [];
+
+          // One group per author, each sorted oldest-first so the story
+          // viewer can page through all of that author's active statuses.
+          final allGroups = (loaded?.statusGroups ?? const <String, List<StatusEntity>>{})
+              .values
+              .toList();
+
+          final recentGroups = allGroups.where((g) => g.any((s) => !s.isViewed)).toList()
+            ..sort((a, b) => b.last.timestamp.compareTo(a.last.timestamp));
+
+          final viewedGroups = allGroups.where((g) => g.every((s) => s.isViewed)).toList()
+            ..sort((a, b) => b.last.timestamp.compareTo(a.last.timestamp));
 
           final filteredRecent = query.isEmpty
-              ? recentStatuses
-              : recentStatuses
-                    .where((s) => s.authorName.toLowerCase().contains(query))
+              ? recentGroups
+              : recentGroups
+                    .where((g) => g.last.authorName.toLowerCase().contains(query))
                     .toList();
 
           final filteredViewed = query.isEmpty
-              ? viewedStatuses
-              : viewedStatuses
-                    .where((s) => s.authorName.toLowerCase().contains(query))
+              ? viewedGroups
+              : viewedGroups
+                    .where((g) => g.last.authorName.toLowerCase().contains(query))
                     .toList();
 
           return Column(
@@ -83,12 +86,25 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      'nav_updates'.tr(),
-                      style: AppTypography.subtitle1.copyWith(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'nav_updates'.tr(),
+                          style: AppTypography.subtitle1.copyWith(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (isConnecting)
+                          Text(
+                            'status_connecting'.tr(),
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
                     ),
                     SizedBox(width: 12.resW),
                     Expanded(
@@ -99,38 +115,44 @@ class _UpdatesViewState extends State<_UpdatesView> {
                       ),
                     ),
                     SizedBox(width: 8.resW),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ReelsViewerScreen(),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_circle_outline,
-                                color: Colors.white, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              'map_explore'.tr(),
-                              style: AppTypography.caption.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    //explore reels button - future implementation
+                    // GestureDetector(
+                    //   onTap: () {
+                    //     Navigator.of(context).push(
+                    //       MaterialPageRoute(
+                    //         builder: (_) => const ReelsViewerScreen(),
+                    //       ),
+                    //     );
+                    //   },
+                    //   child: Container(
+                    //     padding: const EdgeInsets.symmetric(
+                    //       horizontal: 12,
+                    //       vertical: 6,
+                    //     ),
+                    //     decoration: BoxDecoration(
+                    //       color: AppColors.primary,
+                    //       borderRadius: BorderRadius.circular(16),
+                    //     ),
+                    //     child: Row(
+                    //       mainAxisSize: MainAxisSize.min,
+                    //       children: [
+                    //         const Icon(
+                    //           Icons.play_circle_outline,
+                    //           color: Colors.white,
+                    //           size: 16,
+                    //         ),
+                    //         const SizedBox(width: 4),
+                    //         Text(
+                    //           'map_explore'.tr(),
+                    //           style: AppTypography.caption.copyWith(
+                    //             color: Colors.white,
+                    //             fontWeight: FontWeight.w700,
+                    //           ),
+                    //         ),
+                    //       ],
+                    //     ),
+                    //   ),
+                    // ),
                   ],
                 ),
               ),
@@ -148,31 +170,19 @@ class _UpdatesViewState extends State<_UpdatesView> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: myStatus != null
+                                  color: myStatuses.isNotEmpty
                                       ? AppColors.primary
                                       : Colors.grey,
                                   width: 2.resW,
                                 ),
                               ),
                               padding: EdgeInsets.all(2.resW),
-                              child: CircleAvatar(
-                                backgroundColor: Colors.grey[300],
-                                backgroundImage:
-                                    myStatus?.authorAvatar.isNotEmpty == true
-                                    ? CachedNetworkImageProvider(
-                                        myStatus!.authorAvatar,
-                                      )
-                                    : null,
-                                child: myStatus?.authorAvatar.isNotEmpty != true
-                                    ? Icon(
-                                        Icons.person,
-                                        color: Colors.white,
-                                        size: 30.resW,
-                                      )
-                                    : null,
+                              child: StatusAvatarPreview(
+                                status: myStatuses.isNotEmpty ? myStatuses.last : null,
+                                size: 52.resW,
                               ),
                             ),
-                            if (myStatus == null)
+                            if (myStatuses.isEmpty)
                               Positioned(
                                 bottom: 0,
                                 right: 0,
@@ -201,7 +211,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                           ),
                         ),
                         subtitle: Text(
-                          myStatus != null
+                          myStatuses.isNotEmpty
                               ? 'status_tap_to_view'.tr()
                               : 'status_tap_to_add'.tr(),
                           style: AppTypography.body2.copyWith(
@@ -209,12 +219,16 @@ class _UpdatesViewState extends State<_UpdatesView> {
                           ),
                         ),
                         onTap: () {
-                          if (myStatus != null) {
+                          if (myStatuses.isNotEmpty) {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (context) => StoryViewerScreen(status: myStatus),
+                                builder: (context) => StoryViewerScreen(
+                                  statuses: myStatuses,
+                                ),
                               ),
                             );
+                          } else {
+                            _openAddStatusSheet(context);
                           }
                         },
                       ),
@@ -240,14 +254,10 @@ class _UpdatesViewState extends State<_UpdatesView> {
                     if (filteredRecent.isNotEmpty)
                       SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
-                          final status = filteredRecent[index];
+                          final group = filteredRecent[index];
                           return StatusTile(
-                            status: status,
-                            onTap: () {
-                              context.read<StatusCubit>().markStatusAsViewed(
-                                status.id,
-                              );
-                            },
+                            status: group.last,
+                            onTap: () => _openGroup(context, group),
                           );
                         }, childCount: filteredRecent.length),
                       ),
@@ -272,17 +282,10 @@ class _UpdatesViewState extends State<_UpdatesView> {
                     if (filteredViewed.isNotEmpty)
                       SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
-                          final status = filteredViewed[index];
+                          final group = filteredViewed[index];
                           return StatusTile(
-                            status: status,
-                            onTap: () {
-                              // Already viewed — navigate to story viewer
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => StoryViewerScreen(status: status),
-                                ),
-                              );
-                            },
+                            status: group.last,
+                            onTap: () => _openGroup(context, group),
                           );
                         }, childCount: filteredViewed.length),
                       ),
@@ -311,22 +314,90 @@ class _UpdatesViewState extends State<_UpdatesView> {
         children: [
           FloatingActionButton.small(
             heroTag: 'pencil_fab',
-            onPressed: () {
-              // Text status — future implementation
-            },
+            onPressed: () => _openCreationScreen(
+              context,
+              mode: StatusContentType.text,
+            ),
             backgroundColor: Colors.grey[200],
             child: Icon(Icons.edit, color: AppColors.textPrimary),
           ),
           SizedBox(height: 16.resH),
           FloatingActionButton(
             heroTag: 'camera_fab',
-            onPressed: () {
-              // Camera status — future implementation
-            },
+            onPressed: () => _captureFromCamera(context),
             backgroundColor: AppColors.primary,
             child: const Icon(Icons.camera_alt, color: Colors.white),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Opens [StoryViewerScreen] for an author's full [group] of active
+  /// statuses (already sorted oldest-first), starting at their first
+  /// unviewed status — or the beginning, if all have been viewed.
+  void _openGroup(BuildContext context, List<StatusEntity> group) {
+    final initialIndex = group.indexWhere((s) => !s.isViewed);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StoryViewerScreen(
+          statuses: group,
+          initialIndex: initialIndex < 0 ? 0 : initialIndex,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openCreationScreen(
+    BuildContext context, {
+    required StatusContentType mode,
+    String? mediaPath,
+  }) {
+    return Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StatusCreationScreen(
+          initialMode: mode,
+          initialMediaPath: mediaPath,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _captureFromCamera(BuildContext context) async {
+    final xfile = await ImagePicker().pickImage(source: ImageSource.camera);
+    if (xfile == null || !context.mounted) return;
+    await _openCreationScreen(
+      context,
+      mode: StatusContentType.image,
+      mediaPath: xfile.path,
+    );
+  }
+
+  void _openAddStatusSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => AddStatusBottomSheet(
+        onCameraTap: () async {
+          Navigator.of(sheetContext).pop();
+          await _captureFromCamera(context);
+        },
+        onGalleryItemTap: (file, isVideo) async {
+          Navigator.of(sheetContext).pop();
+          await _openCreationScreen(
+            context,
+            mode: isVideo ? StatusContentType.video : StatusContentType.image,
+            mediaPath: file.path,
+          );
+        },
+        onCategoryTap: (mode) async {
+          Navigator.of(sheetContext).pop();
+          await _openCreationScreen(context, mode: mode);
+        },
+        onMusicTap: () => Navigator.of(sheetContext).pop(),
+        onAITap: () => Navigator.of(sheetContext).pop(),
       ),
     );
   }

@@ -171,14 +171,14 @@ class ChatCubit extends Cubit<ChatState> {
       }
     };
 
-    _socketService.onReconnected = () {
+    _socketService.addReconnectListener(() {
       debugPrint(
         '[ChatCubit] Socket reconnected — triggering REST status sync + pending replay + missed-message recovery',
       );
       syncStatusesFromRest().ignore();
       syncPendingMessages().ignore();
       _syncMissedMessages().ignore();
-    };
+    });
 
     // FR-022: Recipient receives a "delete for everyone" notification.
     _socketService.onMessageDeleted = (clientMessageId) {

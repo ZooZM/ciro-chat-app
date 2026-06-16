@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_reaction.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_viewer.dart';
 import 'package:ciro_chat_app/features/status/domain/repositories/status_repository.dart';
 import 'package:equatable/equatable.dart';
 import 'package:injectable/injectable.dart';
@@ -12,6 +14,8 @@ part 'status_state.dart';
 class StatusCubit extends Cubit<StatusState> {
   final StatusRepository repository;
   StreamSubscription? _statusSubscription;
+  StreamSubscription? _viewerAddedSubscription;
+  StreamSubscription? _reactedSubscription;
   Timer? _expiryTimer;
 
   StatusCubit(this.repository) : super(StatusInitial()) {
@@ -34,23 +38,24 @@ class StatusCubit extends Cubit<StatusState> {
     emit(StatusLoading());
     final recentResult = await repository.getRecentStatuses();
     final viewedResult = await repository.getViewedStatuses();
-    final myStatusResult = await repository.getMyStatus();
-    
+    final myStatusesResult = await repository.getMyStatuses();
+
     recentResult.fold(
       (failure) => emit(StatusError(failure.message)),
       (recentStatuses) {
         viewedResult.fold(
           (failure) => emit(StatusError(failure.message)),
           (viewedStatuses) {
-            myStatusResult.fold(
+            myStatusesResult.fold(
               (failure) => emit(StatusError(failure.message)),
-              (myStatus) {
+              (myStatuses) {
                 emit(StatusLoaded(
                   recentStatuses: recentStatuses,
                   viewedStatuses: viewedStatuses,
-                  myStatus: myStatus,
+                  myStatuses: myStatuses,
                 ));
                 _listenToStatusStream();
+                _listenToMyStatusUpdates();
               },
             );
           },
@@ -78,7 +83,9 @@ class StatusCubit extends Cubit<StatusState> {
         isMine: true,
       );
 
-      emit(currentState.copyWith(myStatus: newStatus));
+      emit(currentState.copyWith(
+        myStatuses: [...currentState.myStatuses, newStatus],
+      ));
 
       final result = await repository.addStatus(newStatus);
       result.fold(
@@ -97,15 +104,7 @@ class StatusCubit extends Cubit<StatusState> {
       
       // Optimistic update
       final statusToUpdate = currentState.recentStatuses.firstWhere((s) => s.id == statusId);
-      final updatedStatus = StatusEntity(
-        id: statusToUpdate.id,
-        authorName: statusToUpdate.authorName,
-        authorAvatar: statusToUpdate.authorAvatar,
-        timestamp: statusToUpdate.timestamp,
-        expiresAt: statusToUpdate.expiresAt,
-        isViewed: true,
-        isMine: statusToUpdate.isMine,
-      );
+      final updatedStatus = statusToUpdate.copyWith(isViewed: true);
 
       final updatedRecent = List<StatusEntity>.from(currentState.recentStatuses)..removeWhere((s) => s.id == statusId);
       final updatedViewed = List<StatusEntity>.from(currentState.viewedStatuses)..insert(0, updatedStatus);
@@ -136,6 +135,17 @@ class StatusCubit extends Cubit<StatusState> {
     _statusSubscription = repository.statusStream.listen((status) {
       if (state is StatusLoaded) {
         final currentState = state as StatusLoaded;
+        if (status.isMine) {
+          // Own status echoed back (e.g. via socket) — append/replace it in
+          // "My status" instead of overwriting the whole list, then keep
+          // the list in chronological order for the story viewer.
+          final updatedMyStatuses = List<StatusEntity>.from(currentState.myStatuses)
+            ..removeWhere((s) => s.id == status.id)
+            ..add(status)
+            ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          emit(currentState.copyWith(myStatuses: updatedMyStatuses));
+          return;
+        }
         final updatedRecent = List<StatusEntity>.from(currentState.recentStatuses)
           ..removeWhere((s) => s.id == status.id)
           ..insert(0, status);
@@ -144,9 +154,49 @@ class StatusCubit extends Cubit<StatusState> {
     });
   }
 
+  void _listenToMyStatusUpdates() {
+    _viewerAddedSubscription?.cancel();
+    _viewerAddedSubscription = repository.statusViewerAddedStream.listen((event) {
+      if (state is StatusLoaded) {
+        final currentState = state as StatusLoaded;
+        final myStatuses = currentState.myStatuses;
+        final index = myStatuses.indexWhere((s) => s.id == event.statusId);
+        if (index == -1) return;
+
+        final target = myStatuses[index];
+        final updatedViewers = List<StatusViewer>.from(target.viewers)
+          ..removeWhere((v) => v.userId == event.viewer.userId)
+          ..add(event.viewer);
+        final updatedMyStatuses = List<StatusEntity>.from(myStatuses);
+        updatedMyStatuses[index] = target.copyWith(viewers: updatedViewers);
+        emit(currentState.copyWith(myStatuses: updatedMyStatuses));
+      }
+    });
+
+    _reactedSubscription?.cancel();
+    _reactedSubscription = repository.statusReactedStream.listen((event) {
+      if (state is StatusLoaded) {
+        final currentState = state as StatusLoaded;
+        final myStatuses = currentState.myStatuses;
+        final index = myStatuses.indexWhere((s) => s.id == event.statusId);
+        if (index == -1) return;
+
+        final target = myStatuses[index];
+        final updatedReactions = List<StatusReaction>.from(target.reactions)
+          ..removeWhere((r) => r.userId == event.reaction.userId)
+          ..add(event.reaction);
+        final updatedMyStatuses = List<StatusEntity>.from(myStatuses);
+        updatedMyStatuses[index] = target.copyWith(reactions: updatedReactions);
+        emit(currentState.copyWith(myStatuses: updatedMyStatuses));
+      }
+    });
+  }
+
   @override
   Future<void> close() {
     _statusSubscription?.cancel();
+    _viewerAddedSubscription?.cancel();
+    _reactedSubscription?.cancel();
     _expiryTimer?.cancel();
     return super.close();
   }

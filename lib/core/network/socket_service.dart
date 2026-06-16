@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
+import 'package:ciro_chat_app/core/network/socket_events.dart';
 import 'package:ciro_chat_app/core/error/revocation_exception.dart';
 import 'package:ciro_chat_app/core/services/token_refresh_service.dart';
 
@@ -38,7 +39,17 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onNewMessage;
 
   /// Fired after a successful socket reconnect — use to trigger REST status sync.
-  void Function()? onReconnected;
+  /// Multicast (T007a): multiple features (ChatCubit, TranslationCubit) can
+  /// each register their own listener without clobbering one another.
+  final List<void Function()> _reconnectListeners = [];
+
+  void addReconnectListener(void Function() listener) {
+    _reconnectListeners.add(listener);
+  }
+
+  void removeReconnectListener(void Function() listener) {
+    _reconnectListeners.remove(listener);
+  }
 
   /// Fired when another user in the active room is typing.
   void Function(
@@ -78,8 +89,32 @@ class SocketService {
   // ── Status updates callbacks ──────────────────────────────────────────────
   void Function(Map<String, dynamic> data)? onStatusReceived;
 
+  /// Fired when SERVER confirms it stored our uploaded status. pending → synced
+  void Function(Map<String, dynamic> data)? onStatusUploaded;
+
+  /// Fired when someone views one of OUR statuses.
+  void Function(Map<String, dynamic> data)? onStatusViewerAdded;
+
+  /// Fired when someone reacts to one of OUR statuses.
+  void Function(Map<String, dynamic> data)? onStatusReacted;
+
   /// FR-022: Fired when someone deletes a message for everyone.
   void Function(String clientMessageId)? onMessageDeleted;
+
+  // ── Translation callbacks (set by TranslationCubit) ───────────────────────
+  /// `translation:subscribed` — `pending -> active`.
+  void Function(String speakerId, String targetLanguage, int remainingSeconds)?
+  onTranslationSubscribed;
+
+  /// `translation:unsubscribed` — confirms `-> off` (informational only).
+  void Function(String speakerId)? onTranslationUnsubscribed;
+
+  /// `translation:denied` — `pending -> denied`.
+  void Function(String speakerId, String reason)? onTranslationDenied;
+
+  /// `translation_unavailable` — `active -> unavailable`.
+  void Function(String speakerId, String reason, bool transient)?
+  onTranslationUnavailable;
 
   /// Connects to the NestJS WebSocket Gateway.
   /// ONLY call this after the backend has definitively verified the token
@@ -110,8 +145,12 @@ class SocketService {
     _socket?.onConnect((_) {
       debugPrint('[SocketService] Connected');
       isConnectedNotifier.value = true;
-      // Notify Cubit so it can trigger the REST status sync for missed events.
-      onReconnected?.call();
+      // Notify listeners so they can trigger REST status sync / re-subscribe
+      // flows for missed events. Copy the list — a listener may
+      // add/remove itself during iteration.
+      for (final listener in List<void Function()>.from(_reconnectListeners)) {
+        listener();
+      }
     });
 
     _socket?.onConnectError((err) async {
@@ -234,6 +273,27 @@ class SocketService {
       onStatusReceived?.call(Map<String, dynamic>.from(data));
     });
 
+    // SERVER confirmed status storage: pending → synced (mirrors messageSent ACK)
+    _socket?.on('statusUploaded', (data) {
+      debugPrint('[STATUS] statusUploaded: $data');
+      if (data == null || data is! Map) return;
+      onStatusUploaded?.call(Map<String, dynamic>.from(data));
+    });
+
+    // Someone viewed one of our statuses
+    _socket?.on('statusViewerAdded', (data) {
+      debugPrint('[STATUS] statusViewerAdded: $data');
+      if (data == null || data is! Map) return;
+      onStatusViewerAdded?.call(Map<String, dynamic>.from(data));
+    });
+
+    // Someone reacted to one of our statuses
+    _socket?.on('statusReacted', (data) {
+      debugPrint('[STATUS] statusReacted: $data');
+      if (data == null || data is! Map) return;
+      onStatusReacted?.call(Map<String, dynamic>.from(data));
+    });
+
     // ── FR-022: Message deletion ──────────────────────────────────────────
     _socket?.on('messageDeleted', (data) {
       debugPrint('[DELETE] messageDeleted: $data');
@@ -331,6 +391,50 @@ class SocketService {
       final reason = map['reason']?.toString() ?? '';
       if (chatRoomId.isEmpty) return;
       onScreenShareRejected?.call(chatRoomId, activeSharerUserId, activeSharerName, reason);
+    });
+
+    // ── Translation events ────────────────────────────────────────────────
+    _socket?.on(SocketEvents.translationSubscribed, (data) {
+      debugPrint('[TRANSLATION] subscribed: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final speakerId = map['speakerId']?.toString() ?? '';
+      final targetLanguage = map['targetLanguage']?.toString() ?? '';
+      final remainingSeconds = map['remainingSeconds'] is int
+          ? map['remainingSeconds'] as int
+          : 0;
+      if (speakerId.isEmpty) return;
+      onTranslationSubscribed?.call(speakerId, targetLanguage, remainingSeconds);
+    });
+
+    _socket?.on(SocketEvents.translationUnsubscribed, (data) {
+      debugPrint('[TRANSLATION] unsubscribed: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final speakerId = map['speakerId']?.toString() ?? '';
+      if (speakerId.isEmpty) return;
+      onTranslationUnsubscribed?.call(speakerId);
+    });
+
+    _socket?.on(SocketEvents.translationDenied, (data) {
+      debugPrint('[TRANSLATION] denied: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final speakerId = map['speakerId']?.toString() ?? '';
+      final reason = map['reason']?.toString() ?? '';
+      if (speakerId.isEmpty) return;
+      onTranslationDenied?.call(speakerId, reason);
+    });
+
+    _socket?.on(SocketEvents.translationUnavailable, (data) {
+      debugPrint('[TRANSLATION] unavailable: $data');
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final speakerId = map['speakerId']?.toString() ?? '';
+      final reason = map['reason']?.toString() ?? '';
+      final transient = map['transient'] == true;
+      if (speakerId.isEmpty) return;
+      onTranslationUnavailable?.call(speakerId, reason, transient);
     });
   }
 
@@ -474,6 +578,45 @@ class SocketService {
       'userName': userName,
       'isSharing': isSharing,
       'withAudio': withAudio,
+    });
+  }
+
+  // ── Translation emitters ──────────────────────────────────────────────────
+
+  /// FR-001: enable live translation of [speakerId] into [targetLanguage].
+  void emitTranslationSubscribe({
+    required String roomId,
+    required String speakerId,
+    required String targetLanguage,
+  }) {
+    _socket?.emit(SocketEvents.translationSubscribe, {
+      'roomId': roomId,
+      'speakerId': speakerId,
+      'targetLanguage': targetLanguage,
+    });
+  }
+
+  /// FR-002/FR-013: stop translating [speakerId] for this listener.
+  void emitTranslationUnsubscribe({
+    required String roomId,
+    required String speakerId,
+  }) {
+    _socket?.emit(SocketEvents.translationUnsubscribe, {
+      'roomId': roomId,
+      'speakerId': speakerId,
+    });
+  }
+
+  /// US3: switch [speakerId]'s target language mid-call.
+  void emitTranslationChangeLanguage({
+    required String roomId,
+    required String speakerId,
+    required String targetLanguage,
+  }) {
+    _socket?.emit(SocketEvents.translationChangeLanguage, {
+      'roomId': roomId,
+      'speakerId': speakerId,
+      'targetLanguage': targetLanguage,
     });
   }
 

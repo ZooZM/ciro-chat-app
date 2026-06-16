@@ -14,13 +14,13 @@ class StatusLoading extends StatusState {}
 class StatusLoaded extends StatusState {
   final List<StatusEntity> recentStatuses;
   final List<StatusEntity> viewedStatuses;
-  final StatusEntity? myStatus;
+  final List<StatusEntity> myStatuses;
   final String searchQuery;
 
   const StatusLoaded({
     required this.recentStatuses,
     required this.viewedStatuses,
-    this.myStatus,
+    this.myStatuses = const [],
     this.searchQuery = '',
   });
 
@@ -28,20 +28,34 @@ class StatusLoaded extends StatusState {
   List<Object?> get props => [
         recentStatuses,
         viewedStatuses,
-        myStatus,
+        myStatuses,
         searchQuery,
       ];
+
+  /// Every "other" status grouped by [StatusEntity.authorId], each group
+  /// sorted chronologically (oldest first) so the story viewer can page
+  /// through an author's full set of active statuses in posting order.
+  Map<String, List<StatusEntity>> get statusGroups {
+    final groups = <String, List<StatusEntity>>{};
+    for (final status in [...recentStatuses, ...viewedStatuses]) {
+      groups.putIfAbsent(status.authorId, () => []).add(status);
+    }
+    for (final group in groups.values) {
+      group.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    }
+    return groups;
+  }
 
   StatusLoaded copyWith({
     List<StatusEntity>? recentStatuses,
     List<StatusEntity>? viewedStatuses,
-    StatusEntity? myStatus,
+    List<StatusEntity>? myStatuses,
     String? searchQuery,
   }) {
     return StatusLoaded(
       recentStatuses: recentStatuses ?? this.recentStatuses,
       viewedStatuses: viewedStatuses ?? this.viewedStatuses,
-      myStatus: myStatus ?? this.myStatus,
+      myStatuses: myStatuses ?? this.myStatuses,
       searchQuery: searchQuery ?? this.searchQuery,
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +15,14 @@ import '../../domain/repositories/video_call_repository.dart';
 import '../widgets/screen_share_tile.dart';
 import '../widgets/screen_share_toggle_sheet.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
+import '../../../translation/domain/entities/caption.dart';
+import '../../../translation/domain/entities/supported_languages.dart';
+import '../../../translation/domain/entities/translation_subscription.dart';
+import '../../../translation/presentation/bloc/translation_cubit.dart';
+import '../../../translation/presentation/bloc/translation_state.dart';
+import '../../../translation/presentation/widgets/caption_overlay.dart';
+import '../../../translation/presentation/widgets/subtitle_overlay_widget.dart';
+import '../../../translation/presentation/widgets/translation_toggle_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Palette (matches the mockup exactly)
@@ -62,9 +71,14 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   late final Stopwatch _callTimer;
   Timer? _uiTimer;
 
+  // Live translation captions (015-live-translation-captions)
+  late final TranslationCubit _translationCubit;
+  final Set<String> _shownDeniedFor = {};
+
   @override
   void initState() {
     super.initState();
+    _translationCubit = getIt<TranslationCubit>();
     _callTimer = Stopwatch()..start();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -131,7 +145,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   void _connectFromCubitState() {
     final s = context.read<CallCubit>().state;
     if (s is CallActive && s.isGroupCall) {
-      _connectToRoom(s.livekitUrl, s.livekitToken, isVideo: s.isVideo);
+      _connectToRoom(
+        s.livekitUrl,
+        s.livekitToken,
+        isVideo: s.isVideo,
+        chatRoomId: s.chatRoomId,
+      );
     } else {
       setState(() {
         _error = 'No active group call state found.';
@@ -144,6 +163,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     String url,
     String token, {
     bool isVideo = false,
+    required String chatRoomId,
   }) async {
     try {
       await PermissionService.requestSingle(Permission.microphone);
@@ -172,9 +192,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         })
         ..on<TrackUnsubscribedEvent>((_) {
           if (mounted) setState(() {});
+        })
+        ..on<ParticipantDisconnectedEvent>((event) {
+          _translationCubit.removeSpeaker(event.participant.identity);
         });
 
       await _room!.connect(url, token);
+      debugPrint('[GroupCallScreen] Room connected. Calling attachRoom with roomId: $chatRoomId');
+      _translationCubit.attachRoom(_room!, roomId: chatRoomId);
+      debugPrint('[GroupCallScreen] attachRoom done — TranslationCubit is now listening for captions.');
       getIt<VideoCallRepository>().setExternalRoom(_room!);
       // Keep the WebRTC connection alive when the screen locks (Android).
       getIt<VideoCallRepository>().setCallServiceActive(true);
@@ -230,6 +256,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _roomEventsListener?.dispose();
+    _translationCubit.detachRoom();
+    _translationCubit.close();
     getIt<VideoCallRepository>().setCallServiceActive(false);
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
@@ -250,33 +278,57 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<CallCubit, CallState>(
-      listener: (context, state) {
-        if (state is CallIdle || state is CallEnded) {
-          final router = GoRouter.of(context);
-          final canPop = context.canPop();
-          _room?.disconnect().then((_) {
-            if (!mounted) return;
-            // _endCall and this listener can both fire for the same CallIdle —
-            // whichever pops second hits "nothing to pop". Guard with try/catch
-            // and fall back to /home if the stack has already unwound.
-            if (canPop) {
-              try { router.pop(); } catch (_) { router.go('/home'); }
-            } else {
-              router.go('/home');
-            }
-          });
-        }
-      },
-      child: Scaffold(
-        backgroundColor: _kBg,
-        body: SafeArea(
-          bottom: false,
-          child: _isConnecting
-              ? _buildConnecting()
-              : _error != null
-              ? _buildError()
-              : _buildCallBody(),
+    return BlocProvider<TranslationCubit>.value(
+      value: _translationCubit,
+      child: MultiBlocListener(
+        listeners: [
+          BlocListener<CallCubit, CallState>(
+            listener: (context, state) {
+              if (state is CallIdle || state is CallEnded) {
+                final router = GoRouter.of(context);
+                final canPop = context.canPop();
+                _room?.disconnect().then((_) {
+                  if (!mounted) return;
+                  // _endCall and this listener can both fire for the same CallIdle —
+                  // whichever pops second hits "nothing to pop". Guard with try/catch
+                  // and fall back to /home if the stack has already unwound.
+                  if (canPop) {
+                    try { router.pop(); } catch (_) { router.go('/home'); }
+                  } else {
+                    router.go('/home');
+                  }
+                });
+              }
+            },
+          ),
+          BlocListener<TranslationCubit, TranslationState>(
+            bloc: _translationCubit,
+            listener: (context, state) {
+              for (final entry in state.subscriptions.entries) {
+                if (entry.value.status == TranslationStatus.denied) {
+                  if (_shownDeniedFor.add(entry.key)) {
+                    final reason = entry.value.deniedReason ?? 'unknown';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('translation_denied_$reason'.tr())),
+                    );
+                  }
+                } else {
+                  _shownDeniedFor.remove(entry.key);
+                }
+              }
+            },
+          ),
+        ],
+        child: Scaffold(
+          backgroundColor: _kBg,
+          body: SafeArea(
+            bottom: false,
+            child: _isConnecting
+                ? _buildConnecting()
+                : _error != null
+                ? _buildError()
+                : _buildCallBody(),
+          ),
         ),
       ),
     );
@@ -370,21 +422,38 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               isSharing: isSharing,
             ),
 
-            // ── Content area ─────────────────────────────────────────────────
+            // ── Content area + subtitle overlay ───────────────────────────
             Expanded(
-              child: isWaiting
-                  ? _buildWaitingCenter()
-                  : _buildParticipantGrid(
-                      remoteParticipants,
-                      remoteShareTrack: remoteShareTrack,
-                      remoteSharerName: remoteSharerName,
-                      remoteSharerUserId: remoteSharerUserId,
-                      remoteSharerHasAudio: remoteSharerHasAudio,
-                      isMutedLocally: isMutedLocally,
-                      showRemoteTile: remoteSharerUserId.isNotEmpty,
-                      isSharing: isSharing,
-                      localShareTrack: localShareTrack,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: isWaiting
+                        ? _buildWaitingCenter()
+                        : _buildParticipantGrid(
+                            remoteParticipants,
+                            remoteShareTrack: remoteShareTrack,
+                            remoteSharerName: remoteSharerName,
+                            remoteSharerUserId: remoteSharerUserId,
+                            remoteSharerHasAudio: remoteSharerHasAudio,
+                            isMutedLocally: isMutedLocally,
+                            showRemoteTile: remoteSharerUserId.isNotEmpty,
+                            isSharing: isSharing,
+                            localShareTrack: localShareTrack,
+                          ),
+                  ),
+                  // FR-004/FR-010: unified subtitle strip at the bottom of the
+                  // grid — visible regardless of tile size or camera state.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SubtitleOverlayWidget(
+                      caption: _translationCubit.latestActiveCaption,
+                      participants: remoteParticipants,
                     ),
+                  ),
+                ],
+              ),
             ),
 
             // ── Controls ─────────────────────────────────────────────────────
@@ -726,14 +795,72 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final isMuted = participant.audioTrackPublications.any(
       (pub) => pub.muted || pub.track == null,
     );
+    final speakerId = participant.identity;
 
-    return _ParticipantTile(
-      initial: initial,
-      label: displayName,
-      color: _kTileColors[index % (_kTileColors.length - 1)], // exclude teal
-      isMuted: isMuted,
-      videoTrack: videoTrack,
+    return BlocBuilder<TranslationCubit, TranslationState>(
+      bloc: _translationCubit,
+      builder: (context, translationState) {
+        final sub = translationState.subscriptions[speakerId];
+        return _ParticipantTile(
+          initial: initial,
+          label: displayName,
+          color: _kTileColors[index % (_kTileColors.length - 1)], // exclude teal
+          isMuted: isMuted,
+          videoTrack: videoTrack,
+          caption: _translationCubit.captionNotifier(speakerId),
+          translationStatus: sub?.status ?? TranslationStatus.off,
+          onTapTranslate: () => _onTapTranslate(speakerId, sub),
+        );
+      },
     );
+  }
+
+  /// T025/T027 (US3): shows [TranslationToggleSheet] for [speakerId] and
+  /// dispatches subscribe/unsubscribe/changeLanguage based on the result.
+  Future<void> _onTapTranslate(
+    String speakerId,
+    TranslationSubscription? sub,
+  ) async {
+    final isEnabled = sub != null && sub.status != TranslationStatus.off;
+    final initialLanguage = _translationCubit.resolveTargetLanguage(
+      speakerId,
+      deviceLanguageCode: context.locale.languageCode,
+      supportedLanguages: kSupportedTranslationLanguages,
+    );
+
+    final result = await showModalBottomSheet<TranslationToggleResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => TranslationToggleSheet(
+        isEnabled: isEnabled,
+        initialLanguage: initialLanguage,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    switch (result) {
+      case TranslationToggleOn(targetLanguage: final targetLanguage):
+        if (!isEnabled) {
+          debugPrint('[GroupCallScreen] CC → subscribe(speakerId: $speakerId, targetLanguage: $targetLanguage)');
+          _translationCubit.subscribe(
+            speakerId: speakerId,
+            targetLanguage: targetLanguage,
+          );
+        } else if (sub.targetLanguage != targetLanguage) {
+          debugPrint('[GroupCallScreen] CC → changeLanguage(speakerId: $speakerId, targetLanguage: $targetLanguage)');
+          _translationCubit.changeLanguage(
+            speakerId: speakerId,
+            targetLanguage: targetLanguage,
+          );
+        } else {
+          debugPrint('[GroupCallScreen] CC → already enabled with same language ($targetLanguage), no-op.');
+        }
+      case TranslationToggleOff():
+        if (isEnabled) {
+          debugPrint('[GroupCallScreen] CC → unsubscribe(speakerId: $speakerId)');
+          _translationCubit.unsubscribe(speakerId);
+        }
+    }
   }
 
   // ── Controls ───────────────────────────────────────────────────────────────
@@ -943,16 +1070,34 @@ class _ParticipantTile extends StatelessWidget {
   final bool isMuted;
   final VideoTrack? videoTrack;
 
+  /// FR-004 (T019): per-speaker live caption, rendered via [CaptionOverlay].
+  final ValueListenable<Caption?>? caption;
+
+  /// US3 (T027/T028): this speaker's translation toggle status, drives the
+  /// CC icon highlight and the "translation unavailable" badge.
+  final TranslationStatus? translationStatus;
+
+  /// US3 (T027): tapped to open [TranslationToggleSheet] for this speaker.
+  /// `null` (e.g. the local tile) hides the CC icon entirely.
+  final VoidCallback? onTapTranslate;
+
   const _ParticipantTile({
     required this.initial,
     required this.label,
     required this.color,
     required this.isMuted,
     this.videoTrack,
+    this.caption,
+    this.translationStatus,
+    this.onTapTranslate,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isTranslationLive =
+        translationStatus == TranslationStatus.pending ||
+        translationStatus == TranslationStatus.active;
+
     return AspectRatio(
       aspectRatio: 0.9,
       child: ClipRRect(
@@ -1005,6 +1150,61 @@ class _ParticipantTile extends StatelessWidget {
                       color: Colors.grey.shade700,
                     ),
                   ),
+                ),
+
+              // CC (translation) toggle (top-left)
+              if (onTapTranslate != null)
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: GestureDetector(
+                    onTap: onTapTranslate,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: isTranslationLive ? _kGreen : Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.closed_caption,
+                        size: 16,
+                        color: isTranslationLive
+                            ? Colors.white
+                            : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+
+              // "Translation unavailable" badge (FR-002/FR-014)
+              if (translationStatus == TranslationStatus.unavailable)
+                Positioned(
+                  top: 44,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'translation_unavailable_badge'.tr(),
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+                ),
+
+              // Live translation caption (FR-004/FR-009/FR-011)
+              if (caption != null)
+                Positioned(
+                  left: 8,
+                  right: 8,
+                  bottom: 8,
+                  child: CaptionOverlay(caption: caption!),
                 ),
             ],
           ),

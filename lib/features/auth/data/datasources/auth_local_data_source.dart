@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/core/utils/auth_token_cache.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:injectable/injectable.dart';
 
@@ -25,11 +26,14 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     await _storage.write(key: 'accessToken', value: accessToken);
     // You might also want to save a refreshToken if your backend generates one
     await _storage.write(key: 'refreshToken', value: refreshToken);
+    AuthTokenCache.set(accessToken);
   }
 
   @override
   Future<String?> getAccessToken() async {
-    return await _storage.read(key: 'accessToken');
+    final token = await _storage.read(key: 'accessToken');
+    AuthTokenCache.set(token);
+    return token;
   }
 
   @override
@@ -44,6 +48,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     await _storage.delete(key: 'userPhone');
     await _storage.delete(key: 'userId');
     await _storage.delete(key: 'isLoggedIn');
+    AuthTokenCache.set(null);
   }
 
   @override

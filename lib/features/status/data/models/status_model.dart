@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:ciro_chat_app/features/status/data/models/status_reaction_model.dart';
+import 'package:ciro_chat_app/features/status/data/models/status_viewer_model.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_privacy.dart';
@@ -19,6 +23,12 @@ class StatusModel extends StatusEntity {
     super.musicTrackId,
     super.caption,
     super.privacy = StatusPrivacy.public,
+    super.clientStatusId = '',
+    super.authorId = '',
+    super.audience = const [],
+    super.syncStatus = 'synced',
+    super.viewers = const [],
+    super.reactions = const [],
   });
 
   factory StatusModel.fromJson(Map<String, dynamic> json) {
@@ -26,7 +36,9 @@ class StatusModel extends StatusEntity {
       id: json['id'] as String,
       authorName: json['authorName'] as String,
       authorAvatar: json['authorAvatar'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: DateTime.parse(
+        (json['createdAt'] ?? json['timestamp']) as String,
+      ),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       isViewed: (json['isViewed'] as bool?) ?? false,
       isMine: (json['isMine'] as bool?) ?? false,
@@ -44,6 +56,23 @@ class StatusModel extends StatusEntity {
         (e) => e.name == json['privacy'],
         orElse: () => StatusPrivacy.public,
       ),
+      clientStatusId: json['clientStatusId'] as String? ?? '',
+      authorId: json['authorId'] as String? ?? '',
+      audience: (json['audience'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      syncStatus: json['syncStatus'] as String? ?? 'synced',
+      viewers: (json['viewers'] as List<dynamic>?)
+              ?.map((e) => StatusViewerModel.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      reactions: (json['reactions'] as List<dynamic>?)
+              ?.map(
+                (e) => StatusReactionModel.fromJson(e as Map<String, dynamic>),
+              )
+              .toList() ??
+          const [],
     );
   }
 
@@ -64,6 +93,25 @@ class StatusModel extends StatusEntity {
       'musicTrackId': musicTrackId,
       'caption': caption,
       'privacy': privacy.name,
+      'clientStatusId': clientStatusId,
+      'authorId': authorId,
+      'audience': audience,
+      'syncStatus': syncStatus,
+      'viewers': viewers
+          .map((v) => StatusViewerModel(
+                userId: v.userId,
+                name: v.name,
+                avatarUrl: v.avatarUrl,
+                viewedAt: v.viewedAt,
+              ).toJson())
+          .toList(),
+      'reactions': reactions
+          .map((r) => StatusReactionModel(
+                userId: r.userId,
+                reaction: r.reaction,
+                createdAt: r.createdAt,
+              ).toJson())
+          .toList(),
     };
   }
 
@@ -90,6 +138,14 @@ class StatusModel extends StatusEntity {
         (e) => e.name == map['privacy'],
         orElse: () => StatusPrivacy.public,
       ),
+      clientStatusId: map['client_status_id'] as String? ?? '',
+      authorId: map['author_id'] as String? ?? '',
+      syncStatus: map['sync_status'] as String? ?? 'synced',
+      audience: map['audience_json'] != null
+          ? (jsonDecode(map['audience_json'] as String) as List<dynamic>)
+              .map((e) => e as String)
+              .toList()
+          : const [],
     );
   }
 
@@ -110,6 +166,10 @@ class StatusModel extends StatusEntity {
       'music_track_id': musicTrackId,
       'caption': caption,
       'privacy': privacy.name,
+      'client_status_id': clientStatusId,
+      'sync_status': syncStatus,
+      'audience_json': jsonEncode(audience),
+      'author_id': authorId,
     };
   }
 }

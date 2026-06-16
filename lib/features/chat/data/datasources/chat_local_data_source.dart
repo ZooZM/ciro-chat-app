@@ -233,7 +233,11 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
       font_style   TEXT,
       music_track_id TEXT,
       caption      TEXT,
-      privacy      TEXT DEFAULT 'public'
+      privacy      TEXT DEFAULT 'public',
+      client_status_id TEXT DEFAULT '',
+      sync_status  TEXT DEFAULT 'synced',
+      audience_json TEXT DEFAULT '[]',
+      author_id    TEXT DEFAULT ''
     )
   ''';
 
@@ -243,6 +247,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     'CREATE INDEX IF NOT EXISTS idx_msg_client_id  ON messages(client_message_id)',
     'CREATE INDEX IF NOT EXISTS idx_msg_status     ON messages(status)',
     'CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phoneNumber)',
+    'CREATE INDEX IF NOT EXISTS idx_statuses_client_id ON statuses(client_status_id)',
   ];
 
   static const _recordingsSchema = '''
@@ -279,7 +284,7 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     _db = await openDatabase(
       path,
       version:
-          16, // v16: add gallery_path, share_status, shared_message_id to recordings
+          18, // v18: backfill statuses content_type/text_content/media_url/background_color/font_style/music_track_id
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
@@ -395,6 +400,46 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             );
           } catch (e) {
             debugPrint('Migration v16 error: $e');
+          }
+        }
+        // v17: status sync metadata (FR-002/FR-016/FR-017, data-model.md §4)
+        if (oldVersion < 17) {
+          try {
+            await db.execute(
+              "ALTER TABLE statuses ADD COLUMN client_status_id TEXT DEFAULT ''",
+            );
+            await db.execute(
+              "ALTER TABLE statuses ADD COLUMN sync_status TEXT DEFAULT 'synced'",
+            );
+            await db.execute(
+              "ALTER TABLE statuses ADD COLUMN audience_json TEXT DEFAULT '[]'",
+            );
+            await db.execute(
+              "ALTER TABLE statuses ADD COLUMN author_id TEXT DEFAULT ''",
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_statuses_client_id ON statuses(client_status_id)',
+            );
+          } catch (e) {
+            debugPrint('Migration v17 error: $e');
+          }
+        }
+        // v18: backfill statuses content columns missing on installs that
+        // upgraded through a build where this migration was dropped.
+        if (oldVersion < 18) {
+          for (final stmt in [
+            "ALTER TABLE statuses ADD COLUMN content_type TEXT DEFAULT 'image'",
+            'ALTER TABLE statuses ADD COLUMN text_content TEXT',
+            'ALTER TABLE statuses ADD COLUMN media_url TEXT',
+            'ALTER TABLE statuses ADD COLUMN background_color TEXT',
+            'ALTER TABLE statuses ADD COLUMN font_style TEXT',
+            'ALTER TABLE statuses ADD COLUMN music_track_id TEXT',
+          ]) {
+            try {
+              await db.execute(stmt);
+            } catch (e) {
+              debugPrint('Migration v18 error: $e');
+            }
           }
         }
       },

@@ -13,6 +13,9 @@ class SocketEvents {
   static const String callEnded = 'callEnded';
   static const String userStatus = 'userStatus';
   static const String statusReceived = 'statusReceived';
+  static const String statusUploaded = 'statusUploaded';
+  static const String statusViewerAdded = 'statusViewerAdded';
+  static const String statusReacted = 'statusReacted';
   static const String messageDeleted = 'messageDeleted';
 
   // Group call — server → client
@@ -43,4 +46,15 @@ class SocketEvents {
   static const String acceptGroupCall = 'acceptGroupCall';
   static const String declineGroupCall = 'declineGroupCall';
   static const String leaveGroupCall = 'leaveGroupCall';
+
+  // Translation — client → server
+  static const String translationSubscribe = 'translation:subscribe';
+  static const String translationUnsubscribe = 'translation:unsubscribe';
+  static const String translationChangeLanguage = 'translation:changeLanguage';
+
+  // Translation — server → client
+  static const String translationSubscribed = 'translation:subscribed';
+  static const String translationUnsubscribed = 'translation:unsubscribed';
+  static const String translationDenied = 'translation:denied';
+  static const String translationUnavailable = 'translation_unavailable';
 }

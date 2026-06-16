@@ -22,14 +22,17 @@ class ModeSwitcherBar extends StatelessWidget {
         color: Colors.black54,
         borderRadius: BorderRadius.circular(AppConstants.radiusPill),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildModeItem(context, StatusContentType.video, 'status.video'.tr()),
-          _buildModeItem(context, StatusContentType.image, 'status.image'.tr()),
-          _buildModeItem(context, StatusContentType.text, 'status.text'.tr()),
-          _buildModeItem(context, StatusContentType.voice, 'status.voice'.tr()),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildModeItem(context, StatusContentType.video, 'status.video'.tr()),
+            _buildModeItem(context, StatusContentType.image, 'status.image'.tr()),
+            _buildModeItem(context, StatusContentType.text, 'status.text'.tr()),
+            _buildModeItem(context, StatusContentType.voice, 'status.voice'.tr()),
+          ],
+        ),
       ),
     );
   }

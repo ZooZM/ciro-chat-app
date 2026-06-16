@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'status_content_type.dart';
 import 'status_privacy.dart';
+import 'status_reaction.dart';
+import 'status_viewer.dart';
 
 class StatusEntity extends Equatable {
   final String id;
@@ -21,6 +23,14 @@ class StatusEntity extends Equatable {
   final String? caption;
   final StatusPrivacy privacy;
 
+  // Sync/identity fields (014-status-feature-integration)
+  final String clientStatusId;
+  final String authorId;
+  final List<String> audience;
+  final String syncStatus;
+  final List<StatusViewer> viewers;
+  final List<StatusReaction> reactions;
+
   const StatusEntity({
     required this.id,
     required this.authorName,
@@ -37,6 +47,12 @@ class StatusEntity extends Equatable {
     this.musicTrackId,
     this.caption,
     this.privacy = StatusPrivacy.public, // default
+    this.clientStatusId = '',
+    this.authorId = '',
+    this.audience = const [],
+    this.syncStatus = 'synced',
+    this.viewers = const [],
+    this.reactions = const [],
   });
 
   @override
@@ -56,5 +72,59 @@ class StatusEntity extends Equatable {
         musicTrackId,
         caption,
         privacy,
+        clientStatusId,
+        authorId,
+        audience,
+        syncStatus,
+        viewers,
+        reactions,
       ];
+
+  StatusEntity copyWith({
+    String? id,
+    String? authorName,
+    String? authorAvatar,
+    DateTime? timestamp,
+    DateTime? expiresAt,
+    bool? isViewed,
+    bool? isMine,
+    StatusContentType? contentType,
+    String? textContent,
+    String? mediaUrl,
+    String? backgroundColor,
+    String? fontStyle,
+    String? musicTrackId,
+    String? caption,
+    StatusPrivacy? privacy,
+    String? clientStatusId,
+    String? authorId,
+    List<String>? audience,
+    String? syncStatus,
+    List<StatusViewer>? viewers,
+    List<StatusReaction>? reactions,
+  }) {
+    return StatusEntity(
+      id: id ?? this.id,
+      authorName: authorName ?? this.authorName,
+      authorAvatar: authorAvatar ?? this.authorAvatar,
+      timestamp: timestamp ?? this.timestamp,
+      expiresAt: expiresAt ?? this.expiresAt,
+      isViewed: isViewed ?? this.isViewed,
+      isMine: isMine ?? this.isMine,
+      contentType: contentType ?? this.contentType,
+      textContent: textContent ?? this.textContent,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      fontStyle: fontStyle ?? this.fontStyle,
+      musicTrackId: musicTrackId ?? this.musicTrackId,
+      caption: caption ?? this.caption,
+      privacy: privacy ?? this.privacy,
+      clientStatusId: clientStatusId ?? this.clientStatusId,
+      authorId: authorId ?? this.authorId,
+      audience: audience ?? this.audience,
+      syncStatus: syncStatus ?? this.syncStatus,
+      viewers: viewers ?? this.viewers,
+      reactions: reactions ?? this.reactions,
+    );
+  }
 }

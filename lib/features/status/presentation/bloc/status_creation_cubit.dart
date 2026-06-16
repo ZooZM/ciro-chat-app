@@ -51,121 +51,47 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
   void switchMode(StatusContentType mode) {
     if (state is StatusCreationComposing) {
       final currentDraft = (state as StatusCreationComposing).draft;
-      final updatedDraft = StatusEntity(
-        id: currentDraft.id,
-        authorName: currentDraft.authorName,
-        authorAvatar: currentDraft.authorAvatar,
-        timestamp: currentDraft.timestamp,
-        expiresAt: currentDraft.expiresAt,
-        contentType: mode,
-        textContent: currentDraft.textContent,
-        mediaUrl: currentDraft.mediaUrl,
-        backgroundColor: currentDraft.backgroundColor,
-        fontStyle: currentDraft.fontStyle,
-        musicTrackId: currentDraft.musicTrackId,
-        caption: currentDraft.caption,
-        privacy: currentDraft.privacy,
-        isMine: true,
-      );
-      emit(StatusCreationComposing(updatedDraft));
+      emit(StatusCreationComposing(currentDraft.copyWith(contentType: mode)));
     } else {
       initDraft(mode);
     }
   }
 
   void updateText(String text) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: draft.contentType,
-          textContent: text,
-          mediaUrl: draft.mediaUrl,
-          backgroundColor: draft.backgroundColor,
-          fontStyle: draft.fontStyle,
-          musicTrackId: draft.musicTrackId,
-          caption: draft.caption,
-          privacy: draft.privacy,
-          isMine: true,
-        ));
+    _updateDraft((draft) => draft.copyWith(textContent: text));
   }
 
   void updateBackgroundColor(String colorHex) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: draft.contentType,
-          textContent: draft.textContent,
-          mediaUrl: draft.mediaUrl,
-          backgroundColor: colorHex,
-          fontStyle: draft.fontStyle,
-          musicTrackId: draft.musicTrackId,
-          caption: draft.caption,
-          privacy: draft.privacy,
-          isMine: true,
-        ));
+    _updateDraft((draft) => draft.copyWith(backgroundColor: colorHex));
   }
 
   void updateFontStyle(String fontStyle) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: draft.contentType,
-          textContent: draft.textContent,
-          mediaUrl: draft.mediaUrl,
-          backgroundColor: draft.backgroundColor,
-          fontStyle: fontStyle,
-          musicTrackId: draft.musicTrackId,
-          caption: draft.caption,
-          privacy: draft.privacy,
-          isMine: true,
-        ));
+    _updateDraft((draft) => draft.copyWith(fontStyle: fontStyle));
   }
 
-  void updatePrivacy(StatusPrivacy privacy) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: draft.contentType,
-          textContent: draft.textContent,
-          mediaUrl: draft.mediaUrl,
-          backgroundColor: draft.backgroundColor,
-          fontStyle: draft.fontStyle,
-          musicTrackId: draft.musicTrackId,
-          caption: draft.caption,
-          privacy: privacy,
-          isMine: true,
-        ));
+  /// T053: switching to "private" pre-selects the user's cached/fetched
+  /// default audience (T052) so the upload carries a sensible `audience`
+  /// without requiring a new contact-picker UI (SC-007).
+  Future<void> updatePrivacy(StatusPrivacy privacy) async {
+    _updateDraft((draft) => draft.copyWith(privacy: privacy));
+
+    if (privacy != StatusPrivacy.private) return;
+    final draft = (state as StatusCreationComposing).draft;
+    if (draft.audience.isNotEmpty) return;
+
+    final result = await statusRepository.getDefaultAudience();
+    result.fold(
+      (_) {},
+      (contacts) => _updateDraft(
+        (draft) => draft.copyWith(
+          audience: contacts.map((c) => c.userId).toList(),
+        ),
+      ),
+    );
   }
 
   void attachMedia(String mediaUrl, StatusContentType type) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: type,
-          textContent: draft.textContent,
-          mediaUrl: mediaUrl,
-          backgroundColor: draft.backgroundColor,
-          fontStyle: draft.fontStyle,
-          musicTrackId: draft.musicTrackId,
-          caption: draft.caption,
-          privacy: draft.privacy,
-          isMine: true,
-        ));
+    _updateDraft((draft) => draft.copyWith(contentType: type, mediaUrl: mediaUrl));
   }
 
   void attachVoiceRecording(String filePath) {
@@ -192,22 +118,7 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
   }
 
   void attachMusicTrack(String trackId) {
-    _updateDraft((draft) => StatusEntity(
-          id: draft.id,
-          authorName: draft.authorName,
-          authorAvatar: draft.authorAvatar,
-          timestamp: draft.timestamp,
-          expiresAt: draft.expiresAt,
-          contentType: draft.contentType,
-          textContent: draft.textContent,
-          mediaUrl: draft.mediaUrl,
-          backgroundColor: draft.backgroundColor,
-          fontStyle: draft.fontStyle,
-          musicTrackId: trackId,
-          caption: draft.caption,
-          privacy: draft.privacy,
-          isMine: true,
-        ));
+    _updateDraft((draft) => draft.copyWith(musicTrackId: trackId));
   }
 
   void attachAIImage(String imageUrl) {
@@ -221,7 +132,7 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
       
       final result = await statusRepository.uploadStatus(draft);
       result.fold(
-        (failure) => emit(StatusCreationError(failure.message)),
+        (failure) => emit(StatusCreationError(draft, failure.message)),
         (_) => emit(StatusCreationSuccess()),
       );
     }
