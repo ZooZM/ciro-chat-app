@@ -47,7 +47,12 @@ class TranslationCubit extends Cubit<TranslationState> {
   /// Per-speaker caption hot path — NOT part of [TranslationState]
   /// (data-model.md §5). Caption updates call `.value =`, never `emit()`.
   final Map<String, ValueNotifier<Caption?>> _captionNotifiers = {};
-  final ValueNotifier<Caption?> latestActiveCaption = ValueNotifier(null);
+
+  /// Ordered transcript for the subtitle overlay (FR-F02/FR-F04/FR-F05).
+  /// Interim captions are updated in-place; a final caption locks its row so
+  /// the next packet from that speaker opens a new row.
+  final ValueNotifier<List<Caption>> transcriptList = ValueNotifier(const []);
+
   final Map<String, _SegmentTracker> _lastApplied = {};
 
   final _sideEventController = StreamController<TranslationSideEvent>.broadcast();
@@ -143,7 +148,37 @@ class TranslationCubit extends Cubit<TranslationState> {
     debugPrint('[TranslationCubit] ACCEPTED — speakerId="$speakerId" type=${caption.type} text="${caption.text}"');
     _lastApplied[speakerId] = _SegmentTracker(caption.segmentId, caption.seq, caption.type);
     captionNotifier(speakerId).value = caption;
-    latestActiveCaption.value = caption;
+    _appendToTranscript(caption);
+  }
+
+  /// Appends or updates [caption] in [transcriptList] (FR-F02/FR-F04/FR-F05).
+  ///
+  /// - Finds the last non-final row from the same speaker and updates it in
+  ///   place (interim text growing, or interim being finalized).
+  /// - If no pending row exists (previous was final, or first caption from this
+  ///   speaker), a new row is appended.
+  /// - Caps the list at 100 rows to prevent unbounded memory growth.
+  void _appendToTranscript(Caption caption) {
+    final list = List<Caption>.from(transcriptList.value);
+
+    // Scan backwards for the last in-progress (non-final) row from this speaker.
+    int pendingIdx = -1;
+    for (int i = list.length - 1; i >= 0; i--) {
+      if (list[i].speakerId == caption.speakerId &&
+          list[i].type != CaptionType.final_) {
+        pendingIdx = i;
+        break;
+      }
+    }
+
+    if (pendingIdx >= 0) {
+      list[pendingIdx] = caption; // update interim or mark as final
+    } else {
+      list.add(caption); // new utterance from this speaker
+    }
+
+    if (list.length > 100) list.removeRange(0, list.length - 100);
+    transcriptList.value = list;
   }
 
   /// FR-001: enables translation for [speakerId] into [targetLanguage].
@@ -238,8 +273,10 @@ class TranslationCubit extends Cubit<TranslationState> {
     emit(state.copyWith(subscriptions: updated));
     _captionNotifiers.remove(speakerId)?.dispose();
     _lastApplied.remove(speakerId);
-    if (latestActiveCaption.value?.speakerId == speakerId) {
-      latestActiveCaption.value = null;
+    final filtered =
+        transcriptList.value.where((c) => c.speakerId != speakerId).toList();
+    if (filtered.length != transcriptList.value.length) {
+      transcriptList.value = filtered;
     }
   }
 
@@ -341,7 +378,7 @@ class TranslationCubit extends Cubit<TranslationState> {
     for (final notifier in _captionNotifiers.values) {
       notifier.dispose();
     }
-    latestActiveCaption.dispose();
+    transcriptList.dispose();
     _sideEventController.close();
     return super.close();
   }

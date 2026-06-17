@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
@@ -74,6 +75,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   // Live translation captions (015-live-translation-captions)
   late final TranslationCubit _translationCubit;
   final Set<String> _shownDeniedFor = {};
+  // Temporary global data-channel tap — confirms the Room is receiving ANY
+  // LiveKit data packets before the datasource's topic filter runs.
+  // room.events.listen() returns CancelListenFunc, not StreamSubscription.
+  CancelListenFunc? _rawDataDebugSub;
 
   @override
   void initState() {
@@ -201,6 +206,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       debugPrint('[GroupCallScreen] Room connected. Calling attachRoom with roomId: $chatRoomId');
       _translationCubit.attachRoom(_room!, roomId: chatRoomId);
       debugPrint('[GroupCallScreen] attachRoom done — TranslationCubit is now listening for captions.');
+      _rawDataDebugSub = _room!.events.listen((event) {
+        if (event is DataReceivedEvent) {
+          debugPrint(
+            '[LiveKit RAW] topic: "${event.topic}",'
+            ' bytes: ${event.data.length},'
+            ' payload: ${utf8.decode(event.data)}',
+          );
+        }
+      });
       getIt<VideoCallRepository>().setExternalRoom(_room!);
       // Keep the WebRTC connection alive when the screen locks (Android).
       getIt<VideoCallRepository>().setCallServiceActive(true);
@@ -256,6 +270,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _roomEventsListener?.dispose();
+    _rawDataDebugSub?.call();
     _translationCubit.detachRoom();
     _translationCubit.close();
     getIt<VideoCallRepository>().setCallServiceActive(false);
@@ -448,7 +463,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     right: 0,
                     bottom: 0,
                     child: SubtitleOverlayWidget(
-                      caption: _translationCubit.latestActiveCaption,
+                      transcript: _translationCubit.transcriptList,
                       participants: remoteParticipants,
                     ),
                   ),
