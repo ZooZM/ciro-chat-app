@@ -1,10 +1,14 @@
-import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
-import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
+import 'dart:io';
+
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/utils/url_utils.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_viewer.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// How long each segment of the progress bar takes to fill.
 const _kStorySegmentDuration = Duration(seconds: 5);
@@ -31,6 +35,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     with SingleTickerProviderStateMixin {
   late int _currentIndex;
   late final AnimationController _progressController;
+  bool _isPopping = false;
 
   StatusEntity get _currentStatus => widget.statuses[_currentIndex];
 
@@ -63,7 +68,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       setState(() => _currentIndex++);
       _startCurrent();
     } else {
-      Navigator.of(context).pop();
+      _safePop();
     }
   }
 
@@ -84,6 +89,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   void _resume() {
     if (!_progressController.isAnimating) {
       _progressController.forward();
+    }
+  }
+
+  void _safePop() {
+    if (_isPopping || !mounted) return;
+    _isPopping = true;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -112,7 +125,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               ),
             ),
             const SizedBox(height: 8),
-            _StoryHeader(status: status),
+            _StoryHeader(status: status, onBack: _safePop),
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -137,8 +150,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
               ),
-            // Own statuses can't be replied to or reacted on.
-            if (!status.isMine) _StoryBottomBar(status: status),
+            if (status.isMine)
+              _StoryViewersBar(statusId: status.id)
+            else
+              _StoryBottomBar(
+                status: status,
+                onPause: _pause,
+                onResume: _resume,
+              ),
           ],
         ),
       ),
@@ -159,8 +178,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           textAlign: TextAlign.center,
         );
       case StatusContentType.image:
-        if (status.mediaUrl != null) {
-          return Image.network(status.mediaUrl!, headers: UrlUtils.authHeaders);
+        if (status.mediaUrl != null && status.mediaUrl!.isNotEmpty) {
+          final url = status.mediaUrl!;
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            return Image.network(url, headers: UrlUtils.authHeaders);
+          }
+          // Local file path (e.g. optimistic insert before server upload)
+          return Image.file(File(url));
         }
         return const Icon(Icons.image, size: 100, color: Colors.white);
       case StatusContentType.video:
@@ -170,6 +194,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
   }
 }
+
+// ── Progress bar ────────────────────────────────────────────────────────────
 
 class _StoryProgressBar extends StatelessWidget {
   final int count;
@@ -232,10 +258,13 @@ class _StoryProgressBar extends StatelessWidget {
   }
 }
 
+// ── Header ──────────────────────────────────────────────────────────────────
+
 class _StoryHeader extends StatelessWidget {
   final StatusEntity status;
+  final VoidCallback onBack;
 
-  const _StoryHeader({required this.status});
+  const _StoryHeader({required this.status, required this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -245,18 +274,20 @@ class _StoryHeader extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.black54),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+            onPressed: onBack,
           ),
           const SizedBox(width: 4),
           CircleAvatar(
             radius: 22,
-            backgroundColor: const Color(0xFFFCB64F), // Orange background
-            backgroundImage: status.authorAvatar.isNotEmpty ? NetworkImage(status.authorAvatar) : null,
+            backgroundColor: const Color(0xFFFCB64F),
+            backgroundImage: status.authorAvatar.isNotEmpty
+                ? NetworkImage(status.authorAvatar)
+                : null,
             child: status.authorAvatar.isEmpty
                 ? Text(
-                    status.authorName.isNotEmpty ? status.authorName[0].toUpperCase() : '?',
+                    status.authorName.isNotEmpty
+                        ? status.authorName[0].toUpperCase()
+                        : '?',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
@@ -272,7 +303,7 @@ class _StoryHeader extends StatelessWidget {
               Text(
                 status.authorName,
                 style: const TextStyle(
-                  color: Colors.black, // Matches image exactly
+                  color: Colors.black,
                   fontWeight: FontWeight.w500,
                   fontSize: 16,
                 ),
@@ -296,18 +327,66 @@ class _StoryHeader extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
     if (diff.inDays == 0) {
-      return 'status.today'.tr() + ' ${DateFormat.jm().format(timestamp)}';
+      return '${'status.today'.tr()} ${DateFormat.jm().format(timestamp)}';
     } else if (diff.inDays == 1) {
-      return 'status.yesterday'.tr() + ' ${DateFormat.jm().format(timestamp)}';
+      return '${'status.yesterday'.tr()} ${DateFormat.jm().format(timestamp)}';
     }
     return DateFormat.yMMMd().format(timestamp);
   }
 }
 
-class _StoryBottomBar extends StatelessWidget {
-  final StatusEntity status;
+// ── Reply bottom bar (other users' statuses) ────────────────────────────────
 
-  const _StoryBottomBar({required this.status});
+class _StoryBottomBar extends StatefulWidget {
+  final StatusEntity status;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+
+  const _StoryBottomBar({
+    required this.status,
+    required this.onPause,
+    required this.onResume,
+  });
+
+  @override
+  State<_StoryBottomBar> createState() => _StoryBottomBarState();
+}
+
+class _StoryBottomBarState extends State<_StoryBottomBar> {
+  final _textController = TextEditingController();
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() => _hasText = hasText);
+    }
+  }
+
+  void _sendReply() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    getIt<StatusCubit>().reply(widget.status.id, text);
+    _textController.clear();
+    widget.onResume();
+  }
+
+  void _sendReaction() {
+    getIt<StatusCubit>().react(widget.status.id, '❤️');
+  }
+
+  @override
+  void dispose() {
+    _textController.removeListener(_onTextChanged);
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -319,10 +398,11 @@ class _StoryBottomBar extends StatelessWidget {
             child: Container(
               height: 48,
               decoration: BoxDecoration(
-                color: const Color(0xFF5D4F3F), // Dark semi-transparent brown
+                color: const Color(0xFF5D4F3F),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: TextField(
+                controller: _textController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'status.reply'.tr(),
@@ -332,19 +412,17 @@ class _StoryBottomBar extends StatelessWidget {
                     fontWeight: FontWeight.w400,
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
                 ),
-                onSubmitted: (text) {
-                  // TODO: Send reply logic
-                },
+                onTap: widget.onPause,
+                onSubmitted: (_) => _sendReply(),
               ),
             ),
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () {
-              // TODO: React logic
-            },
+            onTap: _hasText ? _sendReply : _sendReaction,
             child: Container(
               height: 48,
               width: 48,
@@ -352,15 +430,168 @@ class _StoryBottomBar extends StatelessWidget {
                 color: Color(0xFF5D4F3F),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.favorite_border,
-                color: Colors.white,
-                size: 26,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  _hasText ? Icons.send : Icons.favorite_border,
+                  key: ValueKey(_hasText),
+                  color: Colors.white,
+                  size: 26,
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Viewers bar (own statuses) ───────────────────────────────────────────────
+
+class _StoryViewersBar extends StatelessWidget {
+  final String statusId;
+
+  const _StoryViewersBar({required this.statusId});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<StatusCubit, StatusState>(
+      bloc: getIt<StatusCubit>(),
+      buildWhen: (prev, curr) {
+        if (prev is StatusLoaded && curr is StatusLoaded) {
+          final prevStatus = prev.myStatuses
+              .cast<StatusEntity?>()
+              .firstWhere((s) => s?.id == statusId, orElse: () => null);
+          final currStatus = curr.myStatuses
+              .cast<StatusEntity?>()
+              .firstWhere((s) => s?.id == statusId, orElse: () => null);
+          return prevStatus?.viewers != currStatus?.viewers;
+        }
+        return curr is StatusLoaded;
+      },
+      builder: (context, state) {
+        final viewers = state is StatusLoaded
+            ? (state.myStatuses
+                    .cast<StatusEntity?>()
+                    .firstWhere((s) => s?.id == statusId,
+                        orElse: () => null)
+                    ?.viewers ??
+                const <StatusViewer>[])
+            : const <StatusViewer>[];
+
+        return GestureDetector(
+          onTap: viewers.isNotEmpty
+              ? () => _showViewersList(context, viewers)
+              : null,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+            child: Row(
+              children: [
+                const Icon(Icons.remove_red_eye_outlined,
+                    color: Colors.white70, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  viewers.isEmpty
+                      ? 'status.no_views'.tr()
+                      : '${'status.views'.tr()} ${viewers.length}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                if (viewers.isNotEmpty) ...[
+                  const Spacer(),
+                  const Icon(Icons.chevron_right,
+                      color: Colors.white70, size: 20),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showViewersList(BuildContext context, List<StatusViewer> viewers) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2C2C2C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ViewersSheet(viewers: viewers),
+    );
+  }
+}
+
+class _ViewersSheet extends StatelessWidget {
+  final List<StatusViewer> viewers;
+
+  const _ViewersSheet({required this.viewers});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.white30,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              const Icon(Icons.remove_red_eye_outlined,
+                  color: Colors.white70, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                '${viewers.length} ${'status.views'.tr()}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: viewers.length,
+            itemBuilder: (context, index) {
+              final viewer = viewers[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: viewer.avatarUrl.isNotEmpty
+                      ? NetworkImage(viewer.avatarUrl)
+                      : null,
+                  child: viewer.avatarUrl.isEmpty
+                      ? Text(viewer.name.isNotEmpty
+                          ? viewer.name[0].toUpperCase()
+                          : '?')
+                      : null,
+                ),
+                title: Text(
+                  viewer.name,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  DateFormat.jm().format(viewer.viewedAt),
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+      ],
     );
   }
 }

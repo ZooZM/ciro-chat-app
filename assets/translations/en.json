@@ -55,7 +55,9 @@
     "create_image_for": "Describe the image you want to create",
     "today": "Today",
     "yesterday": "Yesterday",
-    "reply": "Reply"
+    "reply": "Reply",
+    "views": "Views",
+    "no_views": "No views yet"
   },
   "map_following": "Following",
   "map_explore": "Explore",

@@ -101,26 +101,39 @@ class StatusCubit extends Cubit<StatusState> {
   Future<void> markStatusAsViewed(String statusId) async {
     if (state is StatusLoaded) {
       final currentState = state as StatusLoaded;
-      
-      // Optimistic update
-      final statusToUpdate = currentState.recentStatuses.firstWhere((s) => s.id == statusId);
-      final updatedStatus = statusToUpdate.copyWith(isViewed: true);
 
-      final updatedRecent = List<StatusEntity>.from(currentState.recentStatuses)..removeWhere((s) => s.id == statusId);
-      final updatedViewed = List<StatusEntity>.from(currentState.viewedStatuses)..insert(0, updatedStatus);
-      
-      emit(currentState.copyWith(recentStatuses: updatedRecent, viewedStatuses: updatedViewed));
+      // Optimistic update — only move if the status is still in the unviewed list.
+      final statusToUpdate = currentState.recentStatuses
+          .cast<StatusEntity?>()
+          .firstWhere((s) => s?.id == statusId, orElse: () => null);
 
-      // Network request
+      if (statusToUpdate != null) {
+        final updatedStatus = statusToUpdate.copyWith(isViewed: true);
+        final updatedRecent = List<StatusEntity>.from(currentState.recentStatuses)
+          ..removeWhere((s) => s.id == statusId);
+        final updatedViewed = List<StatusEntity>.from(currentState.viewedStatuses)
+          ..insert(0, updatedStatus);
+        emit(currentState.copyWith(recentStatuses: updatedRecent, viewedStatuses: updatedViewed));
+      }
+
+      // Always notify the server regardless of local state.
       final result = await repository.markAsViewed(statusId);
       result.fold(
         (failure) {
-          // Revert on failure (simplified)
-          emit(currentState);
+          // Revert optimistic update on failure.
+          if (statusToUpdate != null) emit(currentState);
         },
         (_) {},
       );
     }
+  }
+
+  Future<void> react(String statusId, String reaction) async {
+    await repository.react(statusId, reaction);
+  }
+
+  Future<void> reply(String statusId, String message) async {
+    await repository.reply(statusId, message);
   }
 
   void searchStatuses(String query) {

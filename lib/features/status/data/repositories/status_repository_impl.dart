@@ -91,7 +91,8 @@ class StatusRepositoryImpl implements StatusRepository {
         // Offline or request failed — fall back to whatever is cached locally.
       }
       final statuses = await localDataSource.getStatuses(isViewed: false);
-      return Right(statuses);
+      final phoneToName = await _getContactPhoneToName();
+      return Right(statuses.map((s) => _resolveContactName(s, phoneToName)).toList());
     } catch (e) {
       return Left(CacheFailure(e.toString()));
     }
@@ -101,10 +102,39 @@ class StatusRepositoryImpl implements StatusRepository {
   Future<Either<Failure, List<StatusEntity>>> getViewedStatuses() async {
     try {
       final statuses = await localDataSource.getStatuses(isViewed: true);
-      return Right(statuses);
+      final phoneToName = await _getContactPhoneToName();
+      return Right(statuses.map((s) => _resolveContactName(s, phoneToName)).toList());
     } catch (e) {
       return Left(CacheFailure(e.toString()));
     }
+  }
+
+  /// Builds a phone-number → contact-name lookup from the locally cached
+  /// contacts table (populated during contacts sync).
+  Future<Map<String, String>> _getContactPhoneToName() async {
+    try {
+      final contacts = await chatLocalDataSource.watchContacts().first;
+      return {
+        for (final c in contacts)
+          if (c.phoneNumber.isNotEmpty) c.phoneNumber: c.name,
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Returns [status] with [authorName] replaced by the saved contact name
+  /// when [authorName] matches a phone number in [phoneToName].
+  StatusEntity _resolveContactName(
+    StatusEntity status,
+    Map<String, String> phoneToName,
+  ) {
+    if (status.isMine) return status;
+    final resolved = phoneToName[status.authorName] ?? phoneToName[status.authorId];
+    if (resolved != null && resolved.isNotEmpty && resolved != 'Unknown') {
+      return status.copyWith(authorName: resolved);
+    }
+    return status;
   }
 
   @override
@@ -285,10 +315,11 @@ class StatusRepositoryImpl implements StatusRepository {
   }
 
   @override
-  Stream<StatusEntity> get statusStream => remoteDataSource.onStatusReceived.map((model) {
-        // Cache immediately upon receiving
+  Stream<StatusEntity> get statusStream =>
+      remoteDataSource.onStatusReceived.asyncMap((model) async {
         localDataSource.cacheStatus(model);
-        return model;
+        final phoneToName = await _getContactPhoneToName();
+        return _resolveContactName(model, phoneToName);
       });
 
   @override

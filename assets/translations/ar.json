@@ -55,7 +55,9 @@
     "create_image_for": "صف الصورة التي تريد إنشاءها",
     "today": "اليوم",
     "yesterday": "أمس",
-    "reply": "رد"
+    "reply": "رد",
+    "views": "مشاهدة",
+    "no_views": "لا مشاهدات بعد"
   },
   "map_following": "المتابَعون",
   "map_explore": "استكشاف",
