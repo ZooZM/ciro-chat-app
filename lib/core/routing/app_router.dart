@@ -24,6 +24,9 @@ import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
 import '../../features/video_call/presentation/pages/group_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_group_call_screen.dart';
+import '../../features/video_call/presentation/pages/avatar_incoming_call_screen.dart';
+import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
+import '../../features/video_call/presentation/bloc/call_cubit.dart';
 import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
 import '../di/injection.dart';
 
@@ -50,6 +53,8 @@ class AppRouterName {
   static const String profile = '/profile';
   static const String groupCall = '/group_call/:roomId';
   static const String incomingGroupCall = '/incoming_group_call';
+  static const String avatarIncomingCall = '/avatar_incoming_call';
+  static const String avatarActiveCall = '/avatar_active_call';
   static const String recordings = '/recordings';
 }
 
@@ -191,12 +196,31 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRouterName.videoCall,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
-        return VideoCallScreen(
-          contactName: data['contactName'] as String? ?? 'Calling...',
-          livekitUrl: data['livekitUrl'] as String? ?? '',
-          livekitToken: data['livekitToken'] as String? ?? '',
+        return CustomTransitionPage(
+          transitionDuration: const Duration(milliseconds: 500),
+          reverseTransitionDuration: const Duration(milliseconds: 500),
+          child: Hero(
+            tag: 'call_screen_transition',
+            child: VideoCallScreen(
+              contactName: data['contactName'] as String? ?? 'Calling...',
+              livekitUrl: data['livekitUrl'] as String? ?? '',
+              livekitToken: data['livekitToken'] as String? ?? '',
+            ),
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            );
+          },
         );
       },
     ),
@@ -212,15 +236,34 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRouterName.voiceCall,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
-        return VoiceCallScreen(
-          contactName: data['contactName'] as String? ?? 'Calling...',
-          avatarInitials: data['avatarInitials'] as String? ?? '',
-          livekitUrl: data['livekitUrl'] as String? ?? '',
-          livekitToken: data['livekitToken'] as String? ?? '',
-          initialMicMuted: data['initialMicMuted'] as bool? ?? false,
-          initialSpeakerOn: data['initialSpeakerOn'] as bool? ?? false,
+        return CustomTransitionPage(
+          transitionDuration: const Duration(milliseconds: 500),
+          reverseTransitionDuration: const Duration(milliseconds: 500),
+          child: Hero(
+            tag: 'call_screen_transition',
+            child: VoiceCallScreen(
+              contactName: data['contactName'] as String? ?? 'Calling...',
+              avatarInitials: data['avatarInitials'] as String? ?? '',
+              livekitUrl: data['livekitUrl'] as String? ?? '',
+              livekitToken: data['livekitToken'] as String? ?? '',
+              initialMicMuted: data['initialMicMuted'] as bool? ?? false,
+              initialSpeakerOn: data['initialSpeakerOn'] as bool? ?? false,
+            ),
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            );
+          },
         );
       },
     ),
@@ -250,6 +293,65 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.recordings,
       builder: (context, state) => const RecordingsListPage(),
+    ),
+    GoRoute(
+      path: AppRouterName.avatarIncomingCall,
+      pageBuilder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return CustomTransitionPage(
+          opaque: false,
+          barrierColor: Colors.black54,
+          child: AvatarIncomingCallScreen(
+            callerName: data['callerName'] as String? ?? 'Unknown',
+            callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
+            onJoin: () => getIt<CallCubit>().acceptCall(),
+            onDecline: () => getIt<CallCubit>().rejectCall(),
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              )),
+              child: child,
+            );
+          },
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.avatarActiveCall,
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return StatefulBuilder(
+          builder: (context, setState) {
+            bool isMuted = data['isMuted'] == true;
+            bool isCameraOff = data['isCameraOff'] == true;
+            return AvatarActiveCallScreen(
+              remoteName: data['remoteName'] as String? ?? 'Unknown',
+              remoteAvatarUrl: data['remoteAvatarUrl'] as String? ?? '',
+              localAvatarUrl: data['localAvatarUrl'] as String? ?? '',
+              localName: data['localName'] as String? ?? 'You',
+              isMuted: isMuted,
+              isCameraOff: isCameraOff,
+              callDuration: data['callDuration'] as String? ?? '00:00',
+              onToggleMute: () {
+                setState(() => data['isMuted'] = !isMuted);
+              },
+              onToggleCamera: () {
+                setState(() => data['isCameraOff'] = !isCameraOff);
+              },
+              onEndCall: () => getIt<CallCubit>().endCall(),
+              onMinimize: () {
+                if (context.canPop()) context.pop();
+              },
+            );
+          },
+        );
+      },
     ),
   ],
 );

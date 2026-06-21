@@ -101,11 +101,11 @@ class AppTypography {
   // ── App-specific convenience styles ──────────────────────────────────────
 
   /// "CIRO" logo wordmark
-  static TextStyle get logoMark => GoogleFonts.montserrat(
+  static TextStyle get logoMark => GoogleFonts.comfortaa(
         fontSize: 32,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w900,
         color: const Color(0xFF333333),
-        letterSpacing: 6,
+        letterSpacing: -1,
       );
 
   /// "CONNECT" tagline below logo

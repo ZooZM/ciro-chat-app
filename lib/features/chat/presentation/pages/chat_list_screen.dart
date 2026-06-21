@@ -336,12 +336,13 @@ class ChatListAppBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'CIRO',
+                'ciro',
                 style: AppTypography.logoMark.copyWith(
-                  fontSize: 16,
+                  fontSize: 24,
                   height: 1.1,
-                  letterSpacing: 2,
+                  letterSpacing: -1.0,
                   color: const Color(0xFF222222),
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               Text(

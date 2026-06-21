@@ -71,7 +71,7 @@ class _CallOverlayState extends State<CallOverlay> {
             );
           } else {
             navContext.push(
-              AppRouterName.incomingCall,
+              AppRouterName.avatarIncomingCall,
               extra: {
                 'callerName': state.callerName,
                 'callerAvatarUrl': state.callerAvatarUrl,
