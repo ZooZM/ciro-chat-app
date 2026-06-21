@@ -338,11 +338,11 @@ class ChatListAppBar extends StatelessWidget {
               Text(
                 'ciro',
                 style: AppTypography.logoMark.copyWith(
-                  fontSize: 24,
+                  fontSize: 26,
                   height: 1.1,
                   letterSpacing: -1.0,
-                  color: const Color(0xFF222222),
-                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF111111),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               Text(

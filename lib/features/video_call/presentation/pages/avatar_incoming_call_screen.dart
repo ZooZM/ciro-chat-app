@@ -154,102 +154,99 @@ class AvatarIncomingCallScreen extends StatelessWidget {
                   SizedBox(height: 32.resH),
                   
                   // Bottom Area (PIP + Actions)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // PIP Avatar
-                      Container(
-                        width: 90.resR,
-                        height: 140.resR,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFB5E550), // Lime green tint from the screenshot
-                          borderRadius: BorderRadius.circular(16.resR),
-                          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.resR),
-                        ),
-                        alignment: Alignment.center,
+                      // PIP Avatar (lime green box)
+                      Align(
+                        alignment: Alignment.centerLeft,
                         child: Container(
+                          width: 90.resW,
+                          height: 140.resH,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withOpacity(0.1),
+                            color: const Color(0xFFB4E051),
+                            borderRadius: BorderRadius.circular(24.resR),
                           ),
-                          padding: EdgeInsets.all(4.resR),
-                          child: CircleAvatar(
-                            radius: 24.resR,
-                            backgroundColor: Colors.white24,
-                            child: Text(
-                              'YOU',
-                              style: AppTypography.subtitle2.copyWith(color: Colors.black54, fontSize: 12.resSp),
+                          child: Center(
+                            child: CircleAvatar(
+                              radius: 24.resR,
+                              backgroundColor: Colors.black26,
+                              backgroundImage: callerAvatarUrl.isNotEmpty
+                                  ? CachedNetworkImageProvider(callerAvatarUrl)
+                                  : null,
+                              child: callerAvatarUrl.isEmpty
+                                  ? const Icon(Icons.person, color: Colors.white)
+                                  : null,
                             ),
                           ),
                         ),
                       ),
-                      
-                      SizedBox(width: 16.resW),
-                      
-                      // Action Buttons Container
-                      Expanded(
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 16.resH),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(24.resR),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: ElevatedButton(
-                                  onPressed: onJoin,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF25D366), // Bright green
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(vertical: 16.resH),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(24.resR),
-                                    ),
-                                  ),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text('call_action_join'.tr(), style: AppTypography.subtitle1.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+
+                      SizedBox(height: 16.resH),
+
+                      // Action Buttons Row: Join | Not Now | Arrow
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 16.resH),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(24.resR),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: onJoin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF25D366),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: EdgeInsets.symmetric(vertical: 16.resH),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24.resR),
                                   ),
                                 ),
-                              ),
-                              SizedBox(width: 12.resW),
-                              Expanded(
-                                flex: 2,
-                                child: ElevatedButton(
-                                  onPressed: onDecline,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white.withOpacity(0.2),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(vertical: 16.resH),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(24.resR),
-                                    ),
-                                  ),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text('call_action_not_now'.tr(), style: AppTypography.subtitle2.copyWith(color: Colors.white)),
-                                  ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('call_action_join'.tr(), style: AppTypography.subtitle1.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
                                 ),
                               ),
-                              SizedBox(width: 12.resW),
-                              Container(
-                                padding: EdgeInsets.all(12.resR),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withOpacity(0.2),
+                            ),
+                            SizedBox(width: 12.resW),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: onDecline,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white.withOpacity(0.2),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: EdgeInsets.symmetric(vertical: 16.resH),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24.resR),
+                                  ),
                                 ),
-                                child: Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 24.resR),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('call_action_not_now'.tr(), style: AppTypography.subtitle2.copyWith(color: Colors.white)),
+                                ),
                               ),
-                            ],
-                          ),
+                            ),
+                            SizedBox(width: 12.resW),
+                            Container(
+                              padding: EdgeInsets.all(12.resR),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                              child: Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 24.resR),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+
                 ],
               ),
             ),

@@ -66,20 +66,23 @@ class AppLogoWidget extends StatelessWidget {
               children: [
                 // ── "CIRO" wordmark (Bold, Dark Grey/Black) ───────────────────────
                 Text(
-                  'CIRO',
+                  'ciro',
                   style: AppTypography.logoMark.copyWith(
                     fontSize: size * 0.27,
-                    color: const Color(0xFF333333), // Dark grey/black matching design
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -1.5,
+                    color: const Color(0xFF111111), // Dark grey/black matching design
                   ),
                 ),
 
-                SizedBox(height: size * 0.03),
+                SizedBox(height: size * 0.01),
 
                 // ── "CONNECT" tagline (Smaller, Primary Green) ────────────────────
                 Text(
                   'CONNECT',
                   style: AppTypography.logoTagline.copyWith(
-                    fontSize: size * 0.11,
+                    fontSize: size * 0.10,
+                    letterSpacing: 3.5,
                     color: AppColors.primary, 
                   ),
                 ),

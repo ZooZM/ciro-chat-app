@@ -103,9 +103,9 @@ class AppTypography {
   /// "CIRO" logo wordmark
   static TextStyle get logoMark => GoogleFonts.comfortaa(
         fontSize: 32,
-        fontWeight: FontWeight.w900,
-        color: const Color(0xFF333333),
-        letterSpacing: -1,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF111111),
+        letterSpacing: -1.0,
       );
 
   /// "CONNECT" tagline below logo
