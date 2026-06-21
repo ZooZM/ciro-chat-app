@@ -1,23 +1,96 @@
+import 'dart:ui' as ui;
+
+import 'package:ciro_chat_app/features/map/domain/entities/map_user.dart';
 import 'package:ciro_chat_app/features/map/presentation/bloc/map_cubit.dart';
 import 'package:ciro_chat_app/features/map/presentation/bloc/map_state.dart';
-import 'package:ciro_chat_app/features/map/presentation/mock/map_mock_data.dart';
-import 'package:ciro_chat_app/features/map/presentation/widgets/map_avatar_marker.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/map_fab_column.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/map_filter_sheet.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/map_top_bar.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/user_details_sheet.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:ciro_chat_app/core/theme/app_colors.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' hide ClusterManager, Cluster;
 
-class MapScreen extends StatelessWidget {
+/// Wraps an already-resolved per-user [Marker] (icon included) so the
+/// cluster manager (FR-029/SC-011) can group nearby markers purely by
+/// position, without re-deriving anything the cubit already computed.
+class _MarkerClusterItem with ClusterItem {
+  _MarkerClusterItem(this.marker);
+
+  final Marker marker;
+
+  @override
+  LatLng get location => marker.position;
+}
+
+class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
+
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> {
+  late final ClusterManager<_MarkerClusterItem> _clusterManager;
+  Set<Marker> _renderedMarkers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _clusterManager = ClusterManager<_MarkerClusterItem>(
+      const <_MarkerClusterItem>[],
+      (markers) {
+        if (mounted) setState(() => _renderedMarkers = markers);
+      },
+      markerBuilder: _buildClusterMarker,
+    );
+  }
+
+  Future<Marker> _buildClusterMarker(Cluster<_MarkerClusterItem> cluster) async {
+    if (!cluster.isMultiple) return cluster.items.first.marker;
+    return Marker(
+      markerId: MarkerId('cluster_${cluster.getId()}'),
+      position: cluster.location,
+      icon: await _clusterBadge(cluster.count),
+      onTap: () {}, // Clusters split apart on zoom; no detail sheet for a group.
+    );
+  }
+
+  Future<BitmapDescriptor> _clusterBadge(int count) async {
+    const size = 96.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = const Color(0xFF1E3A5F);
+    canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, paint);
+    canvas.drawCircle(
+      const Offset(size / 2, size / 2),
+      size / 2 - 3,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+    final painter = TextPainter(textDirection: ui.TextDirection.ltr)
+      ..text = TextSpan(
+        text: '$count',
+        style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+      )
+      ..layout();
+    painter.paint(canvas, Offset((size - painter.width) / 2, (size - painter.height) / 2));
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<MapCubit, MapState>(
       builder: (context, state) {
+        _clusterManager.setItems(
+          state.googleMarkers.map(_MarkerClusterItem.new).toList(),
+        );
         final cubit = context.read<MapCubit>();
         return BlocListener<MapCubit, MapState>(
           listenWhen: (previous, current) =>
@@ -42,7 +115,10 @@ class MapScreen extends StatelessWidget {
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
-                  markers: state.googleMarkers,
+                  markers: _renderedMarkers,
+                  onMapCreated: (controller) => _clusterManager.setMapId(controller.mapId),
+                  onCameraMove: _clusterManager.onCameraMove,
+                  onCameraIdle: _clusterManager.updateMap,
                 ),
                 // ── Top bar overlay ───────────────────────────────────────────
                 Positioned(
@@ -59,6 +135,25 @@ class MapScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                // ── Loading / empty / error overlays ──────────────────────────
+                if (state.status == MapViewStatus.loading)
+                  const Center(child: CircularProgressIndicator()),
+                if (state.status == MapViewStatus.empty)
+                  Center(
+                    child: _MapMessage(
+                      text: state.selectedTab == MapTab.explore
+                          ? 'map_empty_explore'.tr()
+                          : 'map_empty_following'.tr(),
+                    ),
+                  ),
+                if (state.status == MapViewStatus.error)
+                  Center(
+                    child: _MapMessage(
+                      text: 'map_error_loading'.tr(),
+                      actionLabel: 'map_retry'.tr(),
+                      onAction: cubit.retry,
+                    ),
+                  ),
                 // ── Right FAB column ──────────────────────────────────────────
                 Positioned(
                   right: 12,
@@ -75,7 +170,7 @@ class MapScreen extends StatelessWidget {
     );
   }
 
-  void _showUserDetails(BuildContext context, MockUser user) {
+  void _showUserDetails(BuildContext context, MapUser user) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -125,6 +220,36 @@ class MapScreen extends StatelessWidget {
           child: child,
         );
       },
+    );
+  }
+}
+
+class _MapMessage extends StatelessWidget {
+  const _MapMessage({required this.text, this.actionLabel, this.onAction});
+
+  final String text;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text, textAlign: TextAlign.center),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
     );
   }
 }

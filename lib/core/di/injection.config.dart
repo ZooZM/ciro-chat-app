@@ -43,6 +43,14 @@ import '../../features/chat/data/repositories/chat_repository_impl.dart'
 import '../../features/chat/domain/repositories/chat_repository.dart' as _i420;
 import '../../features/chat/presentation/bloc/chat_cubit.dart' as _i708;
 import '../../features/contacts/data/contacts_service.dart' as _i850;
+import '../../features/map/data/datasources/map_location_service.dart' as _i248;
+import '../../features/map/data/datasources/map_remote_data_source.dart'
+    as _i341;
+import '../../features/map/data/repositories/map_repository_impl.dart' as _i457;
+import '../../features/map/domain/repositories/map_repository.dart' as _i973;
+import '../../features/map/presentation/bloc/map_cubit.dart' as _i301;
+import '../../features/map/presentation/utils/marker_icon_factory.dart'
+    as _i548;
 import '../../features/payment/data/datasources/payment_remote_data_source.dart'
     as _i811;
 import '../../features/payment/data/repositories/payment_repository_impl.dart'
@@ -115,6 +123,10 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i832.RecordingCaptureService>(
       () => _i832.RecordingCaptureService(),
     );
+    gh.lazySingleton<_i248.MapLocationService>(
+      () => _i248.MapLocationService(),
+    );
+    gh.lazySingleton<_i548.MarkerIconFactory>(() => _i548.MarkerIconFactory());
     gh.lazySingleton<_i137.StatusLocalDataSource>(
       () => _i137.StatusLocalDataSourceImpl(),
     );
@@ -160,6 +172,12 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i107.AuthRemoteDataSource>(
       () => _i107.AuthRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
+    gh.lazySingleton<_i341.MapRemoteDataSource>(
+      () => _i341.MapRemoteDataSourceImpl(
+        gh<_i667.DioClient>(),
+        gh<_i917.SocketService>(),
+      ),
+    );
     gh.lazySingleton<_i980.ChatRemoteDataSource>(
       () => _i980.ChatRemoteDataSourceImpl(
         gh<_i667.DioClient>(),
@@ -187,6 +205,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i59.RecordingsRepository>(
       () =>
           _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
+    );
+    gh.lazySingleton<_i973.MapRepository>(
+      () => _i457.MapRepositoryImpl(gh<_i341.MapRemoteDataSource>()),
     );
     gh.lazySingleton<_i171.StatusRepository>(
       () => _i539.StatusRepositoryImpl(
@@ -235,6 +256,13 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i484.StatusCubit>(
       () => _i484.StatusCubit(gh<_i171.StatusRepository>()),
+    );
+    gh.lazySingleton<_i301.MapCubit>(
+      () => _i301.MapCubit(
+        gh<_i973.MapRepository>(),
+        gh<_i248.MapLocationService>(),
+        gh<_i548.MarkerIconFactory>(),
+      ),
     );
     gh.lazySingleton<_i52.AuthCubit>(
       () => _i52.AuthCubit(

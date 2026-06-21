@@ -1,25 +1,27 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
-import 'package:ciro_chat_app/features/map/presentation/mock/map_mock_data.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
+import 'package:ciro_chat_app/features/map/domain/entities/map_user.dart';
+import 'package:ciro_chat_app/features/map/presentation/utils/map_color_utils.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class MapAvatarMarker extends StatelessWidget {
   const MapAvatarMarker({
     super.key,
-    required this.marker,
+    required this.user,
     this.onTap,
   });
 
-  final MockMapMarker marker;
+  final MapUser user;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final user = marker.user;
     final borderColor =
         user.isOnline ? AppColors.primary : const Color(0xFF9E9E9E);
+    final resolvedAvatarUrl = UrlUtils.resolveMediaUrl(user.avatarUrl);
 
     return GestureDetector(
       onTap: onTap,
@@ -43,11 +45,11 @@ class MapAvatarMarker extends StatelessWidget {
                 ),
                 child: CircleAvatar(
                   radius: 28,
-                  backgroundColor: user.avatarBgColor,
-                  backgroundImage: user.avatarUrl != null
-                      ? CachedNetworkImageProvider(user.avatarUrl!)
+                  backgroundColor: MapColorUtils.forId(user.id),
+                  backgroundImage: resolvedAvatarUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(resolvedAvatarUrl)
                       : null,
-                  child: user.avatarUrl == null
+                  child: resolvedAvatarUrl.isEmpty
                       ? Text(
                           user.initial,
                           style: const TextStyle(
@@ -92,7 +94,7 @@ class MapAvatarMarker extends StatelessWidget {
               ],
             ),
             child: Text(
-              marker.isCurrentUser ? 'map_you'.tr() : user.name,
+              user.isCurrentUser ? 'map_you'.tr() : user.name,
               style: AppTypography.caption.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w600,

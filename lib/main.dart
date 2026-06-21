@@ -99,9 +99,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       socket.disconnect();
+      // 018-snap-map-realtime (FR-031): stop the geolocator stream while
+      // backgrounded — independent of the socket, since GPS keeps running
+      // otherwise and drains battery for no visible benefit.
+      getIt<MapCubit>().pauseSharingForBackground();
     } else if (state == AppLifecycleState.resumed && !socket.isConnected) {
       getIt<AuthLocalDataSource>().getAccessToken().then((token) {
         if (token != null && token.isNotEmpty) socket.connect(token);
+        getIt<MapCubit>().resumeSharingForForeground();
       });
     }
   }
@@ -124,7 +129,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
             ),
             BlocProvider<MapCubit>(
-              create: (_) => MapCubit(),
+              create: (_) => getIt<MapCubit>(),
             ),
           ],
           // CallOverlay centralizes all call navigation via GoRouter so the

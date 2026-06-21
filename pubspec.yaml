@@ -65,6 +65,8 @@ dependencies:
   easy_localization: ^3.0.8
   latlong2: ^0.9.1
   widget_to_marker: ^1.0.6
+  google_maps_cluster_manager_2: ^3.2.0
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:

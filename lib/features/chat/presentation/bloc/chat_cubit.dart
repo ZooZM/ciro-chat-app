@@ -120,14 +120,16 @@ class ChatCubit extends Cubit<ChatState> {
 
   // ── Initialisation ──────────────────────────────────────────────────────────
 
+  Future<void> _onUserStatusChanged(String userId, bool isOnline) async {
+    await _localDataSource.updateUserOnlineStatus(userId, isOnline);
+  }
+
   Future<void> _initServices() async {
     currentUserId = await _authLocalDataSource.getUserId() ?? '';
     currentUserPhone = await _authLocalDataSource.getUserPhone() ?? '';
     await _localDataSource.initDB();
 
-    _socketService.onUserStatusChanged = (userId, isOnline) async {
-      await _localDataSource.updateUserOnlineStatus(userId, isOnline);
-    };
+    _socketService.addUserStatusListener(_onUserStatusChanged);
     // Fetch block list — emit into state; no mutable field.
     final blockListResult = await _chatRepository.getBlockList();
     blockListResult.fold(
@@ -1691,6 +1693,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   @override
   Future<void> close() {
+    _socketService.removeUserStatusListener(_onUserStatusChanged);
     _roomStreamSub?.cancel();
     _typingTimer?.cancel();
     for (final t in _incomingTypingTimers.values) {
