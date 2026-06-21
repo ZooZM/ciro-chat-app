@@ -116,15 +116,18 @@ class StatusCubit extends Cubit<StatusState> {
         emit(currentState.copyWith(recentStatuses: updatedRecent, viewedStatuses: updatedViewed));
       }
 
-      // Always notify the server regardless of local state.
-      final result = await repository.markAsViewed(statusId);
-      result.fold(
-        (failure) {
-          // Revert optimistic update on failure.
-          if (statusToUpdate != null) emit(currentState);
-        },
-        (_) {},
-      );
+      // Don't notify the server when the owner views their own status — the
+      // server tracks viewers from other users, not self-views.
+      final isOwn = currentState.myStatuses.any((s) => s.id == statusId);
+      if (!isOwn) {
+        final result = await repository.markAsViewed(statusId);
+        result.fold(
+          (failure) {
+            if (statusToUpdate != null) emit(currentState);
+          },
+          (_) {},
+        );
+      }
     }
   }
 

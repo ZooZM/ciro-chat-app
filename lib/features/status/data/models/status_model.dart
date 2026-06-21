@@ -36,10 +36,13 @@ class StatusModel extends StatusEntity {
       id: json['id'] as String,
       authorName: json['authorName'] as String,
       authorAvatar: json['authorAvatar'] as String,
+      // .toLocal(): the server sends UTC ISO strings; converting immediately
+      // keeps every in-memory timestamp in the viewing device's local time,
+      // so cross-timezone "Today"/"Yesterday" comparisons stay correct.
       timestamp: DateTime.parse(
         (json['createdAt'] ?? json['timestamp']) as String,
-      ),
-      expiresAt: DateTime.parse(json['expiresAt'] as String),
+      ).toLocal(),
+      expiresAt: DateTime.parse(json['expiresAt'] as String).toLocal(),
       isViewed: (json['isViewed'] as bool?) ?? false,
       isMine: (json['isMine'] as bool?) ?? false,
       contentType: StatusContentType.values.firstWhere(
@@ -81,8 +84,10 @@ class StatusModel extends StatusEntity {
       'id': id,
       'authorName': authorName,
       'authorAvatar': authorAvatar,
-      'timestamp': timestamp.toIso8601String(),
-      'expiresAt': expiresAt.toIso8601String(),
+      // .toUtc(): keeps the wire format an absolute instant (with explicit
+      // 'Z' offset) so other devices in different timezones parse it correctly.
+      'timestamp': timestamp.toUtc().toIso8601String(),
+      'expiresAt': expiresAt.toUtc().toIso8601String(),
       'isViewed': isViewed,
       'isMine': isMine,
       'contentType': contentType.name,

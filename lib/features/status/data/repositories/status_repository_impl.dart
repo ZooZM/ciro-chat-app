@@ -10,6 +10,8 @@ import 'package:ciro_chat_app/features/status/data/datasources/status_local_data
 import 'package:ciro_chat_app/features/status/data/datasources/status_remote_data_source.dart';
 import 'package:ciro_chat_app/features/status/data/models/status_audience_contact_model.dart';
 import 'package:ciro_chat_app/features/status/data/models/status_model.dart';
+import 'package:ciro_chat_app/features/status/data/models/status_reaction_model.dart';
+import 'package:ciro_chat_app/features/status/data/models/status_viewer_model.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/ai_image_result.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_audience_contact.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
@@ -109,29 +111,36 @@ class StatusRepositoryImpl implements StatusRepository {
     }
   }
 
-  /// Builds a phone-number → contact-name lookup from the locally cached
-  /// contacts table (populated during contacts sync).
+  /// Builds a lookup map from the locally cached contacts table.
+  /// Keys: contact's backend user ID + contact's phone number.
+  /// Values: the name the device user saved for that contact.
   Future<Map<String, String>> _getContactPhoneToName() async {
     try {
       final contacts = await chatLocalDataSource.watchContacts().first;
-      return {
-        for (final c in contacts)
-          if (c.phoneNumber.isNotEmpty) c.phoneNumber: c.name,
-      };
+      final map = <String, String>{};
+      for (final c in contacts) {
+        if (c.name.isEmpty || c.name == 'Unknown') continue;
+        // Match by backend user ID (most reliable — used when authorId is a userId)
+        if (c.id.isNotEmpty) map[c.id] = c.name;
+        // Match by phone number (fallback — used when authorName is a phone number)
+        if (c.phoneNumber.isNotEmpty) map[c.phoneNumber] = c.name;
+      }
+      return map;
     } catch (_) {
       return {};
     }
   }
 
-  /// Returns [status] with [authorName] replaced by the saved contact name
-  /// when [authorName] matches a phone number in [phoneToName].
+  /// Returns [status] with [authorName] replaced by the device contact name
+  /// when the author can be matched in the contact lookup by userId or phone.
   StatusEntity _resolveContactName(
     StatusEntity status,
-    Map<String, String> phoneToName,
+    Map<String, String> lookup,
   ) {
     if (status.isMine) return status;
-    final resolved = phoneToName[status.authorName] ?? phoneToName[status.authorId];
-    if (resolved != null && resolved.isNotEmpty && resolved != 'Unknown') {
+    // Prefer authorId lookup (backend userId → saved contact name)
+    final resolved = lookup[status.authorId] ?? lookup[status.authorName];
+    if (resolved != null && resolved.isNotEmpty) {
       return status.copyWith(authorName: resolved);
     }
     return status;
@@ -141,7 +150,45 @@ class StatusRepositoryImpl implements StatusRepository {
   Future<Either<Failure, List<StatusEntity>>> getMyStatuses() async {
     try {
       final statuses = await localDataSource.getMyStatuses();
-      return Right(statuses);
+      if (statuses.isEmpty) return const Right([]);
+
+      final lookup = await _getContactPhoneToName();
+
+      // Fetch current viewers + reactions from the server for each uploaded
+      // status so they survive cubit reloads (SQLite has no viewers/reactions
+      // columns — both only exist in memory otherwise).
+      final enriched = await Future.wait(
+        statuses.map((status) async {
+          if (status.syncStatus != 'synced') return status;
+          try {
+            final results = await Future.wait([
+              remoteDataSource.getViewers(status.id),
+              remoteDataSource.getReactions(status.id),
+            ]);
+            final rawViewers = results[0] as List<StatusViewerModel>;
+            final rawReactions = results[1] as List<StatusReactionModel>;
+
+            final resolvedViewers = rawViewers.map((v) {
+              final name = lookup[v.userId] ?? v.name;
+              return StatusViewerModel(
+                userId: v.userId,
+                name: name.isEmpty ? v.name : name,
+                avatarUrl: v.avatarUrl,
+                viewedAt: v.viewedAt,
+              );
+            }).toList();
+
+            return status.copyWith(
+              viewers: resolvedViewers,
+              reactions: rawReactions,
+            );
+          } catch (_) {
+            return status;
+          }
+        }),
+      );
+
+      return Right(enriched);
     } catch (e) {
       return Left(CacheFailure(e.toString()));
     }
@@ -324,7 +371,20 @@ class StatusRepositoryImpl implements StatusRepository {
 
   @override
   Stream<({String statusId, StatusViewer viewer})> get statusViewerAddedStream =>
-      remoteDataSource.onStatusViewerAdded;
+      remoteDataSource.onStatusViewerAdded.asyncMap((event) async {
+        final lookup = await _getContactPhoneToName();
+        final resolvedName = lookup[event.viewer.userId] ?? event.viewer.name;
+        if (resolvedName == event.viewer.name) return event;
+        return (
+          statusId: event.statusId,
+          viewer: StatusViewerModel(
+            userId: event.viewer.userId,
+            name: resolvedName,
+            avatarUrl: event.viewer.avatarUrl,
+            viewedAt: event.viewer.viewedAt,
+          ),
+        );
+      });
 
   @override
   Stream<({String statusId, StatusReaction reaction})> get statusReactedStream =>

@@ -14,7 +14,7 @@ class StatusViewerModel extends StatusViewer {
       name: json['name'] as String? ?? '',
       avatarUrl: json['avatarUrl'] as String? ?? '',
       viewedAt: json['viewedAt'] != null
-          ? DateTime.parse(json['viewedAt'] as String)
+          ? DateTime.parse(json['viewedAt'] as String).toLocal()
           : DateTime.now(),
     );
   }
@@ -24,7 +24,7 @@ class StatusViewerModel extends StatusViewer {
       'userId': userId,
       'name': name,
       'avatarUrl': avatarUrl,
-      'viewedAt': viewedAt.toIso8601String(),
+      'viewedAt': viewedAt.toUtc().toIso8601String(),
     };
   }
 }

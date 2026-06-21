@@ -38,6 +38,7 @@ abstract class StatusRemoteDataSource {
   Future<AIImageResultModel> generateAIImage(String prompt);
   Future<List<StatusModel>> getFeed();
   Future<List<StatusViewerModel>> getViewers(String statusId);
+  Future<List<StatusReactionModel>> getReactions(String statusId);
   Future<List<StatusAudienceContactModel>> getDefaultAudience();
 }
 
@@ -184,6 +185,15 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
     final data = response.data as List<dynamic>;
     return data
         .map((e) => StatusViewerModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<StatusReactionModel>> getReactions(String statusId) async {
+    final response = await dioClient.dio.get('/status/$statusId/reactions');
+    final data = response.data as List<dynamic>;
+    return data
+        .map((e) => StatusReactionModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

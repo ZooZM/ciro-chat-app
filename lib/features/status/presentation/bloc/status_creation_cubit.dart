@@ -127,9 +127,16 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
 
   Future<void> submitStatus() async {
     if (state is StatusCreationComposing) {
-      final draft = (state as StatusCreationComposing).draft;
+      // Refresh the timestamp to the moment of actual submission — the draft
+      // was created when the composer screen opened, which can be well
+      // before the user finishes typing/picking media and hits send.
+      final now = DateTime.now();
+      final draft = (state as StatusCreationComposing).draft.copyWith(
+        timestamp: now,
+        expiresAt: now.add(const Duration(hours: 24)),
+      );
       emit(StatusCreationUploading(draft));
-      
+
       final result = await statusRepository.uploadStatus(draft);
       result.fold(
         (failure) => emit(StatusCreationError(draft, failure.message)),
