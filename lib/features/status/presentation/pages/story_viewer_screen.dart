@@ -1,9 +1,10 @@
 import 'dart:io';
 
-import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
+import 'package:ciro_chat_app/features/status/domain/entities/status_reaction.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_viewer.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -21,10 +22,15 @@ class StoryViewerScreen extends StatefulWidget {
   final List<StatusEntity> statuses;
   final int initialIndex;
 
+  /// True when opened from a "X loved your status" push notification — the
+  /// viewers/reactions sheet opens automatically once the screen settles.
+  final bool openViewersOnStart;
+
   const StoryViewerScreen({
     super.key,
     required this.statuses,
     this.initialIndex = 0,
+    this.openViewersOnStart = false,
   });
 
   @override
@@ -47,7 +53,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       vsync: this,
       duration: _kStorySegmentDuration,
     )..addStatusListener(_onProgressStatusChanged);
-    _startCurrent();
+    // Defer so context.read<StatusCubit>() resolves against the BlocProvider
+    // ancestor rather than a separate factory instance from getIt.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startCurrent();
+    });
   }
 
   void _onProgressStatusChanged(AnimationStatus status) {
@@ -57,7 +67,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   void _startCurrent() {
-    getIt<StatusCubit>().markStatusAsViewed(_currentStatus.id);
+    context.read<StatusCubit>().markStatusAsViewed(_currentStatus.id);
     _progressController
       ..reset()
       ..forward();
@@ -151,7 +161,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ),
               ),
             if (status.isMine)
-              _StoryViewersBar(statusId: status.id)
+              _StoryViewersBar(
+                statusId: status.id,
+                autoOpen: widget.openViewersOnStart && _currentIndex == widget.initialIndex,
+              )
             else
               _StoryBottomBar(
                 status: status,
@@ -181,10 +194,22 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         if (status.mediaUrl != null && status.mediaUrl!.isNotEmpty) {
           final url = status.mediaUrl!;
           if (url.startsWith('http://') || url.startsWith('https://')) {
-            return Image.network(url, headers: UrlUtils.authHeaders);
+            return CachedNetworkImage(
+              imageUrl: url,
+              httpHeaders: UrlUtils.authHeaders ?? {},
+              fit: BoxFit.contain,
+              placeholder: (_, __) => const Center(
+                child: CircularProgressIndicator(color: Colors.white54),
+              ),
+              errorWidget: (_, __, ___) => const Icon(
+                Icons.broken_image,
+                size: 80,
+                color: Colors.white54,
+              ),
+            );
           }
           // Local file path (e.g. optimistic insert before server upload)
-          return Image.file(File(url));
+          return Image.file(File(url), fit: BoxFit.contain);
         }
         return const Icon(Icons.image, size: 100, color: Colors.white);
       case StatusContentType.video:
@@ -266,60 +291,88 @@ class _StoryHeader extends StatelessWidget {
 
   const _StoryHeader({required this.status, required this.onBack});
 
+  /// Returns the contact-resolved name for this status from the current cubit
+  /// state, falling back to [status.authorName] when not found.
+  String _resolvedName(StatusState state) {
+    if (state is! StatusLoaded) return status.authorName;
+    final all = [
+      ...state.recentStatuses,
+      ...state.viewedStatuses,
+      ...state.myStatuses,
+    ];
+    final latest = all
+        .cast<StatusEntity?>()
+        .firstWhere((s) => s?.id == status.id, orElse: () => null);
+    final name = latest?.authorName ?? status.authorName;
+    return name.isNotEmpty ? name : status.authorName;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black54),
-            onPressed: onBack,
-          ),
-          const SizedBox(width: 4),
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFFFCB64F),
-            backgroundImage: status.authorAvatar.isNotEmpty
-                ? NetworkImage(status.authorAvatar)
-                : null,
-            child: status.authorAvatar.isEmpty
-                ? Text(
-                    status.authorName.isNotEmpty
-                        ? status.authorName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 18,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return BlocBuilder<StatusCubit, StatusState>(
+      buildWhen: (prev, curr) {
+        // Only rebuild when the author name for this specific status changes.
+        if (prev is StatusLoaded && curr is StatusLoaded) {
+          return _resolvedName(prev) != _resolvedName(curr);
+        }
+        return prev.runtimeType != curr.runtimeType;
+      },
+      builder: (context, state) {
+        final displayName = _resolvedName(state);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
             children: [
-              Text(
-                status.authorName,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                ),
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black54),
+                onPressed: onBack,
               ),
-              const SizedBox(height: 2),
-              Text(
-                _formatTimestamp(status.timestamp),
-                style: const TextStyle(
-                  color: Colors.black54,
-                  fontSize: 13,
-                ),
+              const SizedBox(width: 4),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFFCB64F),
+                backgroundImage: status.authorAvatar.isNotEmpty
+                    ? NetworkImage(status.authorAvatar)
+                    : null,
+                child: status.authorAvatar.isEmpty
+                    ? Text(
+                        displayName.isNotEmpty
+                            ? displayName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 18,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatTimestamp(status.timestamp),
+                    style: const TextStyle(
+                      color: Colors.black54,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -372,13 +425,13 @@ class _StoryBottomBarState extends State<_StoryBottomBar> {
   void _sendReply() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-    getIt<StatusCubit>().reply(widget.status.id, text);
+    context.read<StatusCubit>().reply(widget.status.id, text);
     _textController.clear();
     widget.onResume();
   }
 
   void _sendReaction() {
-    getIt<StatusCubit>().react(widget.status.id, '❤️');
+    context.read<StatusCubit>().react(widget.status.id, '❤️');
   }
 
   @override
@@ -449,40 +502,52 @@ class _StoryBottomBarState extends State<_StoryBottomBar> {
 
 // ── Viewers bar (own statuses) ───────────────────────────────────────────────
 
-class _StoryViewersBar extends StatelessWidget {
+class _StoryViewersBar extends StatefulWidget {
   final String statusId;
+  final bool autoOpen;
 
-  const _StoryViewersBar({required this.statusId});
+  const _StoryViewersBar({required this.statusId, this.autoOpen = false});
+
+  @override
+  State<_StoryViewersBar> createState() => _StoryViewersBarState();
+}
+
+class _StoryViewersBarState extends State<_StoryViewersBar> {
+  bool _hasAutoOpened = false;
+
+  StatusEntity? _findStatus(StatusState state) {
+    if (state is! StatusLoaded) return null;
+    return state.myStatuses
+        .cast<StatusEntity?>()
+        .firstWhere((s) => s?.id == widget.statusId, orElse: () => null);
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<StatusCubit, StatusState>(
-      bloc: getIt<StatusCubit>(),
       buildWhen: (prev, curr) {
-        if (prev is StatusLoaded && curr is StatusLoaded) {
-          final prevStatus = prev.myStatuses
-              .cast<StatusEntity?>()
-              .firstWhere((s) => s?.id == statusId, orElse: () => null);
-          final currStatus = curr.myStatuses
-              .cast<StatusEntity?>()
-              .firstWhere((s) => s?.id == statusId, orElse: () => null);
-          return prevStatus?.viewers != currStatus?.viewers;
-        }
-        return curr is StatusLoaded;
+        final prevStatus = _findStatus(prev);
+        final currStatus = _findStatus(curr);
+        return prevStatus?.viewers != currStatus?.viewers ||
+            prevStatus?.reactions != currStatus?.reactions;
       },
       builder: (context, state) {
-        final viewers = state is StatusLoaded
-            ? (state.myStatuses
-                    .cast<StatusEntity?>()
-                    .firstWhere((s) => s?.id == statusId,
-                        orElse: () => null)
-                    ?.viewers ??
-                const <StatusViewer>[])
-            : const <StatusViewer>[];
+        final status = _findStatus(state);
+        final viewers = status?.viewers ?? const <StatusViewer>[];
+        final reactedUserIds = (status?.reactions ?? const <StatusReaction>[])
+            .map((r) => r.userId)
+            .toSet();
+
+        if (widget.autoOpen && !_hasAutoOpened && viewers.isNotEmpty) {
+          _hasAutoOpened = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showViewersList(context, viewers, reactedUserIds);
+          });
+        }
 
         return GestureDetector(
           onTap: viewers.isNotEmpty
-              ? () => _showViewersList(context, viewers)
+              ? () => _showViewersList(context, viewers, reactedUserIds)
               : null,
           child: Container(
             padding:
@@ -511,22 +576,27 @@ class _StoryViewersBar extends StatelessWidget {
     );
   }
 
-  void _showViewersList(BuildContext context, List<StatusViewer> viewers) {
+  void _showViewersList(
+    BuildContext context,
+    List<StatusViewer> viewers,
+    Set<String> reactedUserIds,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF2C2C2C),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _ViewersSheet(viewers: viewers),
+      builder: (_) => _ViewersSheet(viewers: viewers, reactedUserIds: reactedUserIds),
     );
   }
 }
 
 class _ViewersSheet extends StatelessWidget {
   final List<StatusViewer> viewers;
+  final Set<String> reactedUserIds;
 
-  const _ViewersSheet({required this.viewers});
+  const _ViewersSheet({required this.viewers, required this.reactedUserIds});
 
   @override
   Widget build(BuildContext context) {
@@ -567,6 +637,7 @@ class _ViewersSheet extends StatelessWidget {
             itemCount: viewers.length,
             itemBuilder: (context, index) {
               final viewer = viewers[index];
+              final hasLoved = reactedUserIds.contains(viewer.userId);
               return ListTile(
                 leading: CircleAvatar(
                   backgroundImage: viewer.avatarUrl.isNotEmpty
@@ -586,6 +657,9 @@ class _ViewersSheet extends StatelessWidget {
                   DateFormat.jm().format(viewer.viewedAt),
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
+                trailing: hasLoved
+                    ? const Icon(Icons.favorite, color: Colors.redAccent, size: 20)
+                    : null,
               );
             },
           ),

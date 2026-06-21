@@ -7,7 +7,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:injectable/injectable.dart';
 import '../di/injection.dart';
 import '../network/dio_client.dart';
-import '../routing/app_router.dart' show AppRouterName, appRouter, handleInitialNotification;
+import '../routing/app_router.dart'
+    show AppRouterName, appRouter, handleInitialNotification, navigateToStatusReaction;
 import '../../features/chat/presentation/bloc/chat_cubit.dart';
 
 @lazySingleton
@@ -79,7 +80,10 @@ class PushNotificationService {
       initSettings,
       onDidReceiveNotificationResponse: (details) {
         final payload = details.payload;
-        if (payload != null && payload.isNotEmpty) {
+        if (payload == null || payload.isEmpty) return;
+        if (payload.startsWith('status:')) {
+          navigateToStatusReaction(payload.substring('status:'.length)).ignore();
+        } else {
           _navigateToRoom(payload).ignore();
         }
       },
@@ -117,7 +121,13 @@ class PushNotificationService {
     final notification = message.notification;
     if (notification == null) return;
 
+    final type = message.data['type'] as String?;
     final roomId = message.data['roomId'] as String?;
+    final statusId = message.data['statusId'] as String?;
+    final payload = (type == 'statusReaction' && statusId != null)
+        ? 'status:$statusId'
+        : roomId;
+
     _localNotifications.show(
       notification.hashCode,
       notification.title,
@@ -133,11 +143,17 @@ class PushNotificationService {
         ),
         iOS: const DarwinNotificationDetails(threadIdentifier: 'messages'),
       ),
-      payload: roomId,
+      payload: payload,
     );
   }
 
   void handleNotificationTap(RemoteMessage message) {
+    final type = message.data['type'] as String?;
+    if (type == 'statusReaction') {
+      final statusId = message.data['statusId'] as String?;
+      if (statusId != null) navigateToStatusReaction(statusId).ignore();
+      return;
+    }
     final roomId = message.data['roomId'] as String?;
     if (roomId != null) _navigateToRoom(roomId).ignore();
   }

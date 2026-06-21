@@ -13,7 +13,7 @@ class AIImageResultModel extends AIImageResult {
       generationId: json['generationId'] as String,
       prompt: json['prompt'] as String,
       imageUrl: json['imageUrl'] as String,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
     );
   }
 }

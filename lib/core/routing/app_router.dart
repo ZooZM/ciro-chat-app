@@ -4,6 +4,7 @@ import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.
 import 'package:ciro_chat_app/features/status/presentation/pages/status_creation_screen.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
@@ -57,16 +58,51 @@ final GlobalKey<NavigatorState> globalNavigatorKey =
     GlobalKey<NavigatorState>();
 
 /// Checks if the app was launched by tapping a push notification (terminated state).
-/// If so, navigates directly to the referenced chat room.
+/// If so, navigates directly to the referenced chat room or status.
 Future<void> handleInitialNotification() async {
   final message = await FirebaseMessaging.instance.getInitialMessage();
   if (message == null) return;
+
+  final type = message.data['type'] as String?;
+  if (type == 'statusReaction') {
+    final statusId = message.data['statusId'] as String?;
+    if (statusId != null) await navigateToStatusReaction(statusId);
+    return;
+  }
+
   final roomId = message.data['roomId'] as String?;
   if (roomId == null) return;
   final room = await getIt<ChatCubit>().getRoomById(roomId);
   if (room != null) {
     appRouter.push(AppRouterName.chatRoom, extra: room);
   }
+}
+
+/// Opens the story viewer for [statusId] (one of the current user's own
+/// statuses) with the viewers/reactions sheet shown automatically — used when
+/// the user taps a "X loved your status" push notification.
+Future<void> navigateToStatusReaction(String statusId) async {
+  final statusCubit = getIt<StatusCubit>();
+  if (statusCubit.state is! StatusLoaded) {
+    await statusCubit.loadRecentStatuses();
+  }
+  final state = statusCubit.state;
+  if (state is StatusLoaded) {
+    final index = state.myStatuses.indexWhere((s) => s.id == statusId);
+    if (index != -1) {
+      globalNavigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => StoryViewerScreen(
+            statuses: state.myStatuses,
+            initialIndex: index,
+            openViewersOnStart: true,
+          ),
+        ),
+      );
+      return;
+    }
+  }
+  appRouter.go(AppRouterName.updates);
 }
 
 final GoRouter appRouter = GoRouter(

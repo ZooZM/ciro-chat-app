@@ -12,7 +12,7 @@ class StatusReactionModel extends StatusReaction {
       userId: json['userId'] as String? ?? '',
       reaction: json['reaction'] as String? ?? '',
       createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'] as String)
+          ? DateTime.parse(json['createdAt'] as String).toLocal()
           : DateTime.now(),
     );
   }
@@ -21,7 +21,7 @@ class StatusReactionModel extends StatusReaction {
     return {
       'userId': userId,
       'reaction': reaction,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 }
