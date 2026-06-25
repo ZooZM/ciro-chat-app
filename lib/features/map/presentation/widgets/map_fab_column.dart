@@ -5,14 +5,17 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/map_cubit.dart';
+import '../bloc/map_state.dart';
 
 class MapFabColumn extends StatelessWidget {
   const MapFabColumn({
     super.key,
     required this.onFilterTap,
+    required this.onLocateMe,
   });
 
   final VoidCallback onFilterTap;
+  final VoidCallback onLocateMe;
 
   @override
   Widget build(BuildContext context) {
@@ -22,23 +25,23 @@ class MapFabColumn extends StatelessWidget {
       children: [
         _CircleFab(
           icon: Icons.layers_outlined,
-          tooltip: 'Layers',
+          tooltip: 'map_layers'.tr(),
           onTap: () => context.read<MapCubit>().toggleMapType(),
         ),
         const SizedBox(height: 10),
         _CircleFab(
           icon: Icons.tune,
-          tooltip: 'Filter',
+          tooltip: 'map_filter'.tr(),
           onTap: onFilterTap,
         ),
         const SizedBox(height: 10),
         _CircleFab(
           icon: Icons.my_location,
-          tooltip: 'Locate Me',
-          onTap: () {},
+          tooltip: 'map_locate_me'.tr(),
+          onTap: onLocateMe,
         ),
         const SizedBox(height: 16),
-        _ShareLocationFab(),
+        const _ShareLocationFab(),
       ],
     );
   }
@@ -82,43 +85,71 @@ class _CircleFab extends StatelessWidget {
   }
 }
 
+/// Tap toggles live location sharing; long-press toggles Ghost Mode
+/// (FR-005/011) — reuses the existing single FAB rather than adding new UI.
 class _ShareLocationFab extends StatelessWidget {
+  const _ShareLocationFab();
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {},
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.location_on, color: Colors.white, size: 22),
-            const SizedBox(height: 2),
-            Text(
-              'map_share_location'.tr(),
-              style: AppTypography.caption.copyWith(
-                color: Colors.white,
-                fontSize: 8,
-                fontWeight: FontWeight.w600,
+    return BlocBuilder<MapCubit, MapState>(
+      buildWhen: (previous, current) =>
+          previous.isSharing != current.isSharing ||
+          previous.isGhostMode != current.isGhostMode,
+      builder: (context, state) {
+        final cubit = context.read<MapCubit>();
+        final isGhost = state.isGhostMode;
+        final color = isGhost ? Colors.grey.shade600 : AppColors.primary;
+
+        return GestureDetector(
+          onTap: () {
+            if (isGhost) return;
+            state.isSharing ? cubit.stopSharing() : cubit.startSharing();
+          },
+          onLongPress: cubit.toggleGhostMode,
+          child: Tooltip(
+            message: isGhost ? 'map_ghost_mode_on'.tr() : 'map_ghost_mode'.tr(),
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isGhost
+                        ? Icons.visibility_off
+                        : (state.isSharing ? Icons.location_on : Icons.location_off),
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isGhost ? 'map_ghost_mode'.tr() : 'map_share_location'.tr(),
+                    style: AppTypography.caption.copyWith(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

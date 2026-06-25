@@ -21,7 +21,6 @@ import 'features/call_recording/presentation/bloc/call_recording_cubit.dart';
 import 'features/map/presentation/bloc/map_cubit.dart';
 
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -96,12 +95,25 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     // and Android foreground service keep running while the app is backgrounded.
     // Only the OS-level stop path (LocalTrackUnpublishedEvent) handles teardown.
     final socket = getIt<SocketService>();
+    final mapCubit = getIt<MapCubit>();
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      socket.disconnect();
+      if (mapCubit.state.isSharing) {
+        // 018-snap-map-realtime: keep the socket (and the geolocator stream,
+        // via its background-capable foreground service/iOS background
+        // mode) alive while actively sharing — otherwise shareLocation
+        // events have nowhere to go even if GPS keeps producing them.
+      } else {
+        socket.disconnect();
+        // FR-031: stop the geolocator stream while backgrounded when NOT
+        // actively sharing — independent of the socket, since GPS keeps
+        // running otherwise and drains battery for no visible benefit.
+        mapCubit.pauseSharingForBackground();
+      }
     } else if (state == AppLifecycleState.resumed && !socket.isConnected) {
       getIt<AuthLocalDataSource>().getAccessToken().then((token) {
         if (token != null && token.isNotEmpty) socket.connect(token);
+        getIt<MapCubit>().resumeSharingForForeground();
       });
     }
   }
@@ -123,7 +135,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             BlocProvider<StatusCubit>(
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
             ),
-            BlocProvider<MapCubit>(create: (_) => MapCubit()),
+            BlocProvider<MapCubit>(create: (_) => getIt<MapCubit>()),
           ],
           // CallOverlay centralizes all call navigation via GoRouter so the
           // chat back-stack is preserved across incoming and outgoing calls.

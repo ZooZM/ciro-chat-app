@@ -19,7 +19,20 @@ class SocketService {
   bool get isConnected => _socket?.connected ?? false;
 
   // ── Chat callbacks ────────────────────────────────────────────────────────
-  void Function(String userId, bool isOnline)? onUserStatusChanged;
+  /// Multicast (018-snap-map-realtime): both ChatCubit (SQLite presence) and
+  /// MapCubit (live marker status) must independently receive every
+  /// `userStatus` event — a single-assignment callback would let one
+  /// feature silently clobber the other's listener.
+  final List<void Function(String userId, bool isOnline)>
+  _userStatusListeners = [];
+
+  void addUserStatusListener(void Function(String userId, bool isOnline) listener) {
+    _userStatusListeners.add(listener);
+  }
+
+  void removeUserStatusListener(void Function(String userId, bool isOnline) listener) {
+    _userStatusListeners.remove(listener);
+  }
 
   /// Fired when SERVER confirms it stored our message. pending → sent (1 grey tick)
   void Function(String clientMessageId, DateTime? createdAt)? onMessageSent;
@@ -100,6 +113,22 @@ class SocketService {
 
   /// FR-022: Fired when someone deletes a message for everyone.
   void Function(String clientMessageId)? onMessageDeleted;
+
+  // ── Map callbacks (set by MapCubit, 018-snap-map-realtime) ───────────────
+  /// Batched live location updates for authorized contacts (FR-006a). Each
+  /// item in the list is a raw map; the datasource parses into
+  /// `LocationUpdateModel`.
+  void Function(List<Map<String, dynamic>> updates)? onLocationUpdate;
+
+  /// Fired when an authorized contact enables Ghost Mode (or otherwise stops
+  /// sharing) — the marker for `userId` must be removed.
+  void Function(String userId)? onLocationHidden;
+
+  /// 018-snap-map-realtime: a new "Show on Map" status was just posted —
+  /// Explore-tab viewers should see the pin live, not only after their next
+  /// REST refresh. Raw map matches the `/map/visible`-style shape so it can
+  /// be parsed by the same `MapUserModel.fromJson`.
+  void Function(Map<String, dynamic> json)? onExploreStatusAdded;
 
   // ── Translation callbacks (set by TranslationCubit) ───────────────────────
   /// `translation:subscribed` — `pending -> active`.
@@ -263,7 +292,12 @@ class SocketService {
       if (data == null || data is! Map) return;
       final userId = data['userId']?.toString() ?? '';
       final isOnline = data['isOnline'] == true;
-      if (userId.isNotEmpty) onUserStatusChanged?.call(userId, isOnline);
+      if (userId.isEmpty) return;
+      for (final listener in List<void Function(String, bool)>.from(
+        _userStatusListeners,
+      )) {
+        listener(userId, isOnline);
+      }
     });
 
     // ── Status events ─────────────────────────────────────────────────────
@@ -300,6 +334,31 @@ class SocketService {
       if (data == null || data is! Map) return;
       final clientMsgId = data['clientMessageId']?.toString() ?? '';
       if (clientMsgId.isNotEmpty) onMessageDeleted?.call(clientMsgId);
+    });
+
+    // ── 018-snap-map-realtime: batched live location + visibility events ───
+    _socket?.on('locationUpdate', (data) {
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final raw = map['updates'];
+      if (raw is! List) return;
+      final updates = raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (updates.isNotEmpty) onLocationUpdate?.call(updates);
+    });
+
+    _socket?.on('locationHidden', (data) {
+      if (data == null || data is! Map) return;
+      final map = Map<String, dynamic>.from(data);
+      final userId = map['userId']?.toString() ?? '';
+      if (userId.isNotEmpty) onLocationHidden?.call(userId);
+    });
+
+    _socket?.on('exploreStatusAdded', (data) {
+      if (data == null || data is! Map) return;
+      onExploreStatusAdded?.call(Map<String, dynamic>.from(data));
     });
 
     // ── Group call signaling events ───────────────────────────────────────
@@ -632,6 +691,22 @@ class SocketService {
   // ── FR-022: Message Deletion ─────────────────────────────────────────────
   void deleteMessageForEveryone(String clientMessageId) {
     _socket?.emit('deleteForEveryone', {'clientMessageId': clientMessageId});
+  }
+
+  /// Throttled live-location broadcast (FR-006, R4). The server persists
+  /// immediately and fans this out in ~5s server-side batches (FR-006a).
+  void shareLocation({required double longitude, required double latitude}) {
+    _socket?.emit('shareLocation', {
+      'longitude': longitude,
+      'latitude': latitude,
+    });
+  }
+
+  /// The explicit "Stop Sharing" action — tells the server to drop this user
+  /// from Following-tab queries and immediately notify already-open viewers
+  /// (via `locationHidden`) instead of leaving a stale marker on their map.
+  void stopSharingLocation() {
+    _socket?.emit('stopSharingLocation', {});
   }
 
   void disconnect() {

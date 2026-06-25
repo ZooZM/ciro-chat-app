@@ -50,9 +50,15 @@
 		<key>NSMicrophoneUsageDescription</key>
 		<string>We need microphone access for audio calls.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>We need your location to send location messages in chats.</string>
+		<string>We need your location to send location messages and show you on the map.</string>
 		<key>NSLocationAlwaysUsageDescription</key>
-		<string>We need your location to send location messages in chats.</string>
+		<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn't in the foreground.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn't in the foreground.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>location</string>
+		</array>
 		<key>NSContactsUsageDescription</key>
 		<string>We need access to your contacts to help you find friends to chat with.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

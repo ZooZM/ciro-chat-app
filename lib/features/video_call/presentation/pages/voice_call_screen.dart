@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
+import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/services/call_audio_config.dart';
+import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../bloc/call_cubit.dart';
 
@@ -56,7 +59,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   Future<void> _connectToRoom() async {
     try {
-      _room = Room();
+      await getIt<CallAudioSessionService>().configureForCall();
+      _room = Room(roomOptions: CallAudioConfig.roomOptions());
       _room!.addListener(_onRoomUpdate);
 
       await _room!.connect(widget.livekitUrl, widget.livekitToken);
@@ -118,6 +122,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _room?.removeListener(_onRoomUpdate);
     if (!_isUpgrading) {
       _room?.disconnect();
+      getIt<CallAudioSessionService>().deactivate();
     }
     super.dispose();
   }

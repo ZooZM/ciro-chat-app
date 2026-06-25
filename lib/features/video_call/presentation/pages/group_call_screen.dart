@@ -7,6 +7,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/services/call_audio_config.dart';
+import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ciro_chat_app/core/helpers/permission_service.dart';
@@ -173,15 +175,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       await PermissionService.requestSingle(Permission.microphone);
       if (isVideo) await PermissionService.requestSingle(Permission.camera);
 
-      _room = Room(
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-          defaultScreenShareCaptureOptions: ScreenShareCaptureOptions(
-            useiOSBroadcastExtension: true,
-          ),
-        ),
-      );
+      // Configure the OS voice-communication audio session BEFORE connecting
+      // (FR-Audio-01, SC-003).
+      await getIt<CallAudioSessionService>().configureForCall();
+
+      _room = Room(roomOptions: CallAudioConfig.roomOptions());
       _room!.addListener(_onRoomUpdate);
 
       _roomEventsListener = _room!.createListener()
@@ -276,6 +274,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
+    getIt<CallAudioSessionService>().deactivate();
     super.dispose();
   }
 

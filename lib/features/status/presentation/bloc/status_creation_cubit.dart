@@ -23,16 +23,14 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
     recorderController = RecorderController();
   }
 
-  void initDraft(StatusContentType mode) {
-    String authorName = 'Unknown';
+  Future<void> initDraft(StatusContentType mode) async {
+    // `authCubit.state.userData` is only populated right after a fresh OTP
+    // login — reopening the app with an already-valid session leaves it
+    // null, which used to fall straight through to the "Unknown" default.
+    final authorName = await authCubit.getCurrentUserName() ?? 'Unknown';
     String authorAvatar = '';
-    
     if (authCubit.state is Authenticated) {
-      final userData = (authCubit.state as Authenticated).userData;
-      if (userData != null) {
-        authorName = userData['name'] ?? 'Unknown';
-        authorAvatar = userData['avatarUrl'] ?? '';
-      }
+      authorAvatar = (authCubit.state as Authenticated).userData?['avatarUrl'] ?? '';
     }
 
     final draft = StatusEntity(

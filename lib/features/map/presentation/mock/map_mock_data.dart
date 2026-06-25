@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-// ── Enums ─────────────────────────────────────────────────────────────────────
-
-enum StatusFilter { all, online, offline }
-
 // ── Mock Entities ─────────────────────────────────────────────────────────────
+// MockUser/MockStatus/mockStatuses remain in use by the status feature's
+// reels_viewer_screen.dart; the map-specific mocks (MockMapMarker,
+// mockMapMarkers, mockGroups) were removed once the map feature switched to
+// live MapUser/MapGroup data.
 
 class MockUser {
   const MockUser({
@@ -24,20 +24,6 @@ class MockUser {
   final bool isOnline;
   final String locationLabel;
   final Color avatarBgColor;
-}
-
-class MockMapMarker {
-  const MockMapMarker({
-    required this.user,
-    required this.latitude,
-    required this.longitude,
-    this.isCurrentUser = false,
-  });
-
-  final MockUser user;
-  final double latitude;
-  final double longitude;
-  final bool isCurrentUser;
 }
 
 class MockStatus {
@@ -73,26 +59,6 @@ final MockUser mockUserYou = MockUser(
   avatarBgColor: const Color(0xFF607D8B),
 );
 
-final MockUser mockUserMahmoud = const MockUser(
-  id: 'u2',
-  name: 'Mahmoud',
-  initial: 'M',
-  avatarUrl: null,
-  isOnline: true,
-  locationLabel: 'Al Dhahab Island, Cairo',
-  avatarBgColor: Color(0xFFB0BEC5),
-);
-
-final MockUser mockUserAmr = const MockUser(
-  id: 'u3',
-  name: 'Amr',
-  initial: 'A',
-  avatarUrl: null,
-  isOnline: true,
-  locationLabel: 'Qasr El Nil, Cairo',
-  avatarBgColor: Color(0xFFFCB64F),
-);
-
 final MockUser mockUserAhmed = MockUser(
   id: 'u4',
   name: 'Ahmed',
@@ -114,30 +80,6 @@ final MockUser mockUserOmar = MockUser(
   locationLabel: 'Near Zamalek, Cairo',
   avatarBgColor: const Color(0xFF00796B),
 );
-
-final List<MockMapMarker> mockMapMarkers = [
-  MockMapMarker(
-    user: mockUserYou,
-    latitude: 30.0626,
-    longitude: 31.2197,
-    isCurrentUser: true,
-  ),
-  MockMapMarker(
-    user: mockUserMahmoud,
-    latitude: 30.0680,
-    longitude: 31.2260,
-  ),
-  MockMapMarker(
-    user: mockUserAmr,
-    latitude: 30.0550,
-    longitude: 31.2230,
-  ),
-  MockMapMarker(
-    user: mockUserAhmed,
-    latitude: 30.0490,
-    longitude: 31.2100,
-  ),
-];
 
 final List<MockStatus> mockStatuses = [
   MockStatus(
@@ -170,11 +112,4 @@ final List<MockStatus> mockStatuses = [
     likeCount: 8,
     commentCount: 1,
   ),
-];
-
-final List<String> mockGroups = [
-  'Family',
-  'Work',
-  'Friends',
-  'Neighbours',
 ];

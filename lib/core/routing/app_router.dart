@@ -15,6 +15,7 @@ import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_scre
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
+import 'package:ciro_chat_app/features/map/presentation/pages/invite_to_share_location_page.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -35,6 +36,16 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
 
+/// `chatRoom`'s `extra` payload when the caller also wants to hand the
+/// screen a draft message (e.g. the map's "invite to share location" flow) —
+/// existing call sites keep passing a bare [ChatSession] unchanged.
+class ChatRoomLaunchArgs {
+  const ChatRoomLaunchArgs(this.chat, {this.initialDraftText});
+
+  final ChatSession chat;
+  final String? initialDraftText;
+}
+
 class AppRouterName {
   static const String splash = '/splash';
   static const String auth = '/auth';
@@ -42,6 +53,7 @@ class AppRouterName {
   static const String home = '/home';
   static const String createGroup = '/home/create_group';
   static const String chatRoom = '/chat_room';
+  static const String inviteToShareLocation = '/invite_to_share_location';
   static const String groupChat = '/group_chat';
   static const String contacts = '/contacts';
   static const String incomingCall = '/incoming_call';
@@ -189,13 +201,20 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
+      path: AppRouterName.inviteToShareLocation,
+      builder: (context, state) => const InviteToShareLocationPage(),
+    ),
+    GoRoute(
       path: AppRouterName.chatRoom,
       builder: (context, state) {
         // state.extra is null when GoRouter rebuilds this route without the
         // original extra (deep link, router restore, rotation, or any push
         // missing extra). Cast as nullable and redirect to home instead of
         // throwing a TypeError.
-        final chat = state.extra as ChatSession?;
+        final extra = state.extra;
+        final chat = extra is ChatRoomLaunchArgs ? extra.chat : extra as ChatSession?;
+        final initialDraftText =
+            extra is ChatRoomLaunchArgs ? extra.initialDraftText : null;
         if (chat == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) context.go(AppRouterName.home);
@@ -203,7 +222,7 @@ final GoRouter appRouter = GoRouter(
           return const Scaffold(body: SizedBox.shrink());
         }
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
-        return ChatRoomScreen(chatData: chat);
+        return ChatRoomScreen(chatData: chat, initialDraftText: initialDraftText);
       },
     ),
     GoRoute(

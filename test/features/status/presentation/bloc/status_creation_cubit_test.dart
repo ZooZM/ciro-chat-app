@@ -30,6 +30,8 @@ void main() {
     when(() => mockAuthCubit.state).thenReturn(
       const Authenticated(userData: {'name': 'Me', 'avatarUrl': 'me.png'}),
     );
+    when(() => mockAuthCubit.getCurrentUserName())
+        .thenAnswer((_) async => 'Me');
   });
 
   StatusCreationCubit buildCubit() => StatusCreationCubit(
@@ -45,7 +47,7 @@ void main() {
         when(() => mockRepository.getDefaultAudience())
             .thenAnswer((_) async => const Right(tDefaultAudience));
 
-        cubit.initDraft(StatusContentType.text);
+        await cubit.initDraft(StatusContentType.text);
         await cubit.updatePrivacy(StatusPrivacy.private); // populates audience
         cubit.updateText('hello world');
         cubit.updateBackgroundColor('#000000');
@@ -72,7 +74,7 @@ void main() {
         when(() => mockRepository.getDefaultAudience())
             .thenAnswer((_) async => const Right(tDefaultAudience));
 
-        cubit.initDraft(StatusContentType.text);
+        await cubit.initDraft(StatusContentType.text);
         await cubit.updatePrivacy(StatusPrivacy.private);
       },
       verify: (cubit) {
@@ -89,7 +91,7 @@ void main() {
         when(() => mockRepository.getDefaultAudience())
             .thenAnswer((_) async => const Right(tDefaultAudience));
 
-        cubit.initDraft(StatusContentType.text);
+        await cubit.initDraft(StatusContentType.text);
         await cubit.updatePrivacy(StatusPrivacy.private);
         await cubit.updatePrivacy(StatusPrivacy.private);
       },
@@ -102,7 +104,7 @@ void main() {
       'does not fetch default audience for non-private privacy levels',
       build: buildCubit,
       act: (cubit) async {
-        cubit.initDraft(StatusContentType.text);
+        await cubit.initDraft(StatusContentType.text);
         await cubit.updatePrivacy(StatusPrivacy.public);
         await cubit.updatePrivacy(StatusPrivacy.showOnMap);
       },

@@ -1,14 +1,26 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
-import 'package:ciro_chat_app/features/map/presentation/mock/map_mock_data.dart';
+import 'package:ciro_chat_app/core/utils/url_utils.dart';
+import 'package:ciro_chat_app/features/map/domain/entities/map_user.dart';
+import 'package:ciro_chat_app/features/map/presentation/utils/map_color_utils.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class UserDetailsSheet extends StatelessWidget {
   const UserDetailsSheet({super.key, required this.user});
 
-  final MockUser user;
+  final MapUser user;
+
+  String get _resolvedAvatarUrl => UrlUtils.resolveMediaUrl(user.avatarUrl);
+
+  String _lastUpdatedLabel() {
+    final diff = DateTime.now().difference(user.lastUpdatedAt);
+    if (diff.inMinutes < 1) return 'map_updated_now'.tr();
+    if (diff.inMinutes < 60) return 'map_updated_minutes'.tr(args: ['${diff.inMinutes}']);
+    if (diff.inHours < 24) return 'map_updated_hours'.tr(args: ['${diff.inHours}']);
+    return 'map_updated_days'.tr(args: ['${diff.inDays}']);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,11 +51,11 @@ class UserDetailsSheet extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 36,
-                    backgroundColor: user.avatarBgColor,
-                    backgroundImage: user.avatarUrl != null
-                        ? CachedNetworkImageProvider(user.avatarUrl!)
+                    backgroundColor: MapColorUtils.forId(user.id),
+                    backgroundImage: _resolvedAvatarUrl.isNotEmpty
+                        ? CachedNetworkImageProvider(_resolvedAvatarUrl)
                         : null,
-                    child: user.avatarUrl == null
+                    child: _resolvedAvatarUrl.isEmpty
                         ? Text(
                             user.initial,
                             style: const TextStyle(
@@ -95,7 +107,7 @@ class UserDetailsSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      user.locationLabel,
+                      _lastUpdatedLabel(),
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textSecondary,
                       ),
