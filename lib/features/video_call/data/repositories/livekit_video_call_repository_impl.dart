@@ -4,6 +4,8 @@ import 'package:fpdart/fpdart.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:injectable/injectable.dart';
 import '../../../../core/error/failures.dart';
+import '../../../../core/services/call_audio_config.dart';
+import '../../../../core/services/call_audio_session_service.dart';
 import '../../domain/repositories/video_call_repository.dart';
 import '../datasources/video_call_remote_data_source.dart';
 
@@ -13,13 +15,14 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
       MethodChannel('com.example.ciro_chat_app/screen_share_service');
 
   final VideoCallRemoteDataSource _remoteDataSource;
+  final CallAudioSessionService _audioSession;
   Room? _room;
   EventsListener<RoomEvent>? _roomListener;
   void Function()? _onLocalScreenShareEndedExternally;
   bool _androidServiceRunning = false;
   bool _callServiceRunning = false;
 
-  LivekitVideoCallRepositoryImpl(this._remoteDataSource);
+  LivekitVideoCallRepositoryImpl(this._remoteDataSource, this._audioSession);
 
   @override
   set onLocalScreenShareEndedExternally(void Function()? callback) {
@@ -67,14 +70,11 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
 
   @override
   Future<Room> connect(String wsUrl, String token) async {
-    const roomOptions = RoomOptions(
-      adaptiveStream: true,
-      dynacast: true,
-      defaultScreenShareCaptureOptions:
-          ScreenShareCaptureOptions(useiOSBroadcastExtension: true),
-    );
+    // Configure the OS voice-communication audio session BEFORE connecting so
+    // the mic track publishes into the right session (FR-Audio-01, SC-003).
+    await _audioSession.configureForCall();
 
-    _room = Room(roomOptions: roomOptions);
+    _room = Room(roomOptions: CallAudioConfig.roomOptions());
 
     await _room!.connect(wsUrl, token);
 
@@ -105,6 +105,7 @@ class LivekitVideoCallRepositoryImpl implements VideoCallRepository {
       await _room!.disconnect();
       _room = null;
     }
+    await _audioSession.deactivate();
   }
 
   @override

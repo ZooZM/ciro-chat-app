@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/services/call_audio_config.dart';
+import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:go_router/go_router.dart';
@@ -128,15 +130,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Future<void> _connectToRoom() async {
     try {
+      // Configure the OS voice-communication audio session BEFORE connecting
+      // (FR-Audio-01, SC-003).
+      await getIt<CallAudioSessionService>().configureForCall();
+
       // useiOSBroadcastExtension routes flutter_webrtc to FlutterBroadcastScreenCapturer (socket) not FlutterRPScreenRecorder.
-      _room = Room(
-        roomOptions: const RoomOptions(
-          adaptiveStream: true,
-          dynacast: true,
-          defaultScreenShareCaptureOptions:
-              ScreenShareCaptureOptions(useiOSBroadcastExtension: true),
-        ),
-      );
+      _room = Room(roomOptions: CallAudioConfig.roomOptions());
 
       // Listen to peer connection events native to the LiveKit Room!
       _room!.addListener(_onRoomUpdate);
@@ -229,6 +228,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
+    getIt<CallAudioSessionService>().deactivate();
     super.dispose();
   }
 

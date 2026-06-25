@@ -142,7 +142,7 @@ class _MapScreenState extends State<MapScreen> {
                 // ── Full-screen Google Map ───────────────────────────────────────
                 GoogleMap(
                   initialCameraPosition: const CameraPosition(
-                    target: LatLng(30.0570, 31.2195),
+                    target: LatLng(23.61102335192874, 45.067463360310974),
                     zoom: 13.5,
                   ),
                   mapType: state.mapType,
@@ -159,6 +159,7 @@ class _MapScreenState extends State<MapScreen> {
                   onCameraMove: _clusterManager.onCameraMove,
                   onCameraIdle: _clusterManager.updateMap,
                 ),
+
                 // ── Top bar overlay ───────────────────────────────────────────
                 Positioned(
                   top: 0,

@@ -97,6 +97,7 @@ import '../../features/video_call/presentation/bloc/video_call_cubit.dart'
     as _i804;
 import '../network/dio_client.dart' as _i667;
 import '../network/socket_service.dart' as _i917;
+import '../services/call_audio_session_service.dart' as _i91;
 import '../services/push_notification_service.dart' as _i63;
 import '../services/token_refresh_service.dart' as _i785;
 
@@ -117,6 +118,9 @@ extension GetItInjectableX on _i174.GetIt {
       () => storageModule.secureStorage,
     );
     gh.lazySingleton<_i917.SocketService>(() => _i917.SocketService());
+    gh.lazySingleton<_i91.CallAudioSessionService>(
+      () => _i91.CallAudioSessionService(),
+    );
     gh.lazySingleton<_i772.GallerySaverService>(
       () => _i772.GallerySaverService(),
     );
@@ -157,6 +161,12 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i1015.MusicRemoteDataSource>(
       () => _i1015.MusicRemoteDataSourceImpl(gh<_i667.DioClient>()),
     );
+    gh.lazySingleton<_i220.VideoCallRepository>(
+      () => _i786.LivekitVideoCallRepositoryImpl(
+        gh<_i5.VideoCallRemoteDataSource>(),
+        gh<_i91.CallAudioSessionService>(),
+      ),
+    );
     gh.lazySingleton<_i483.StatusRemoteDataSource>(
       () => _i483.StatusRemoteDataSourceImpl(
         gh<_i917.SocketService>(),
@@ -183,11 +193,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i667.DioClient>(),
         gh<_i917.SocketService>(),
         gh<_i852.AuthLocalDataSource>(),
-      ),
-    );
-    gh.lazySingleton<_i220.VideoCallRepository>(
-      () => _i786.LivekitVideoCallRepositoryImpl(
-        gh<_i5.VideoCallRemoteDataSource>(),
       ),
     );
     gh.lazySingleton<_i750.RecordingsLocalDataSource>(
