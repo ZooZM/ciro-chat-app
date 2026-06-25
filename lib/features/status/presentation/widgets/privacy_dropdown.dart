@@ -53,26 +53,17 @@ class PrivacyDropdown extends StatelessWidget {
         ),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingSm, vertical: 4),
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
         decoration: BoxDecoration(
-          color: Colors.black54,
+          color: Colors.black45,
           borderRadius: BorderRadius.circular(AppConstants.radiusPill),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _getPrivacyIcon(currentPrivacy),
-              color: Colors.white,
-              size: 16,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              _getPrivacyLabel(currentPrivacy),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
-          ],
+        child: Center(
+          child: Text(
+            _getPrivacyLabel(currentPrivacy),
+            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
     );
@@ -96,7 +87,7 @@ class PrivacyDropdown extends StatelessWidget {
       case StatusPrivacy.private:
         return 'status.private'.tr();
       case StatusPrivacy.showOnMap:
-        return 'status.show_on_map'.tr();
+        return 'status.map'.tr(); // In screenshots it's just "Map"
     }
   }
 }
