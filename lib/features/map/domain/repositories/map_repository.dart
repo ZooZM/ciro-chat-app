@@ -46,6 +46,11 @@ abstract class MapRepository {
   /// Throttled live-location broadcast over the socket (FR-006, R4).
   void shareLocation({required double longitude, required double latitude});
 
+  /// The explicit "Stop Sharing" action — excludes the caller from
+  /// Following-tab queries going forward and notifies already-open viewers
+  /// to drop the marker immediately (see [locationHidden]).
+  void stopSharingLocation();
+
   /// Live presence changes for authorized contacts (FR-002/003/004).
   Stream<PresenceUpdate> get presenceUpdates;
 
@@ -55,6 +60,10 @@ abstract class MapRepository {
   /// Fired when an authorized contact's marker must be removed (Ghost Mode
   /// enabled, or otherwise stopped sharing) — FR-012.
   Stream<String> get locationHidden;
+
+  /// A new "Show on Map" status was posted somewhere — Explore tab should
+  /// show the pin live instead of waiting for the next full reload.
+  Stream<MapUser> get exploreStatusAdded;
 
   /// Cancels all subscriptions and unregisters socket callbacks (Constitution V).
   void dispose();

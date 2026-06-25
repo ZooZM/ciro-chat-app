@@ -8,19 +8,16 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class MapAvatarMarker extends StatelessWidget {
-  const MapAvatarMarker({
-    super.key,
-    required this.user,
-    this.onTap,
-  });
+  const MapAvatarMarker({super.key, required this.user, this.onTap});
 
   final MapUser user;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        user.isOnline ? AppColors.primary : const Color(0xFF9E9E9E);
+    final borderColor = user.isOnline
+        ? AppColors.primary
+        : const Color(0xFF9E9E9E);
     final resolvedAvatarUrl = UrlUtils.resolveMediaUrl(user.avatarUrl);
 
     return GestureDetector(
@@ -77,11 +74,10 @@ class MapAvatarMarker extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Container(
             constraints: const BoxConstraints(maxWidth: 80),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),

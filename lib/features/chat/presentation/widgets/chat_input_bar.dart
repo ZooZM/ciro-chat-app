@@ -17,10 +17,15 @@ class ChatInputBar extends StatefulWidget {
   final VoidCallback onAttachmentTap;
   final Function(String) onSendText;
 
+  /// Pre-fills the input as an editable draft (e.g. the map's "invite to
+  /// share location" flow) rather than auto-sending it.
+  final String? initialText;
+
   const ChatInputBar({
     Key? key,
     required this.onAttachmentTap,
     required this.onSendText,
+    this.initialText,
   }) : super(key: key);
 
   @override
@@ -28,7 +33,7 @@ class ChatInputBar extends StatefulWidget {
 }
 
 class _ChatInputBarState extends State<ChatInputBar> {
-  final TextEditingController _msgController = TextEditingController();
+  late final TextEditingController _msgController;
   late final RecorderController _recorderController;
 
   bool _isTextEmpty = true;
@@ -47,6 +52,8 @@ class _ChatInputBarState extends State<ChatInputBar> {
   void initState() {
     super.initState();
     _recorderController = RecorderController();
+    _msgController = TextEditingController(text: widget.initialText ?? '');
+    _isTextEmpty = _msgController.text.trim().isEmpty;
 
     _msgController.addListener(() {
       final isEmpty = _msgController.text.trim().isEmpty;

@@ -48,6 +48,27 @@ class ContactsService {
 
   ContactsService(this._dioClient);
 
+  /// Raw device-contacts phone→name lookup, without the backend sync
+  /// round-trip `syncContacts()` does. Used to resolve a saved contact's
+  /// name locally (e.g. for map markers) — returns an empty map rather than
+  /// throwing if permission isn't granted, since callers treat this as a
+  /// best-effort display enhancement, not a hard requirement.
+  Future<Map<String, String>> getDeviceContactsPhoneToName({
+    String defaultCountryCode = '+20',
+  }) async {
+    final status = await Permission.contacts.status;
+    if (!status.isGranted) return {};
+
+    final contacts = await FlutterContacts.getAll(
+      properties: {ContactProperty.phone},
+    );
+
+    return compute(
+      _normalizeContactsIsolate,
+      {'contacts': contacts, 'defaultCountryCode': defaultCountryCode},
+    );
+  }
+
   Future<List<ChatSession>> syncContacts({
     String defaultCountryCode = '+20',
   }) async {

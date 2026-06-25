@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image/image.dart' as img;
@@ -103,6 +103,23 @@ Uint8List _compositeAvatarMarker(_AvatarCompositeJob job) {
 /// Generated icons are cached so panning/zoom never rebuilds them (FR-028).
 @lazySingleton
 class MarkerIconFactory {
+  MarkerIconFactory();
+
+  /// Test-only seam: lets tests substitute a mock [BaseCacheManager] instead
+  /// of the real one, which would otherwise need real path_provider/sqflite
+  /// plugins to even reach the network call. Not used by DI — the default
+  /// (unnamed) constructor above is what `@lazySingleton` generates.
+  @visibleForTesting
+  MarkerIconFactory.test({required BaseCacheManager cacheManager})
+      : _cacheManager = cacheManager;
+
+  // Lazy: constructing DefaultCacheManager() triggers flutter_cache_manager's
+  // background file-system setup immediately, which is wasted work for any
+  // user with no avatarUrl (and the only realistic placeholder-only case).
+  BaseCacheManager? _cacheManager;
+  BaseCacheManager get _effectiveCacheManager =>
+      _cacheManager ??= DefaultCacheManager();
+
   static const _maxConcurrent = 4;
   int _inFlight = 0;
   final List<Completer<void>> _waiters = [];
@@ -144,7 +161,7 @@ class MarkerIconFactory {
   ) async {
     await _acquire();
     try {
-      final file = await DefaultCacheManager().getSingleFile(user.avatarUrl!);
+      final file = await _effectiveCacheManager.getSingleFile(user.avatarUrl!);
       final bytes = await file.readAsBytes();
       final pngBytes = await compute(
         _compositeAvatarMarker,

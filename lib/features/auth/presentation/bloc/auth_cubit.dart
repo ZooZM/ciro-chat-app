@@ -11,6 +11,7 @@ import '../../domain/repositories/auth_repository.dart';
 import '../../data/datasources/auth_local_data_source.dart';
 
 import '../../../chat/presentation/bloc/chat_cubit.dart';
+import '../../../map/presentation/bloc/map_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
@@ -50,6 +51,7 @@ class AuthCubit extends Cubit<AuthState> {
 
           getIt<ChatCubit>().silentSyncContacts().ignore();
           getIt<PushNotificationService>().init().ignore();
+          getIt<MapCubit>().refreshSession().ignore();
         }
         emit(const Authenticated());
         return true;
@@ -62,6 +64,25 @@ class AuthCubit extends Cubit<AuthState> {
 
     if (state is AuthError) return false;
     return state is Authenticated;
+  }
+
+  /// The current user's display name. `Authenticated.userData` is only ever
+  /// populated by the fresh-login path (`verifyOtp`) — the far more common
+  /// app-restart path (`verifyAuthStatus`) emits a bare `Authenticated()`
+  /// with no userData at all, so anything reading `state.userData` directly
+  /// (e.g. a status draft's author name) sees null on every normal reopen,
+  /// not just right after a fresh login. The access token's `name` claim is
+  /// re-issued from the DB on every login/refresh (see backend
+  /// generateAuthResponse), so it's a reliable fallback either way.
+  Future<String?> getCurrentUserName() async {
+    final currentState = state;
+    if (currentState is Authenticated) {
+      final fromState = currentState.userData?['name'] as String?;
+      if (fromState != null && fromState.isNotEmpty) return fromState;
+    }
+    final token = await _localDataSource.getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return _decodeJwtPayload(token)['name'] as String?;
   }
 
   /// Decodes the JWT payload without verifying the signature.
@@ -130,6 +151,7 @@ class AuthCubit extends Cubit<AuthState> {
         debugPrint('[AuthCubit] Socket connected after OTP verification');
         getIt<ChatCubit>().silentSyncContacts().ignore();
         getIt<PushNotificationService>().init().ignore();
+        getIt<MapCubit>().refreshSession().ignore();
       }
 
       emit(Authenticated(userData: response));
@@ -144,6 +166,7 @@ class AuthCubit extends Cubit<AuthState> {
       if (recCubit.state is RecordingActive) await recCubit.stop();
       getIt<ChatCubit>().reset();
       getIt<CallCubit>().reset();
+      await getIt<MapCubit>().reset();
 
       // 2. Disconnect Network & unregister push
       getIt<SocketService>().disconnect();

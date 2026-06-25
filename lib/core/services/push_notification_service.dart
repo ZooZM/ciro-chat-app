@@ -70,7 +70,7 @@ class PushNotificationService {
 
   Future<void> _initLocalNotifications() async {
     const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@drawable/ic_notification');
     const darwinSettings = DarwinInitializationSettings();
     const initSettings = InitializationSettings(
       android: androidSettings,

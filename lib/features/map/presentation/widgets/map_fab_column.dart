@@ -11,9 +11,11 @@ class MapFabColumn extends StatelessWidget {
   const MapFabColumn({
     super.key,
     required this.onFilterTap,
+    required this.onLocateMe,
   });
 
   final VoidCallback onFilterTap;
+  final VoidCallback onLocateMe;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +38,7 @@ class MapFabColumn extends StatelessWidget {
         _CircleFab(
           icon: Icons.my_location,
           tooltip: 'map_locate_me'.tr(),
-          onTap: () => context.read<MapCubit>().locateMe(),
+          onTap: onLocateMe,
         ),
         const SizedBox(height: 16),
         const _ShareLocationFab(),

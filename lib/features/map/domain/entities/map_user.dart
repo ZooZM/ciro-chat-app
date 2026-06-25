@@ -7,6 +7,7 @@ class MapUser extends Equatable {
   const MapUser({
     required this.id,
     required this.name,
+    this.phoneNumber,
     this.avatarUrl,
     required this.isOnline,
     required this.latitude,
@@ -19,6 +20,11 @@ class MapUser extends Equatable {
 
   final String id;
   final String name;
+
+  /// Used to resolve [name] against the device's local contacts (contact
+  /// name takes priority over the backend-stored name when the number is
+  /// saved) — see `MapCubit._resolveDisplayName`.
+  final String? phoneNumber;
   final String? avatarUrl;
   final bool isOnline;
   final double latitude;
@@ -36,6 +42,7 @@ class MapUser extends Equatable {
 
   MapUser copyWith({
     String? name,
+    String? phoneNumber,
     String? avatarUrl,
     bool? isOnline,
     double? latitude,
@@ -47,6 +54,7 @@ class MapUser extends Equatable {
     return MapUser(
       id: id,
       name: name ?? this.name,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isOnline: isOnline ?? this.isOnline,
       latitude: latitude ?? this.latitude,
@@ -62,6 +70,7 @@ class MapUser extends Equatable {
   List<Object?> get props => [
     id,
     name,
+    phoneNumber,
     avatarUrl,
     isOnline,
     latitude,

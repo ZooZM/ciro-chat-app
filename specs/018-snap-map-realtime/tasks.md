@@ -1,3 +1,4 @@
+
 # Tasks: Snap Map Real-Time Logic
 
 **Input**: Design documents from `/specs/018-snap-map-realtime/`
@@ -41,23 +42,23 @@
 
 ### Flutter domain (entities + abstract repo)
 
-- [ ] T007 [P] Create `MapUser` entity in `lib/features/map/domain/entities/map_user.dart` (Equatable; fields per data-model incl. `lastUpdatedAt`, `groupIds`, `isCoarse`, `isCurrentUser`). Replaces `MockUser`/`MockMapMarker`.
-- [ ] T008 [P] Create `MapFilter` value object + `MapStatusFilter`/`MapDistanceFilter` enums in `lib/features/map/domain/entities/map_filter.dart` (defaults: status `all`, groupId `null`, distance `all`, radius `10.0`), with `bool matches(MapUser)`.
-- [ ] T009 [P] Create `MapGroup` entity in `lib/features/map/domain/entities/map_group.dart`.
-- [ ] T010 Define abstract `MapRepository` in `lib/features/map/domain/repositories/map_repository.dart` (returns `Either<Failure, T>`; exposes user fetches, groups, ghost-mode, location share, and live update streams).
+- [X] T007 [P] Create `MapUser` entity in `lib/features/map/domain/entities/map_user.dart` (Equatable; fields per data-model incl. `lastUpdatedAt`, `groupIds`, `isCoarse`, `isCurrentUser`). Replaces `MockUser`/`MockMapMarker`.
+- [X] T008 [P] Create `MapFilter` value object + `MapStatusFilter`/`MapDistanceFilter` enums in `lib/features/map/domain/entities/map_filter.dart` (defaults: status `all`, groupId `null`, distance `all`, radius `10.0`), with `bool matches(MapUser)`.
+- [X] T009 [P] Create `MapGroup` entity in `lib/features/map/domain/entities/map_group.dart`.
+- [X] T010 Define abstract `MapRepository` in `lib/features/map/domain/repositories/map_repository.dart` (returns `Either<Failure, T>`; exposes user fetches, groups, ghost-mode, location share, and live update streams).
 
 ### Flutter data skeleton + DTOs
 
-- [ ] T011 [P] Create `MapUserModel` in `lib/features/map/data/models/map_user_model.dart` (`fromJson` mapping `_id`→id, `location.coordinates`→lat/lng, `locationUpdatedAt`→`lastUpdatedAt`, `sharedGroupIds`→groupIds, `isCoarse`; `toEntity()`). Follow `StatusModel` pattern; resolve avatar via `UrlUtils.resolveMediaUrl` at render time.
-- [ ] T012 [P] Create `LocationUpdateModel` in `lib/features/map/data/models/location_update_model.dart` parsing batched items (`userId`, `longitude`, `latitude`, `isOnline`, `lastUpdatedAt`) — used by the IV-A-safe socket handler.
-- [ ] T013 Create `MapRemoteDataSource` (abstract + impl skeleton) in `lib/features/map/data/datasources/map_remote_data_source.dart` with `DioClient` + `SocketService` injected (`@LazySingleton`); declare streams `onLocationUpdate`/`onLocationHidden`/`onUserStatusChanged`.
-- [ ] T014 Create `MapRepositoryImpl` skeleton in `lib/features/map/data/repositories/map_repository_impl.dart` (`@LazySingleton(as: MapRepository)`), constructor-injected datasource + `AuthLocalDataSource` + `SharedPreferences`.
+- [X] T011 [P] Create `MapUserModel` in `lib/features/map/data/models/map_user_model.dart` (`fromJson` mapping `_id`→id, `location.coordinates`→lat/lng, `locationUpdatedAt`→`lastUpdatedAt`, `sharedGroupIds`→groupIds, `isCoarse`; `toEntity()`). Follow `StatusModel` pattern; resolve avatar via `UrlUtils.resolveMediaUrl` at render time.
+- [X] T012 [P] Create `LocationUpdateModel` in `lib/features/map/data/models/location_update_model.dart` parsing batched items (`userId`, `longitude`, `latitude`, `isOnline`, `lastUpdatedAt`) — used by the IV-A-safe socket handler.
+- [X] T013 Create `MapRemoteDataSource` (abstract + impl skeleton) in `lib/features/map/data/datasources/map_remote_data_source.dart` with `DioClient` + `SocketService` injected (`@LazySingleton`); declare streams `onLocationUpdate`/`onLocationHidden`/`onUserStatusChanged`.
+- [X] T014 Create `MapRepositoryImpl` skeleton in `lib/features/map/data/repositories/map_repository_impl.dart` (`@LazySingleton(as: MapRepository)`), constructor-injected datasource + `AuthLocalDataSource` + `SharedPreferences`.
 
 ### Flutter presentation skeleton
 
-- [ ] T015 Rewrite `MapState` in `lib/features/map/presentation/bloc/map_state.dart`: add `MapViewStatus` enum (`loading/loaded/empty/error`), `allUsers`, `filter`, `groups`, `selfLocation`, `isSharing`, `isGhostMode`, `permissionGranted`, `failure`; keep `googleMarkers`, `selectedUser`, `mapType`, `selectedTab`. Extend `copyWith`/`props` (Equatable).
-- [ ] T016 Rewrite `MapCubit` constructor/shell in `lib/features/map/presentation/bloc/map_cubit.dart`: inject `MapRepository`; remove mock seeding; add a private `_deriveMarkers()` placeholder and an empty `close()` that will cancel subscriptions + timers.
-- [ ] T017 Register the map feature in DI: annotate the new classes and run `dart run build_runner build --delete-conflicting-outputs`; verify wiring in `lib/core/di/injection.config.dart`. Provide `MapCubit` to `MapScreen` (e.g., `BlocProvider` in `lib/core/routing/app_router.dart`).
+- [X] T015 Rewrite `MapState` in `lib/features/map/presentation/bloc/map_state.dart`: add `MapViewStatus` enum (`loading/loaded/empty/error`), `allUsers`, `filter`, `groups`, `selfLocation`, `isSharing`, `isGhostMode`, `permissionGranted`, `failure`; keep `googleMarkers`, `selectedUser`, `mapType`, `selectedTab`. Extend `copyWith`/`props` (Equatable).
+- [X] T016 Rewrite `MapCubit` constructor/shell in `lib/features/map/presentation/bloc/map_cubit.dart`: inject `MapRepository`; remove mock seeding; add a private `_deriveMarkers()` placeholder and an empty `close()` that will cancel subscriptions + timers.
+- [X] T017 Register the map feature in DI: annotate the new classes and run `dart run build_runner build --delete-conflicting-outputs`; verify wiring in `lib/core/di/injection.config.dart`. Provide `MapCubit` to `MapScreen` (e.g., `BlocProvider` in `lib/core/routing/app_router.dart`).
 
 **Checkpoint**: Schema, entities, contracts, DI, and skeletons exist — user stories can begin.
 
@@ -79,22 +80,22 @@
 
 ### Flutter data (US1)
 
-- [ ] T023 [US1] Implement `getVisibleUsers()` and `getExploreUsers()` in `map_remote_data_source.dart` (Dio GET `/map/visible`, `/map/explore`); wire `SocketService.onUserStatusChanged` → `onUserStatusChanged` stream.
-- [ ] T024 [US1] Implement repository fetches in `map_repository_impl.dart` returning `Either<Failure, List<MapUser>>` (map Dio/Socket exceptions to `ServerFailure`/`CacheFailure` per Constitution VII).
+- [X] T023 [US1] Implement `getVisibleUsers()` and `getExploreUsers()` in `map_remote_data_source.dart` (Dio GET `/map/visible`, `/map/explore`); wire `SocketService.onUserStatusChanged` → `onUserStatusChanged` stream.
+- [X] T024 [US1] Implement repository fetches in `map_repository_impl.dart` returning `Either<Failure, List<MapUser>>` (map Dio/Socket exceptions to `ServerFailure`/`CacheFailure` per Constitution VII).
 
 ### Flutter presentation (US1)
 
-- [ ] T025 [US1] In `MapCubit` (`map_cubit.dart`): `loadFollowing()` → emit `loading` then `loaded`/`empty`/`error`; populate `allUsers`; subscribe to `onUserStatusChanged` to update matching `MapUser.isOnline` (debounced, FR-004).
-- [ ] T026 [US1] Implement the **idempotent upsert** helper in `MapCubit`: apply an incoming user/location ONLY IF `lastUpdatedAt` is strictly newer than the cached entry (used by initial load + live updates) — FR-022a / SC-011.
-- [ ] T027 [US1] Implement the **TTL cleanup** `Timer.periodic` (~60 s) in `MapCubit`: fade then remove markers older than 2 h with no update; re-derive; cancel the timer in `close()` (FR-003c / SC-009, Constitution V).
-- [ ] T028 [US1] Implement `_deriveMarkers()` building `googleMarkers` from `allUsers` (plain avatar markers for now — clustering/isolate added in US5); wire `selectUser` to real `MapUser` and the existing user-detail sheet (FR-030).
-- [ ] T029 [US1] Wire `lib/features/map/presentation/pages/map_screen.dart` to live state: feed `state.googleMarkers`; handle `loading`/`empty`/`error` (with retry) overlays (FR-029); wire Following/Explore tab switch to `loadFollowing()`/`loadExplore()`.
-- [ ] T030 [US1] Update `lib/features/map/presentation/widgets/map_avatar_marker.dart` to render from `MapUser` (replace `MockMapMarker`); keep visuals unchanged.
+- [X] T025 [US1] In `MapCubit` (`map_cubit.dart`): `loadFollowing()` → emit `loading` then `loaded`/`empty`/`error`; populate `allUsers`; subscribe to `onUserStatusChanged` to update matching `MapUser.isOnline` (debounced, FR-004).
+- [X] T026 [US1] Implement the **idempotent upsert** helper in `MapCubit`: apply an incoming user/location ONLY IF `lastUpdatedAt` is strictly newer than the cached entry (used by initial load + live updates) — FR-022a / SC-011.
+- [X] T027 [US1] Implement the **TTL cleanup** `Timer.periodic` (~60 s) in `MapCubit`: fade then remove markers older than 2 h with no update; re-derive; cancel the timer in `close()` (FR-003c / SC-009, Constitution V).
+- [X] T028 [US1] Implement `_deriveMarkers()` building `googleMarkers` from `allUsers` (plain avatar markers for now — clustering/isolate added in US5); wire `selectUser` to real `MapUser` and the existing user-detail sheet (FR-030).
+- [X] T029 [US1] Wire `lib/features/map/presentation/pages/map_screen.dart` to live state: feed `state.googleMarkers`; handle `loading`/`empty`/`error` (with retry) overlays (FR-029); wire Following/Explore tab switch to `loadFollowing()`/`loadExplore()`.
+- [X] T030 [US1] Update `lib/features/map/presentation/widgets/map_avatar_marker.dart` to render from `MapUser` (replace `MockMapMarker`); keep visuals unchanged.
 
 ### Tests (US1)
 
-- [ ] T031 [P] [US1] `test/features/map/map_cubit_test.dart` (`bloc_test`): load→loaded/empty/error; presence update flips marker; **stale-timestamp update is ignored** (SC-011); **TTL tick removes aged marker** (SC-009).
-- [ ] T032 [P] [US1] `test/features/map/map_repository_impl_test.dart` (`mocktail`): `Either` success/failure mapping for visible/explore fetches.
+- [X] T031 [P] [US1] `test/features/map/presentation/bloc/map_cubit_test.dart` (`bloc_test`): load→loaded/empty/error; presence update flips marker; **stale-timestamp update is ignored** (SC-011); **TTL tick removes aged marker** (SC-009).
+- [X] T032 [P] [US1] `test/features/map/data/repositories/map_repository_impl_test.dart` (`mocktail`): `Either` success/failure mapping for visible/explore fetches.
 
 **Checkpoint**: MVP — the map shows real authorized contacts with live, race-safe, self-cleaning markers and a coarse Explore tab.
 
@@ -112,10 +113,10 @@
 
 ### Flutter (US2)
 
-- [ ] T034 [US2] Implement `getGroups()` in `map_remote_data_source.dart` + repository (`Either<Failure, List<MapGroup>>`).
-- [ ] T035 [US2] In `MapCubit`: `setStatusFilter`, `setGroupFilter`, `loadGroups`; store `filter` in state (retained for session, FR-021); `_deriveMarkers()` applies status+group client-side over `allUsers` (< 300 ms, SC-004); re-derive on every live update (FR-022).
-- [ ] T036 [US2] Lift `lib/features/map/presentation/widgets/map_filter_sheet.dart` local state into the cubit: read selection from `state.filter`, dispatch `setStatusFilter`/`setGroupFilter`; replace `mockGroupsList` with `state.groups`. No visual redesign.
-- [ ] T037 [P] [US2] `test/features/map/map_filter_test.dart` (`bloc_test`): status filter, group filter, and combined intersection derive correctly (SC-007).
+- [X] T034 [US2] Implement `getGroups()` in `map_remote_data_source.dart` + repository (`Either<Failure, List<MapGroup>>`).
+- [X] T035 [US2] In `MapCubit`: `setStatusFilter`, `setGroupFilter`, `loadGroups`; store `filter` in state (retained for session, FR-021); `_deriveMarkers()` applies status+group client-side over `allUsers` (< 300 ms, SC-004); re-derive on every live update (FR-022).
+- [X] T036 [US2] Lift `lib/features/map/presentation/widgets/map_filter_sheet.dart` local state into the cubit: read selection from `state.filter`, dispatch `setStatusFilter`/`setGroupFilter`; replace `mockGroupsList` with `state.groups`. No visual redesign.
+- [X] T037 [P] [US2] `test/features/map/presentation/bloc/map_cubit_test.dart` (`bloc_test`): status filter, group filter, and combined intersection derive correctly (SC-007).
 
 **Checkpoint**: US1 + US2 work independently.
 
@@ -138,15 +139,15 @@
 
 ### Flutter — SocketService & location (US3)
 
-- [ ] T044 [US3] Extend `lib/core/network/socket_service.dart`: add `onLocationUpdate(List<LocationUpdateModel>)`, `onLocationHidden(String userId)` callbacks and `shareLocation(lng, lat)` emit; register `_socket?.on('locationUpdate'/'locationHidden')` using the **IV-A safe pattern** (`if (data is! Map) return; Map<String,dynamic>.from(data)`, parse `updates` array).
-- [ ] T045 [US3] Add a location service wrapper (e.g., `lib/features/map/data/datasources/` or reuse) using `geolocator`: request permission, position stream with `distanceFilter: 50` + 30 s heartbeat; expose start/stop; pause on `AppLifecycleState.paused`, resume on `resumed` (FR-006/031, R4).
+- [X] T044 [US3] Extend `lib/core/network/socket_service.dart`: add `onLocationUpdate(List<LocationUpdateModel>)`, `onLocationHidden(String userId)` callbacks and `shareLocation(lng, lat)` emit; register `_socket?.on('locationUpdate'/'locationHidden')` using the **IV-A safe pattern** (`if (data is! Map) return; Map<String,dynamic>.from(data)`, parse `updates` array).
+- [X] T045 [US3] Add a location service wrapper (e.g., `lib/features/map/data/datasources/` or reuse) using `geolocator`: request permission, position stream with `distanceFilter: 50` + 30 s heartbeat; expose start/stop; pause on `AppLifecycleState.paused`, resume on `resumed` (FR-006/031, R4).
 
 ### Flutter — Cubit & UI (US3)
 
-- [ ] T046 [US3] In `MapCubit`: `startSharing()`/`stopSharing()` (emit `shareLocation`, update `isSharing`), `locateMe()` (center camera on `selfLocation`), permission handling (FR-007/032); apply batched `onLocationUpdate` via the idempotent upsert (T026); remove user on `onLocationHidden`; cancel all subscriptions in `close()`.
-- [ ] T047 [US3] In `MapCubit` + repository: `toggleGhostMode()` — optimistic `isGhostMode` flip, persist to `SharedPreferences`, call `PATCH /map/ghost-mode`; hydrate from `GET /map/ghost-mode` on init (FR-011/013). On enable, stop sharing/broadcast.
-- [ ] T048 [US3] Wire `lib/features/map/presentation/widgets/map_fab_column.dart`: Share-Location FAB → `startSharing/stopSharing`; Locate-Me → `locateMe`; add Ghost Mode toggle affordance → `toggleGhostMode` (no visual redesign beyond existing controls).
-- [ ] T049 [P] [US3] `test/features/map/map_location_test.dart` (`bloc_test`): sharing toggles, ghost-mode optimistic + persist, batched `locationUpdate` applied idempotently, `locationHidden` removes marker.
+- [X] T046 [US3] In `MapCubit`: `startSharing()`/`stopSharing()` (emit `shareLocation`, update `isSharing`), `locateMe()` (center camera on `selfLocation`), permission handling (FR-007/032); apply batched `onLocationUpdate` via the idempotent upsert (T026); remove user on `onLocationHidden`; cancel all subscriptions in `close()`.
+- [X] T047 [US3] In `MapCubit` + repository: `toggleGhostMode()` — optimistic `isGhostMode` flip, persist to `SharedPreferences`, call `PATCH /map/ghost-mode`; hydrate from `GET /map/ghost-mode` on init (FR-011/013). On enable, stop sharing/broadcast.
+- [X] T048 [US3] Wire `lib/features/map/presentation/widgets/map_fab_column.dart`: Share-Location FAB → `startSharing/stopSharing`; Locate-Me → `locateMe`; add Ghost Mode toggle affordance → `toggleGhostMode` (no visual redesign beyond existing controls).
+- [X] T049 [P] [US3] `test/features/map/presentation/bloc/map_cubit_test.dart` (`bloc_test`): sharing toggles, ghost-mode optimistic + persist, batched `locationUpdate` applied idempotently, `locationHidden` removes marker.
 
 **Checkpoint**: US1 + US2 + US3 = full P1 set (live, filterable, private, batched).
 
@@ -165,10 +166,10 @@
 
 ### Flutter (US4)
 
-- [ ] T052 [US4] Implement `getNearbyUsers(lat, lng, radiusKm)` in `map_remote_data_source.dart` + repository.
-- [ ] T053 [US4] In `MapCubit`: `setDistanceFilter` — `nearby` re-queries `/map/nearby` (needs `selfLocation`), `all` uses `/map/visible`; emit `loading→loaded/empty`; if `selfLocation == null`, keep filter inert and surface a hint (FR-018 edge case).
-- [ ] T054 [US4] Wire the distance control in `map_filter_sheet.dart` to `setDistanceFilter` (existing UI).
-- [ ] T055 [P] [US4] `test/features/map/map_distance_test.dart` (`bloc_test`): nearby/all switching re-fetches; self-location-unknown handled.
+- [X] T052 [US4] Implement `getNearbyUsers(lat, lng, radiusKm)` in `map_remote_data_source.dart` + repository.
+- [X] T053 [US4] In `MapCubit`: `setDistanceFilter` — `nearby` re-queries `/map/nearby` (needs `selfLocation`), `all` uses `/map/visible`; emit `loading→loaded/empty`; if `selfLocation == null`, keep filter inert and surface a hint (FR-018 edge case).
+- [X] T054 [US4] Wire the distance control in `map_filter_sheet.dart` to `setDistanceFilter` (existing UI).
+- [X] T055 [P] [US4] `test/features/map/presentation/bloc/map_cubit_test.dart` (`bloc_test`): nearby/all switching re-fetches; self-location-unknown handled.
 
 **Checkpoint**: US1–US4 functional.
 
@@ -182,10 +183,10 @@
 
 ### Flutter (US5)
 
-- [ ] T056 [US5] Create `lib/features/map/presentation/utils/marker_icon_factory.dart`: avatar→PNG compositing (decode cached bytes → circle + border + online dot via `image`/`dart:ui`) run via `compute()`/isolate; `BitmapDescriptor.fromBytes` on main; bounded concurrency (≤4) + in-memory cache keyed `userId+avatarUrl+isOnline` (FR-026/027/028, SC-010).
-- [ ] T057 [US5] Integrate marker clustering in `MapCubit._deriveMarkers()` + `map_screen.dart`: cluster manager recompute on `onCameraIdle`; cluster badge bitmap via `widget_to_marker` (low-volume); single markers via the icon factory (FR-024/025).
-- [ ] T058 [US5] Placeholder-first rendering: emit initial-on-color markers immediately, swap to image markers as the factory resolves (FR-027); fallback to initial on image failure.
-- [ ] T059 [P] [US5] `test/features/map/marker_icon_factory_test.dart`: cache hit returns same descriptor; cache key varies with `isOnline`; failure path yields placeholder.
+- [X] T056 [US5] Create `lib/features/map/presentation/utils/marker_icon_factory.dart`: avatar→PNG compositing (decode cached bytes → circle + border + online dot via `image`/`dart:ui`) run via `compute()`/isolate; `BitmapDescriptor.fromBytes` on main; bounded concurrency (≤4) + in-memory cache keyed `userId+avatarUrl+isOnline` (FR-026/027/028, SC-010).
+- [X] T057 [US5] Integrate marker clustering in `MapCubit._deriveMarkers()` + `map_screen.dart`: cluster manager recompute on `onCameraIdle`; cluster badge bitmap via `widget_to_marker` (low-volume); single markers via the icon factory (FR-024/025).
+- [X] T058 [US5] Placeholder-first rendering: emit initial-on-color markers immediately, swap to image markers as the factory resolves (FR-027); fallback to initial on image failure.
+- [X] T059 [P] [US5] `test/features/map/presentation/utils/marker_icon_factory_test.dart`: cache hit returns same descriptor; cache key varies with `isOnline`; failure path yields placeholder.
 
 **Checkpoint**: All user stories independently functional.
 
@@ -193,11 +194,11 @@
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T060 [P] Add/replace localization strings used by wired controls (e.g., Ghost Mode, retry, empty state) in the app's localization assets.
-- [ ] T061 Remove the obsolete `lib/features/map/presentation/mock/map_mock_data.dart` and any remaining mock references once all stories consume live data.
-- [ ] T062 Verify logout teardown: `MapCubit.close()` cancels all subscriptions, geolocator stream, and TTL timer; confirm no mutable `isOnline` added to singletons (Constitution IV-B/V).
-- [ ] T063 [P] Run `flutter analyze` (warnings-as-errors) and backend lint; fix naming/`const`/`final` issues (Constitution VI).
-- [ ] T064 Execute `specs/018-snap-map-realtime/quickstart.md` manual verification matrix end-to-end (all SC checks).
+- [X] T060 [P] Add/replace localization strings used by wired controls (e.g., Ghost Mode, retry, empty state) in the app's localization assets. — all `map_*` keys present in `assets/translations/en.json`.
+- [X] T061 Remove the obsolete `lib/features/map/presentation/mock/map_mock_data.dart` and any remaining mock references once all stories consume live data. — removed map-specific symbols (`MockMapMarker`, `mockMapMarkers`, `mockGroups`, unused seed users); kept `MockUser`/`MockStatus`/`mockStatuses`, which are still genuinely used by the unrelated status feature's `reels_viewer_screen.dart`.
+- [X] T062 Verify logout teardown: `MapCubit.close()` cancels all subscriptions, geolocator stream, and TTL timer; confirm no mutable `isOnline` added to singletons (Constitution IV-B/V). — `close()` was already correct, but found and fixed a real gap: `MapCubit` (a `@lazySingleton`) was never reset on logout, unlike `ChatCubit`/`CallCubit`, so a previous user's `allUsers`/`selfLocation`/`isSharing` could leak to the next login on a shared device. Added `MapCubit.reset()` (stops active sharing, emits fresh `MapState()`) called from `AuthCubit.logOut()`, and `MapCubit.refreshSession()` (re-hydrates ghost mode + reloads following/groups) called from `AuthCubit.verifyAuthStatus()`/`submitOtp()` success paths, mirroring the existing `ChatCubit.reset()`/`silentSyncContacts()` pattern.
+- [X] T063 [P] Run `flutter analyze` (warnings-as-errors) and backend lint; fix naming/`const`/`final` issues (Constitution VI). — `flutter analyze` on `lib/features/map/` and all files touched this session: zero issues. Full-project `flutter analyze` shows pre-existing, unrelated issues in other features (translation/auth/chat/video_call) predating this work; out of scope.
+- [ ] T064 Execute `specs/018-snap-map-realtime/quickstart.md` manual verification matrix end-to-end (all SC checks). — automatable portion done: backend automated tests (`map.service.spec.ts`, `location-batch.service.spec.ts`, `chat.gateway.spec.ts`) all green (29/29); all "Constitution gates" in quickstart.md verified directly against code (IV-A type-safe socket parsing, IV-B no mutable `isOnline` on singletons, V full `close()` teardown, VII `Either`/`Failure`, VIII-A `UrlUtils.resolveMediaUrl`+`CachedNetworkImage`, III `SharedPreferences` not Hive). The 12-row **manual verification matrix** (two-device live presence, Ghost Mode propagation, blocked-user invisibility, clustering/zoom behavior, HTTP↔WS race, batching cadence) still requires a human with two accounts on a real/simulated device — not automatable from this environment.
 
 ---
 

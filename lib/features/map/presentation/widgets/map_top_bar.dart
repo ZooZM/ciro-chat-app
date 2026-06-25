@@ -8,10 +8,14 @@ class MapTopBar extends StatelessWidget {
     super.key,
     required this.selectedTab,
     required this.onTabChanged,
+    required this.onInvite,
+    required this.onCreateGroup,
   });
 
   final MapTab selectedTab;
   final ValueChanged<MapTab> onTabChanged;
+  final VoidCallback onInvite;
+  final VoidCallback onCreateGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -35,12 +39,12 @@ class MapTopBar extends StatelessWidget {
           const SizedBox(width: 8),
           _GlassIconButton(
             icon: Icons.person_add_outlined,
-            onTap: () {},
+            onTap: onInvite,
           ),
           const SizedBox(width: 8),
           _GlassIconButton(
             icon: Icons.add_box_outlined,
-            onTap: () {},
+            onTap: onCreateGroup,
           ),
         ],
       ),

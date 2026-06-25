@@ -6,6 +6,7 @@ class MapUserModel {
   const MapUserModel({
     required this.id,
     required this.name,
+    this.phoneNumber,
     this.avatarUrl,
     required this.isOnline,
     required this.latitude,
@@ -17,6 +18,7 @@ class MapUserModel {
 
   final String id;
   final String name;
+  final String? phoneNumber;
   final String? avatarUrl;
   final bool isOnline;
   final double latitude;
@@ -35,6 +37,7 @@ class MapUserModel {
     return MapUserModel(
       id: json['_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+      phoneNumber: json['phoneNumber']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
       isOnline: json['isOnline'] == true,
       longitude: lng,
@@ -53,6 +56,7 @@ class MapUserModel {
     return MapUser(
       id: id,
       name: name,
+      phoneNumber: phoneNumber,
       avatarUrl: avatarUrl,
       isOnline: isOnline,
       latitude: latitude,

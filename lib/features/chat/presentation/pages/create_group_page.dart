@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/features/map/presentation/bloc/map_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -110,6 +112,10 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
           ),
         );
       } else {
+        // A new GROUP-type chat room also feeds the Map's group filter
+        // (FR-017/023) — refresh it regardless of where this page was
+        // opened from, so a group created from Chats shows up there too.
+        getIt<MapCubit>().loadGroups();
         context.go(AppRouterName.home);
       }
     }

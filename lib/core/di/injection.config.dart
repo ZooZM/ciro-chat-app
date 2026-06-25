@@ -242,6 +242,15 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i208.MusicCubit>(
       () => _i208.MusicCubit(gh<_i289.MusicRepository>()),
     );
+    gh.lazySingleton<_i301.MapCubit>(
+      () => _i301.MapCubit(
+        gh<_i973.MapRepository>(),
+        gh<_i248.MapLocationService>(),
+        gh<_i548.MarkerIconFactory>(),
+        gh<_i850.ContactsService>(),
+        gh<_i852.AuthLocalDataSource>(),
+      ),
+    );
     gh.lazySingleton<_i189.CallRecordingCubit>(
       () => _i189.CallRecordingCubit(
         gh<_i59.RecordingsRepository>(),
@@ -256,13 +265,6 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i484.StatusCubit>(
       () => _i484.StatusCubit(gh<_i171.StatusRepository>()),
-    );
-    gh.lazySingleton<_i301.MapCubit>(
-      () => _i301.MapCubit(
-        gh<_i973.MapRepository>(),
-        gh<_i248.MapLocationService>(),
-        gh<_i548.MarkerIconFactory>(),
-      ),
     );
     gh.lazySingleton<_i52.AuthCubit>(
       () => _i52.AuthCubit(

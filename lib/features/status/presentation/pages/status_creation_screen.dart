@@ -8,6 +8,7 @@ import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart
 import 'package:ciro_chat_app/features/status/domain/entities/status_privacy.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_creation_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_creation_state.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/color_palette_picker.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/mode_switcher_bar.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_toolbar.dart';
@@ -78,6 +79,11 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
       child: BlocConsumer<StatusCreationCubit, StatusCreationState>(
         listener: (context, state) {
           if (state is StatusCreationSuccess) {
+            // The composer's own cubit is a separate instance from the
+            // app-root StatusCubit the Updates screen reads — without this,
+            // "My Status" keeps showing stale data until something else
+            // happens to trigger a reload.
+            context.read<StatusCubit>().loadRecentStatuses();
             context.pop();
           } else if (state is StatusCreationError) {
             ScaffoldMessenger.of(context).showSnackBar(

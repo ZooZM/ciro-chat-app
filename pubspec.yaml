@@ -79,6 +79,8 @@ dev_dependencies:
   mocktail: ^1.0.4
   bloc_test: ^10.0.0
   fake_async: ^1.3.1
+  sqflite_common_ffi: ^2.3.0
+  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
@@ -87,6 +89,13 @@ flutter:
     - assets/logo.png
     - assets/translations/
     - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/logo.png"
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
 
 dependency_overrides:
   connectivity_plus: ^6.1.1

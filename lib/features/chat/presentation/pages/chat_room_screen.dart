@@ -25,7 +25,16 @@ import 'chat_info_screen.dart';
 class ChatRoomScreen extends StatefulWidget {
   final ChatSession chatData;
 
-  const ChatRoomScreen({Key? key, required this.chatData}) : super(key: key);
+  /// Pre-fills the message input (e.g. the map's "invite to share location"
+  /// flow) — left as an editable draft, not auto-sent, so the user can
+  /// review/change it before tapping send.
+  final String? initialDraftText;
+
+  const ChatRoomScreen({
+    Key? key,
+    required this.chatData,
+    this.initialDraftText,
+  }) : super(key: key);
 
   @override
   State<ChatRoomScreen> createState() => _ChatRoomScreenState();
@@ -449,6 +458,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
                   // Bottom Input Bar
                   ChatInputBar(
+                    initialText: widget.initialDraftText,
                     onAttachmentTap: () => _showAttachmentSheet(context),
                     onSendText: (text) {
                       context.read<ChatCubit>().sendLocalMessage(

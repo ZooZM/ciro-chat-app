@@ -124,6 +124,12 @@ class SocketService {
   /// sharing) — the marker for `userId` must be removed.
   void Function(String userId)? onLocationHidden;
 
+  /// 018-snap-map-realtime: a new "Show on Map" status was just posted —
+  /// Explore-tab viewers should see the pin live, not only after their next
+  /// REST refresh. Raw map matches the `/map/visible`-style shape so it can
+  /// be parsed by the same `MapUserModel.fromJson`.
+  void Function(Map<String, dynamic> json)? onExploreStatusAdded;
+
   // ── Translation callbacks (set by TranslationCubit) ───────────────────────
   /// `translation:subscribed` — `pending -> active`.
   void Function(String speakerId, String targetLanguage, int remainingSeconds)?
@@ -348,6 +354,11 @@ class SocketService {
       final map = Map<String, dynamic>.from(data);
       final userId = map['userId']?.toString() ?? '';
       if (userId.isNotEmpty) onLocationHidden?.call(userId);
+    });
+
+    _socket?.on('exploreStatusAdded', (data) {
+      if (data == null || data is! Map) return;
+      onExploreStatusAdded?.call(Map<String, dynamic>.from(data));
     });
 
     // ── Group call signaling events ───────────────────────────────────────
@@ -689,6 +700,13 @@ class SocketService {
       'longitude': longitude,
       'latitude': latitude,
     });
+  }
+
+  /// The explicit "Stop Sharing" action — tells the server to drop this user
+  /// from Following-tab queries and immediately notify already-open viewers
+  /// (via `locationHidden`) instead of leaving a stale marker on their map.
+  void stopSharingLocation() {
+    _socket?.emit('stopSharingLocation', {});
   }
 
   void disconnect() {

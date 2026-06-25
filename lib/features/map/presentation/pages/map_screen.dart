@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:ciro_chat_app/features/map/domain/entities/map_user.dart';
 import 'package:ciro_chat_app/features/map/presentation/bloc/map_cubit.dart';
 import 'package:ciro_chat_app/features/map/presentation/bloc/map_state.dart';
@@ -10,8 +12,10 @@ import 'package:ciro_chat_app/features/map/presentation/widgets/user_details_she
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart' hide ClusterManager, Cluster;
+import 'package:google_maps_flutter/google_maps_flutter.dart'
+    hide ClusterManager, Cluster;
 
 /// Wraps an already-resolved per-user [Marker] (icon included) so the
 /// cluster manager (FR-029/SC-011) can group nearby markers purely by
@@ -35,6 +39,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   late final ClusterManager<_MarkerClusterItem> _clusterManager;
   Set<Marker> _renderedMarkers = {};
+  GoogleMapController? _mapController;
 
   @override
   void initState() {
@@ -48,13 +53,33 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<Marker> _buildClusterMarker(Cluster<_MarkerClusterItem> cluster) async {
+  /// Centers the camera on the device's current position. [force] re-fetches
+  /// even if a location is already known (explicit Locate Me tap); otherwise
+  /// this only does anything the first time a location becomes available
+  /// (e.g. right after the map is created), making "current location" the
+  /// effective initial view without needing a second, real device fix before
+  /// `GoogleMap.initialCameraPosition` is evaluated.
+  Future<void> _goToCurrentLocation({bool force = false}) async {
+    final cubit = context.read<MapCubit>();
+    await cubit.locateMe(force: force);
+    final location = cubit.state.selfLocation;
+    if (location != null) {
+      await _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(location, 16),
+      );
+    }
+  }
+
+  Future<Marker> _buildClusterMarker(
+    Cluster<_MarkerClusterItem> cluster,
+  ) async {
     if (!cluster.isMultiple) return cluster.items.first.marker;
     return Marker(
       markerId: MarkerId('cluster_${cluster.getId()}'),
       position: cluster.location,
       icon: await _clusterBadge(cluster.count),
-      onTap: () {}, // Clusters split apart on zoom; no detail sheet for a group.
+      onTap:
+          () {}, // Clusters split apart on zoom; no detail sheet for a group.
     );
   }
 
@@ -75,11 +100,21 @@ class _MapScreenState extends State<MapScreen> {
     final painter = TextPainter(textDirection: ui.TextDirection.ltr)
       ..text = TextSpan(
         text: '$count',
-        style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 30,
+          fontWeight: FontWeight.bold,
+        ),
       )
       ..layout();
-    painter.paint(canvas, Offset((size - painter.width) / 2, (size - painter.height) / 2));
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    painter.paint(
+      canvas,
+      Offset((size - painter.width) / 2, (size - painter.height) / 2),
+    );
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
   }
@@ -111,12 +146,16 @@ class _MapScreenState extends State<MapScreen> {
                     zoom: 13.5,
                   ),
                   mapType: state.mapType,
-                  myLocationEnabled: false,
+                  myLocationEnabled: true,
                   myLocationButtonEnabled: false,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   markers: _renderedMarkers,
-                  onMapCreated: (controller) => _clusterManager.setMapId(controller.mapId),
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    _clusterManager.setMapId(controller.mapId);
+                    unawaited(_goToCurrentLocation());
+                  },
                   onCameraMove: _clusterManager.onCameraMove,
                   onCameraIdle: _clusterManager.updateMap,
                 ),
@@ -131,6 +170,16 @@ class _MapScreenState extends State<MapScreen> {
                       child: MapTopBar(
                         selectedTab: state.selectedTab,
                         onTabChanged: cubit.switchTab,
+                        onInvite: () =>
+                            context.push(AppRouterName.inviteToShareLocation),
+                        onCreateGroup: () async {
+                          await context.push(AppRouterName.createGroup);
+                          // The create-group flow can also be cancelled
+                          // (back button) without creating anything — this
+                          // refresh is a no-op then, and picks up a newly
+                          // created group's filter entry otherwise.
+                          if (context.mounted) cubit.loadGroups();
+                        },
                       ),
                     ),
                   ),
@@ -138,14 +187,14 @@ class _MapScreenState extends State<MapScreen> {
                 // ── Loading / empty / error overlays ──────────────────────────
                 if (state.status == MapViewStatus.loading)
                   const Center(child: CircularProgressIndicator()),
-                if (state.status == MapViewStatus.empty)
-                  Center(
-                    child: _MapMessage(
-                      text: state.selectedTab == MapTab.explore
-                          ? 'map_empty_explore'.tr()
-                          : 'map_empty_following'.tr(),
-                    ),
-                  ),
+                // if (state.status == MapViewStatus.empty)
+                //   Center(
+                //     child: _MapMessage(
+                //       text: state.selectedTab == MapTab.explore
+                //           ? 'map_empty_explore'.tr()
+                //           : 'map_empty_following'.tr(),
+                //     ),
+                //   ),
                 if (state.status == MapViewStatus.error)
                   Center(
                     child: _MapMessage(
@@ -160,6 +209,8 @@ class _MapScreenState extends State<MapScreen> {
                   bottom: 20,
                   child: MapFabColumn(
                     onFilterTap: () => _showFilterSheet(context),
+                    onLocateMe: () =>
+                        unawaited(_goToCurrentLocation(force: true)),
                   ),
                 ),
               ],
@@ -197,7 +248,9 @@ class _MapScreenState extends State<MapScreen> {
         return Align(
           alignment: Alignment.bottomRight,
           child: Padding(
-            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 20),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 20,
+            ),
             child: Material(
               color: Colors.transparent,
               child: SizedBox(
@@ -210,13 +263,10 @@ class _MapScreenState extends State<MapScreen> {
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          )),
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
           child: child,
         );
       },

@@ -99,6 +99,11 @@ class MapRepositoryImpl implements MapRepository {
   }
 
   @override
+  void stopSharingLocation() {
+    _remoteDataSource.stopSharingLocation();
+  }
+
+  @override
   Stream<PresenceUpdate> get presenceUpdates =>
       _remoteDataSource.onUserStatusChanged;
 
@@ -109,6 +114,10 @@ class MapRepositoryImpl implements MapRepository {
 
   @override
   Stream<String> get locationHidden => _remoteDataSource.onLocationHidden;
+
+  @override
+  Stream<MapUser> get exploreStatusAdded =>
+      _remoteDataSource.onExploreStatusAdded.map((u) => u.toEntity());
 
   @override
   void dispose() {
