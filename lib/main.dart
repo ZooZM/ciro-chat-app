@@ -123,9 +123,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             BlocProvider<StatusCubit>(
               create: (_) => getIt<StatusCubit>()..loadRecentStatuses(),
             ),
-            BlocProvider<MapCubit>(
-              create: (_) => MapCubit(),
-            ),
+            BlocProvider<MapCubit>(create: (_) => MapCubit()),
           ],
           // CallOverlay centralizes all call navigation via GoRouter so the
           // chat back-stack is preserved across incoming and outgoing calls.

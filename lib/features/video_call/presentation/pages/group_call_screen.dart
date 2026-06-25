@@ -31,7 +31,6 @@ import '../../../translation/presentation/widgets/translation_toggle_sheet.dart'
 const _kBg = Color(0xFF616161); // dark gray background
 const _kControlsBg = Color(0xFF3B3B3B); // controls panel
 const _kGreen = Color(0xFF4CAF50);
-const _kRed = Color(0xFFE53935);
 const _kBtnGray = Color(0xFF757575);
 
 // Tile colour palette (matches screenshot order)
@@ -57,8 +56,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   EventsListener<RoomEvent>? _roomEventsListener;
   bool _isConnecting = true;
   bool _isMicMuted = false;
-  bool _isSpeakerOn = true; // speaker is on by default
   bool _isCameraDisabled = true; // voice call: camera off by default
+  bool _isFrontCamera = true;
   String? _error;
 
   // Screen-share side-events
@@ -883,8 +882,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Widget _buildControls({required bool isSharing}) {
     return Container(
       padding: EdgeInsets.only(
-        top: 20.resH,
-        bottom: 32.resH,
+        top: 16.resH,
+        bottom: 28.resH,
         left: 20.resW,
         right: 20.resW,
       ),
@@ -895,40 +894,27 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── 4 primary action buttons ────────────────────────────────────
-          Wrap(
-            spacing: 12.resW,
-            runSpacing: 16.resH,
-            alignment: WrapAlignment.center,
+          // ── Drag handle ────────────────────────────────────────────────
+          Container(
+            width: 40.resW,
+            height: 4.resH,
+            margin: EdgeInsets.only(bottom: 16.resH),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // ── 5 icon buttons row (matches screenshot) ─────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Mic toggle
-              _buildIconBtn(
-                icon: _isMicMuted ? Icons.mic_off : Icons.mic_none,
-                label: _isMicMuted
-                    ? 'call_btn_muted'.tr()
-                    : 'call_btn_mute'.tr(),
-                active: false,
-                onTap: () async {
-                  setState(() => _isMicMuted = !_isMicMuted);
-                  await _room?.localParticipant?.setMicrophoneEnabled(
-                    !_isMicMuted,
-                  );
-                },
-              ),
-              // Speaker toggle
-              _buildIconBtn(
-                icon: _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
-                label: 'call_btn_speaker'.tr(),
-                active: _isSpeakerOn,
-                onTap: () => setState(() => _isSpeakerOn = !_isSpeakerOn),
-              ),
               // Camera toggle
               _buildIconBtn(
                 icon: _isCameraDisabled
                     ? Icons.videocam_off
                     : Icons.videocam_outlined,
                 label: 'call_btn_video'.tr(),
-                active: false,
+                active: !_isCameraDisabled,
                 onTap: () async {
                   final target = _isCameraDisabled;
                   if (target) {
@@ -948,63 +934,62 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   await _room?.localParticipant?.setCameraEnabled(target);
                 },
               ),
-              // Add participant
+              // Flip / Toggle Views
               _buildIconBtn(
-                icon: Icons.person_add_outlined,
-                label: 'call_btn_add'.tr(),
+                icon: Icons.flip_camera_android_outlined,
+                label: 'Toggle',
                 active: false,
-                onTap: () {}, // placeholder
-              ),
-              // Screen share
-              _buildIconBtn(
-                icon: isSharing ? Icons.stop_screen_share : Icons.screen_share,
-                label: isSharing ? 'Stop Share' : 'Share',
-                active: isSharing,
                 onTap: () async {
-                  if (isSharing) {
-                    context.read<CallCubit>().stopScreenShare(
-                      localUserId: _localUserId,
-                      localUserName: _localUserName,
-                    );
-                  } else {
-                    final withAudio = await showModalBottomSheet<bool>(
-                      context: context,
-                      builder: (_) => const ScreenShareToggleSheet(),
-                    );
-                    if (withAudio != null && mounted) {
-                      context.read<CallCubit>().startScreenShare(
-                        localUserId: _localUserId,
-                        localUserName: _localUserName,
-                        withDeviceAudio: withAudio,
+                  try {
+                    final track = _room?.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                    if (track is LocalVideoTrack) {
+                      _isFrontCamera = !_isFrontCamera;
+                      final options = CameraCaptureOptions(
+                        cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
+                      );
+                      await track.restartTrack(options);
+                      setState(() {});
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to switch camera: $e')),
                       );
                     }
                   }
                 },
               ),
-              // Record
-              BlocBuilder<CallRecordingCubit, CallRecordingState>(
-                builder: (context, recState) {
-                  final isRecording = recState is RecordingActive;
-                  return _buildIconBtn(
-                    icon: isRecording
-                        ? Icons.stop_circle
-                        : Icons.radio_button_checked,
-                    label: isRecording ? 'Stop Rec' : 'Record',
-                    active: isRecording,
-                    onTap: () {
-                      if (isRecording) {
-                        context.read<CallRecordingCubit>().stop(
-                          callRoomName: widget.roomId,
-                        );
-                      } else {
-                        context.read<CallRecordingCubit>().start(
-                          callRoomId: widget.roomId,
-                          callRoomName: widget.roomId,
-                        );
-                      }
-                    },
+              // Mic toggle
+              _buildIconBtn(
+                icon: _isMicMuted ? Icons.mic_off : Icons.mic_none,
+                label: _isMicMuted
+                    ? 'call_btn_muted'.tr()
+                    : 'call_btn_mute'.tr(),
+                active: false,
+                onTap: () async {
+                  setState(() => _isMicMuted = !_isMicMuted);
+                  await _room?.localParticipant?.setMicrophoneEnabled(
+                    !_isMicMuted,
                   );
                 },
+              ),
+              // CC / Captions
+              _buildIconBtn(
+                icon: Icons.closed_caption_outlined,
+                label: 'CC',
+                active: false,
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Live Captions coming soon!')),
+                  );
+                },
+              ),
+              // More options ≡
+              _buildIconBtn(
+                icon: Icons.menu,
+                label: 'More',
+                active: false,
+                onTap: () => _showMoreOptions(isSharing: isSharing),
               ),
             ],
           ),
@@ -1016,7 +1001,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _kRed,
+                backgroundColor: const Color(0xFFE53935),
                 padding: EdgeInsets.symmetric(vertical: 14.resH),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -1035,6 +1020,43 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Shows the More Options bottom sheet matching the screenshot design
+  void _showMoreOptions({required bool isSharing}) {
+    final roomId = widget.roomId;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => _MoreOptionsSheet(
+        roomId: roomId,
+        isSharing: isSharing,
+        onShareScreen: () async {
+          Navigator.pop(sheetCtx);
+          if (isSharing) {
+            if (mounted) {
+              context.read<CallCubit>().stopScreenShare(
+                localUserId: _localUserId,
+                localUserName: _localUserName,
+              );
+            }
+          } else {
+            final withAudio = await showModalBottomSheet<bool>(
+              context: context,
+              builder: (_) => const ScreenShareToggleSheet(),
+            );
+            if (withAudio != null && mounted) {
+              context.read<CallCubit>().startScreenShare(
+                localUserId: _localUserId,
+                localUserName: _localUserName,
+                withDeviceAudio: withAudio,
+              );
+            }
+          }
+        },
       ),
     );
   }
@@ -1069,6 +1091,167 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             style: TextStyle(color: Colors.white70, fontSize: 11.resSp),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// More Options Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MoreOptionsSheet extends StatelessWidget {
+  final String roomId;
+  final bool isSharing;
+  final VoidCallback onShareScreen;
+
+  const _MoreOptionsSheet({
+    required this.roomId,
+    required this.isSharing,
+    required this.onShareScreen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF2A2A3E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Handle ──────────────────────────────────────────────────────
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // ── Header row ──────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.view_column_outlined, color: Colors.white70, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Call with $roomId',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white70, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Toggle Views button ─────────────────────────────────────────
+            _MoreOptionsTile(
+              icon: Icons.sync_alt,
+              label: 'Toggle Views',
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Toggle Views')),
+                );
+              },
+            ),
+
+            // ── Share Screen button ─────────────────────────────────────────
+            _MoreOptionsTile(
+              icon: Icons.ios_share,
+              label: isSharing ? 'Stop Sharing' : 'Share Screen',
+              onTap: onShareScreen,
+            ),
+
+            // ── CC button ───────────────────────────────────────
+            _MoreOptionsTile(
+              icon: Icons.closed_caption,
+              label: 'Turn on CC',
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Live Captions coming soon!')),
+                );
+              },
+            ),
+
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreOptionsTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _MoreOptionsTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3D3D55),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 22),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

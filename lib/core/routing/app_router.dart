@@ -316,13 +316,27 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRouterName.incomingGroupCall,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
-        return IncomingGroupCallScreen(
-          chatRoomId: data['chatRoomId'] as String? ?? '',
-          callerName: data['callerName'] as String? ?? 'Unknown',
-          groupName: data['groupName'] as String? ?? '',
-          isVideo: data['isVideo'] == true,
+        return CustomTransitionPage(
+          opaque: false,
+          barrierColor: Colors.black54,
+          child: IncomingGroupCallScreen(
+            chatRoomId: data['chatRoomId'] as String? ?? '',
+            callerName: data['callerName'] as String? ?? 'Unknown',
+            groupName: data['groupName'] as String? ?? '',
+            isVideo: data['isVideo'] == true,
+            callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              child: child,
+            );
+          },
         );
       },
     ),
