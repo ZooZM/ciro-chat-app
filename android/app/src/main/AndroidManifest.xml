@@ -48,7 +48,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <application
-        android:label="ciro_chat_app"
+        android:label="CiroChat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

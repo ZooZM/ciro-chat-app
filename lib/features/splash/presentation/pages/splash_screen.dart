@@ -34,15 +34,15 @@ class _SplashScreenState extends State<SplashScreen>
     _ctrl.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final authFuture = context.read<AuthCubit>().verifyAuthStatus();
-      
-      // Fire off both futures
+
       final isAuth = await authFuture;
-      
+
+      if (!mounted) return;
       if (isAuth) {
         await context.read<ChatCubit>().hydrateRooms();
         if (mounted) context.go(AppRouterName.home);
       } else {
-        if (mounted) context.go(AppRouterName.auth);
+        context.go(AppRouterName.auth);
       }
     });
   }
@@ -62,8 +62,11 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: _fadeAnim,
           child: ScaleTransition(
             scale: _scaleAnim,
-            // AppLogoWidget renders image asset + "CIRO" + "CONNECT"
-            child: const AppLogoWidget(size: 180, showText: true),
+            child: Image.asset(
+              'assets/splash screen.jpg',
+              width: 300,
+              fit: BoxFit.contain,
+            ),
           ),
         ),
       ),

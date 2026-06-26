@@ -141,7 +141,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           // chat back-stack is preserved across incoming and outgoing calls.
           child: CallOverlay(
             child: MaterialApp.router(
-              title: 'Ciro Chat App',
+              title: 'CiroChat',
               localizationsDelegates: context.localizationDelegates,
               supportedLocales: context.supportedLocales,
               locale: context.locale,

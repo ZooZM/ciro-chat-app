@@ -82,20 +82,22 @@ dev_dependencies:
   bloc_test: ^10.0.0
   fake_async: ^1.3.1
   sqflite_common_ffi: ^2.3.0
-  flutter_launcher_icons: ^0.14.3
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/icons/
     - assets/logo.png
+    - assets/AppLogo.png
+    - assets/splash screen.jpg
     - assets/translations/
     - .env
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icons/logo.png"
+  image_path: "assets/AppLogo.png"
   remove_alpha_ios: true
   background_color_ios: "#FFFFFF"
 
