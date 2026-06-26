@@ -5,17 +5,23 @@ import 'package:fpdart/fpdart.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:ciro_chat_app/core/error/failures.dart';
 import 'package:ciro_chat_app/core/network/socket_service.dart';
+import 'package:ciro_chat_app/core/services/callkit_service.dart';
+import 'package:ciro_chat_app/features/call_history/domain/entities/call_history_record.dart';
+import 'package:ciro_chat_app/features/call_history/domain/repositories/call_history_repository.dart';
 import 'package:ciro_chat_app/features/video_call/domain/repositories/video_call_repository.dart';
 import 'package:ciro_chat_app/features/video_call/presentation/bloc/call_cubit.dart';
 
 class MockSocketService extends Mock implements SocketService {}
 class MockVideoCallRepository extends Mock implements VideoCallRepository {}
+class MockCallKitService extends Mock implements CallKitService {}
+class MockCallHistoryRepository extends Mock implements CallHistoryRepository {}
 
 /// Stubs every setter that [CallCubit._bindSocketListeners] assigns at construction.
 void _stubSocketSetters(MockSocketService s) {
   when(() => s.onIncomingCall = any()).thenReturn(null);
   when(() => s.onCallAccepted = any()).thenReturn(null);
   when(() => s.onCallRejected = any()).thenReturn(null);
+  when(() => s.onCallHandledElsewhere = any()).thenReturn(null);
   when(() => s.onIncomingGroupCall = any()).thenReturn(null);
   when(() => s.onGroupCallParticipantJoined = any()).thenReturn(null);
   when(() => s.onGroupCallParticipantLeft = any()).thenReturn(null);
@@ -49,6 +55,15 @@ void main() {
 
   // Swallow flutter_ringtone_player platform calls — plugin isn't registered in tests.
   setUpAll(() {
+    registerFallbackValue(CallHistoryRecord(
+      id: 'fallback',
+      contactUserId: 'fallback',
+      contactName: 'Fallback',
+      direction: CallDirection.outgoing,
+      outcome: CallOutcome.answered,
+      callType: CallType.voice,
+      startedAt: 0,
+    ));
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('flutter_ringtone_player'),
@@ -58,15 +73,21 @@ void main() {
 
   late MockSocketService socket;
   late MockVideoCallRepository repo;
+  late MockCallKitService callKit;
+  late MockCallHistoryRepository historyRepo;
 
   setUp(() {
     socket = MockSocketService();
     repo = MockVideoCallRepository();
+    callKit = MockCallKitService();
+    historyRepo = MockCallHistoryRepository();
     _stubSocketSetters(socket);
     when(() => repo.onLocalScreenShareEndedExternally = any()).thenReturn(null);
+    when(() => callKit.actions).thenAnswer((_) => const Stream<CallKitAction>.empty());
+    when(() => historyRepo.add(any())).thenAnswer((_) async => const Right(unit));
   });
 
-  CallCubit build() => CallCubit(socket, repo);
+  CallCubit build() => CallCubit(socket, repo, callKit, historyRepo);
 
   // ── (a) startScreenShare happy path ────────────────────────────────────────
 

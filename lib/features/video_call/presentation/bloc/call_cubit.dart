@@ -4,8 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:injectable/injectable.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/network/socket_service.dart';
+import '../../../../core/services/callkit_service.dart';
 import '../../../../core/theme/app_constants.dart';
+import '../../../call_history/domain/entities/call_history_record.dart';
+import '../../../call_history/domain/repositories/call_history_repository.dart';
 import '../../domain/entities/call_participant.dart';
 import '../../domain/repositories/video_call_repository.dart';
 
@@ -23,6 +27,13 @@ class CallScreenShareConflict extends CallSideEvent {
 
 /// OS permission was denied or dismissed — show "Permission required" SnackBar.
 class CallScreenShareDenied extends CallSideEvent {}
+
+/// CallKit system controls toggled mute — the active call screen owns the
+/// LiveKit Room, so it consumes this and calls `setMicrophoneEnabled` (C1).
+class CallMuteRequested extends CallSideEvent {
+  final bool muted;
+  CallMuteRequested(this.muted);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATES
@@ -209,17 +220,102 @@ class CallEnded extends CallState {
 class CallCubit extends Cubit<CallState> {
   final SocketService _socketService;
   final VideoCallRepository _repo;
+  final CallKitService _callKit;
+  final CallHistoryRepository _historyRepo;
   final FlutterRingtonePlayer _audioPlayer;
   final _sideEventController = StreamController<CallSideEvent>.broadcast();
 
-  /// One-shot signals (conflict, denial) that the UI consumes via StreamSubscription.
+  static const _uuid = Uuid();
+
+  /// Per-call metadata used to write the history row at the terminal transition.
+  _CallContext? _ctx;
+
+  StreamSubscription<CallKitAction>? _callKitSub;
+
+  /// One-shot signals (conflict, denial, mute) that the UI consumes via StreamSubscription.
   Stream<CallSideEvent> get sideEvents => _sideEventController.stream;
 
-  CallCubit(this._socketService, this._repo)
+  CallCubit(this._socketService, this._repo, this._callKit, this._historyRepo)
     : _audioPlayer = FlutterRingtonePlayer(),
       super(const CallIdle()) {
     _bindSocketListeners();
     _bindRepoListeners();
+    _bindCallKitActions();
+  }
+
+  // ── Call-history context + CallKit bridging (020-native-voip-callkit) ───────
+
+  void _startContext({
+    required String callId,
+    required String contactUserId,
+    required String contactName,
+    String? avatarUrl,
+    required CallDirection direction,
+    required CallType callType,
+    required bool isGroup,
+  }) {
+    _ctx = _CallContext(
+      callId: callId,
+      contactUserId: contactUserId,
+      contactName: contactName,
+      avatarUrl: avatarUrl,
+      direction: direction,
+      callType: callType,
+      isGroup: isGroup,
+      startedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  void _markConnected() => _ctx?.connectedAt = DateTime.now().millisecondsSinceEpoch;
+
+  /// Writes the history row exactly once for the current call, then clears ctx.
+  Future<void> _recordHistory(CallOutcome outcome) async {
+    final ctx = _ctx;
+    if (ctx == null || ctx.recorded) return;
+    ctx.recorded = true;
+    final durationSeconds = (outcome == CallOutcome.answered && ctx.connectedAt != null)
+        ? ((DateTime.now().millisecondsSinceEpoch - ctx.connectedAt!) ~/ 1000)
+        : 0;
+    await _historyRepo.add(CallHistoryRecord(
+      id: ctx.callId,
+      contactUserId: ctx.contactUserId,
+      contactName: ctx.contactName,
+      avatarUrl: ctx.avatarUrl,
+      avatarColorSeed: ctx.contactName.hashCode,
+      direction: ctx.direction,
+      outcome: outcome,
+      callType: ctx.callType,
+      isGroup: ctx.isGroup,
+      startedAt: ctx.startedAt,
+      durationSeconds: durationSeconds,
+    ));
+    _ctx = null;
+  }
+
+  /// Maps native CallKit actions onto existing cubit actions (1:1 only, R10/C1).
+  void _bindCallKitActions() {
+    _callKitSub = _callKit.actions.listen((action) {
+      switch (action) {
+        case CallKitAccept():
+          if (state is CallIncoming) acceptCall();
+          break;
+        case CallKitDecline():
+          if (state is CallIncoming) rejectCall();
+          break;
+        case CallKitEnd():
+          endCall();
+          break;
+        case CallKitTimeout():
+          // Native ring timed out → missed.
+          _recordHistory(CallOutcome.missed);
+          emit(const CallEnded(reason: 'missed'));
+          break;
+        case CallKitMute(:final muted):
+          // The active call screen owns the Room — forward the toggle (C1).
+          _sideEventController.add(CallMuteRequested(muted));
+          break;
+      }
+    });
   }
 
   // ── Socket listener binding ───────────────────────────────────────────────
@@ -227,19 +323,53 @@ class CallCubit extends Cubit<CallState> {
   void _bindSocketListeners() {
     // Remote is calling us
     _socketService.onIncomingCall = (data) async {
-      emit(
-        CallIncoming(
-          callerId: data['callerId'] as String? ?? '',
-          callerName: data['callerName'] as String? ?? 'Unknown',
-          callerAvatarUrl: data['callerAvatarUrl'] as String? ?? '',
-          isVideo:
-              data['isVideo'] ==
-              true, // Rely on backend, fallback to false if omitted
-        ),
+      final callerId = data['callerId'] as String? ?? '';
+      final callerName = data['callerName'] as String? ?? 'Unknown';
+      final callerAvatarUrl = data['callerAvatarUrl'] as String? ?? '';
+      final isVideo = data['isVideo'] == true;
+
+      // 1:1 incoming → native CallKit UI (FR-VoIP-01/02). The backend may pass a
+      // shared callId for cross-device correlation; otherwise generate one.
+      final callId = data['callId'] as String? ?? _uuid.v4();
+      _startContext(
+        callId: callId,
+        contactUserId: callerId,
+        contactName: callerName,
+        avatarUrl: callerAvatarUrl.isEmpty ? null : callerAvatarUrl,
+        direction: CallDirection.incoming,
+        callType: isVideo ? CallType.video : CallType.voice,
+        isGroup: false,
+      );
+      _callKit.showIncoming(
+        callId: callId,
+        callerName: callerName,
+        callerAvatarUrl: callerAvatarUrl.isEmpty ? null : callerAvatarUrl,
+        isVideo: isVideo,
       );
 
-      // CRITICAL: Play ringtone continuously in a LOOP natively!
-      _audioPlayer.playRingtone(looping: true);
+      emit(
+        CallIncoming(
+          callerId: callerId,
+          callerName: callerName,
+          callerAvatarUrl: callerAvatarUrl,
+          isVideo: isVideo,
+        ),
+      );
+      // CallKit rings natively for 1:1 — no in-app ringtone to avoid double ring.
+    };
+
+    // Multi-device dedup (C2 — FR-VoIP-15): the call was answered/declined on
+    // another of the user's devices → dismiss our native UI and DO NOT record
+    // a missed call here.
+    _socketService.onCallHandledElsewhere = (data) {
+      _stopRinging();
+      final ctx = _ctx;
+      if (ctx != null) {
+        ctx.recorded = true; // suppress the missed-record path
+        _callKit.endCall(ctx.callId);
+        _ctx = null;
+      }
+      emit(const CallIdle());
     };
 
     // Both sides accepted — enter the LiveKit room (1-on-1 AND group path).
@@ -276,6 +406,7 @@ class CallCubit extends Cubit<CallState> {
               data['chatRoomId'] as String? ?? '',
           participants: participants,
         ));
+        _markConnected(); // group: history duration only, no CallKit
         return;
       }
 
@@ -298,25 +429,43 @@ class CallCubit extends Cubit<CallState> {
         contactName: contactName,
         isVideo: isVideo,
       ));
+      // 1:1 connected → start the system call session so audio survives
+      // backgrounding (FR-VoIP-03) and Recents duration begins (US2).
+      _markConnected();
+      if (_ctx != null) _callKit.setConnected(_ctx!.callId);
     };
 
     // Remote rejected our call
     _socketService.onCallRejected = (_) {
       _stopRinging();
+      final callId = _ctx?.callId;
+      _recordHistory(CallOutcome.declined); // outgoing declined by remote
+      if (callId != null) _callKit.endCall(callId);
       emit(const CallEnded(reason: 'rejected'));
     };
 
     // ── Group call socket events ───────────────────────────────────────────────
 
     _socketService.onIncomingGroupCall = (data) {
-      _audioPlayer.playRingtone(looping: true);
+      _audioPlayer.playRingtone(looping: true); // group: in-app ringtone (no CallKit)
+      final chatRoomId = data['chatRoomId'] as String? ?? '';
+      final groupName = data['groupName'] as String? ?? '';
+      final isVideo = data['isVideo'] == true;
+      _startContext(
+        callId: _uuid.v4(),
+        contactUserId: chatRoomId,
+        contactName: groupName.isNotEmpty ? groupName : 'Group Call',
+        direction: CallDirection.incoming,
+        callType: isVideo ? CallType.video : CallType.voice,
+        isGroup: true,
+      );
       emit(CallIncoming(
         callerId: data['callerUserId'] as String? ?? '',
         callerName: data['callerName'] as String? ?? 'Unknown',
-        isVideo: data['isVideo'] == true,
+        isVideo: isVideo,
         isGroupCall: true,
-        chatRoomId: data['chatRoomId'] as String? ?? '',
-        groupName: data['groupName'] as String? ?? '',
+        chatRoomId: chatRoomId,
+        groupName: groupName,
         currentParticipantCount: (data['currentParticipantCount'] as int?) ?? 1,
       ));
     };
@@ -391,6 +540,18 @@ class CallCubit extends Cubit<CallState> {
     String targetAvatarUrl = '',
     bool isVideo = true,
   }) async {
+    final callId = _uuid.v4();
+    _startContext(
+      callId: callId,
+      contactUserId: targetUserId,
+      contactName: targetName,
+      avatarUrl: targetAvatarUrl.isEmpty ? null : targetAvatarUrl,
+      direction: CallDirection.outgoing,
+      callType: isVideo ? CallType.video : CallType.voice,
+      isGroup: false,
+    );
+    _callKit.startOutgoing(callId: callId, calleeName: targetName, isVideo: isVideo);
+
     _socketService.requestCall(targetUserId: targetUserId, isVideo: isVideo);
     emit(
       CallOutgoing(
@@ -428,6 +589,9 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallIncoming) return;
     _stopRinging();
+    final callId = _ctx?.callId;
+    _recordHistory(CallOutcome.declined); // incoming declined locally
+    if (callId != null) _callKit.endCall(callId);
     _socketService.rejectCall(callerId: s.callerId);
     emit(const CallEnded(reason: 'rejected'));
   }
@@ -451,18 +615,34 @@ class CallCubit extends Cubit<CallState> {
     );
   }
 
+  /// In-app mute toggle → mirror onto the native call session (C1, bidirectional).
+  void reportLocalMute(bool muted) {
+    final callId = _ctx?.callId;
+    if (callId != null) _callKit.reportMute(callId, muted);
+  }
+
   /// Either side ends the active call
   Future<void> endCall() async {
     await _tearDownLocalScreenShare();
     _stopRinging();
+    // Connected → answered; otherwise it never connected → missed.
+    final ctx = _ctx;
+    final callId = ctx?.callId;
+    await _recordHistory(
+      ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
+    );
+    if (callId != null) await _callKit.endCall(callId);
     _socketService.endCall();
     emit(const CallIdle());
   }
 
-  /// Reset to idle (e.g., after navigating away from ended call)
+  /// Reset to idle (e.g., after navigating away from ended call, and on logout)
   Future<void> reset() async {
     await _tearDownLocalScreenShare();
     _stopRinging();
+    // §V-A logout teardown / FR-VoIP-13: never leave a ghost native call.
+    await _callKit.endAllCalls();
+    _ctx = null;
     emit(const CallIdle());
   }
 
@@ -470,6 +650,14 @@ class CallCubit extends Cubit<CallState> {
 
   /// Initiates a group call. Backend fans out `incomingGroupCall` to room members.
   void startGroupCall({required String chatRoomId, required bool isVideo}) {
+    _startContext(
+      callId: _uuid.v4(),
+      contactUserId: chatRoomId,
+      contactName: 'Group Call',
+      direction: CallDirection.outgoing,
+      callType: isVideo ? CallType.video : CallType.voice,
+      isGroup: true,
+    );
     _socketService.requestGroupCall(chatRoomId: chatRoomId, isVideo: isVideo);
     emit(CallOutgoing(
       targetUserId: chatRoomId,
@@ -506,6 +694,7 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallIncoming || !s.isGroupCall) return;
     _stopRinging();
+    _recordHistory(CallOutcome.declined);
     _socketService.declineGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallEnded(reason: 'rejected'));
   }
@@ -515,6 +704,9 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallActive || !s.isGroupCall) return;
     await _tearDownLocalScreenShare();
+    await _recordHistory(
+      _ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
+    );
     _socketService.leaveGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallIdle());
   }
@@ -675,7 +867,34 @@ class CallCubit extends Cubit<CallState> {
   @override
   Future<void> close() {
     _stopRinging();
+    _callKitSub?.cancel();
     _sideEventController.close();
     return super.close();
   }
+}
+
+/// Mutable per-call metadata captured at call start and finalized into a
+/// [CallHistoryRecord] at the terminal transition (data-model.md).
+class _CallContext {
+  final String callId;
+  final String contactUserId;
+  final String contactName;
+  final String? avatarUrl;
+  final CallDirection direction;
+  final CallType callType;
+  final bool isGroup;
+  final int startedAt;
+  int? connectedAt;
+  bool recorded = false;
+
+  _CallContext({
+    required this.callId,
+    required this.contactUserId,
+    required this.contactName,
+    this.avatarUrl,
+    required this.direction,
+    required this.callType,
+    required this.isGroup,
+    required this.startedAt,
+  });
 }

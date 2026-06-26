@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -10,7 +11,22 @@ import '../di/injection.dart';
 import '../network/dio_client.dart';
 import '../routing/app_router.dart'
     show AppRouterName, appRouter, handleInitialNotification, navigateToStatusReaction;
+import '../services/callkit_service.dart';
 import '../../features/chat/presentation/bloc/chat_cubit.dart';
+
+/// FCM handler for terminated/background `call`-type messages. Runs in a
+/// SEPARATE isolate (U1 — FR-VoIP-12), so it MUST bootstrap Firebase before
+/// touching any plugin. Shows the native CallKit UI directly (no DI).
+@pragma('vm:entry-point')
+Future<void> firebaseCallkitBackgroundHandler(RemoteMessage message) async {
+  if (message.data['type'] != 'call') return;
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Already initialized in this isolate — ignore.
+  }
+  await showCallkitIncomingFromData(Map<String, dynamic>.from(message.data));
+}
 
 @lazySingleton
 class PushNotificationService {
@@ -42,6 +58,10 @@ class PushNotificationService {
     _tokenRefreshSub = messaging.onTokenRefresh.listen(_registerToken);
     _foregroundSub = FirebaseMessaging.onMessage.listen(handleForegroundMessage);
     _notificationTapSub = FirebaseMessaging.onMessageOpenedApp.listen(handleNotificationTap);
+
+    // FR-VoIP-12: wake the native call UI when a call push arrives while the app
+    // is backgrounded or terminated (separate isolate, U1).
+    FirebaseMessaging.onBackgroundMessage(firebaseCallkitBackgroundHandler);
 
     await handleInitialNotification();
   }
@@ -119,10 +139,26 @@ class PushNotificationService {
   }
 
   void handleForegroundMessage(RemoteMessage message) {
+    final type = message.data['type'] as String?;
+
+    // Incoming 1:1 call push — show the native UI. Idempotent on callId, so it
+    // is safe even when the socket path also fires (FR-VoIP-01, E2).
+    if (type == 'call') {
+      final callId = message.data['callId'] as String?;
+      if (callId != null && callId.isNotEmpty) {
+        getIt<CallKitService>().showIncoming(
+          callId: callId,
+          callerName: message.data['callerName'] as String? ?? 'Unknown',
+          callerAvatarUrl: message.data['callerAvatarUrl'] as String?,
+          isVideo: message.data['isVideo']?.toString() == 'true',
+        );
+      }
+      return;
+    }
+
     final notification = message.notification;
     if (notification == null) return;
 
-    final type = message.data['type'] as String?;
     final roomId = message.data['roomId'] as String?;
     final statusId = message.data['statusId'] as String?;
     final payload = (type == 'statusReaction' && statusId != null)

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/routing/app_router.dart';
+import 'package:ciro_chat_app/core/services/audio_route_service.dart';
 import 'package:ciro_chat_app/core/services/call_audio_config.dart';
 import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
@@ -12,6 +13,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
 import '../bloc/call_cubit.dart';
+import '../widgets/audio_route_picker_sheet.dart';
 import '../widgets/screen_share_toggle_sheet.dart';
 
 class VideoCallScreen extends StatefulWidget {
@@ -44,6 +46,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   String _localUserId = '';
   String _localUserName = '';
   String _prevSharerUserId = '';
+  late final AudioRouteService _audioRoute = getIt<AudioRouteService>();
+  StreamSubscription<AudioRouteState>? _routeSub;
+  AudioRouteState _routeState = const AudioRouteState();
 
   @override
   void initState() {
@@ -88,7 +93,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               onPressed: openAppSettings,
             ),
           ));
+        } else if (event is CallMuteRequested) {
+          // C1 — native CallKit mute toggle reflected onto the LiveKit track.
+          _room?.localParticipant?.setMicrophoneEnabled(!event.muted);
+          if (mounted) setState(() => _isMicMuted = event.muted);
         }
+      });
+      _routeSub = _audioRoute.routeStream.listen((s) {
+        if (mounted) setState(() => _routeState = s);
       });
       // T027 — notify when a remote participant starts sharing (FR-011)
       _callStateSub = cubit.stream.listen((state) {
@@ -172,12 +184,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await _room!.localParticipant?.setCameraEnabled(true);
       await _room!.localParticipant?.setMicrophoneEnabled(true);
 
-      // Video calls should always default to speakerphone
-      try {
-        await Hardware.instance.setSpeakerphoneOn(true);
-      } catch (e) {
-        debugPrint('Failed to set speakerphone: $e');
-      }
+      // Video calls default to speakerphone; BT takes precedence (FR-VoIP-10).
+      // Output-only — never touches the 019 audio session.
+      await _audioRoute.start();
+      await _audioRoute.applyDefaultForCall(isVideo: true);
 
       if (mounted) {
         setState(() {
@@ -223,12 +233,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void dispose() {
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
+    _routeSub?.cancel();
     _roomEventsListener?.dispose();
     getIt<VideoCallRepository>().setCallServiceActive(false);
     getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
     getIt<CallAudioSessionService>().deactivate();
+    _audioRoute.stop();
     super.dispose();
   }
 
@@ -525,6 +537,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             try {
                               final targetMuted = !_isMicMuted;
                               await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                              if (!mounted) return;
+                              context.read<CallCubit>().reportLocalMute(targetMuted);
                               setState(() => _isMicMuted = targetMuted);
                             } catch (e) {
                               if (mounted) {
@@ -534,6 +548,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                               }
                             }
                           },
+                        ),
+                        // Audio route — opens Earpiece/Speaker/Bluetooth picker
+                        // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
+                        IconButton(
+                          icon: Icon(
+                            speakerIconForRoute(_routeState.activeRoute),
+                            color: _routeState.activeRoute == AudioOutputRoute.earpiece
+                                ? Colors.white
+                                : AppColors.primary,
+                          ),
+                          onPressed: () => AudioRoutePickerSheet.show(context),
                         ),
                         // T018 — Screen share icon
                         IconButton(

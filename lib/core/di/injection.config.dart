@@ -22,6 +22,14 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart'
     as _i153;
 import '../../features/auth/domain/repositories/auth_repository.dart' as _i787;
 import '../../features/auth/presentation/bloc/auth_cubit.dart' as _i52;
+import '../../features/call_history/data/datasources/call_history_local_data_source.dart'
+    as _i291;
+import '../../features/call_history/data/repositories/call_history_repository_impl.dart'
+    as _i62;
+import '../../features/call_history/domain/repositories/call_history_repository.dart'
+    as _i454;
+import '../../features/call_history/presentation/bloc/call_history_cubit.dart'
+    as _i525;
 import '../../features/call_recording/data/datasources/gallery_saver_service.dart'
     as _i772;
 import '../../features/call_recording/data/datasources/recording_capture_service.dart'
@@ -97,7 +105,9 @@ import '../../features/video_call/presentation/bloc/video_call_cubit.dart'
     as _i804;
 import '../network/dio_client.dart' as _i667;
 import '../network/socket_service.dart' as _i917;
+import '../services/audio_route_service.dart' as _i172;
 import '../services/call_audio_session_service.dart' as _i91;
+import '../services/callkit_service.dart' as _i527;
 import '../services/push_notification_service.dart' as _i63;
 import '../services/token_refresh_service.dart' as _i785;
 
@@ -152,8 +162,21 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i94.ChatLocalDataSource>(
       () => _i94.ChatLocalDataSourceImpl(),
     );
+    gh.lazySingleton<_i172.AudioRouteService>(
+      () => _i172.AudioRouteServiceImpl(),
+    );
     gh.lazySingleton<_i5.VideoCallRemoteDataSource>(
       () => _i5.VideoCallRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
+    gh.lazySingleton<_i291.CallHistoryLocalDataSource>(
+      () =>
+          _i291.CallHistoryLocalDataSourceImpl(gh<_i94.ChatLocalDataSource>()),
+    );
+    gh.lazySingleton<_i527.CallKitService>(() => _i527.CallKitServiceImpl());
+    gh.lazySingleton<_i454.CallHistoryRepository>(
+      () => _i62.CallHistoryRepositoryImpl(
+        gh<_i291.CallHistoryLocalDataSource>(),
+      ),
     );
     gh.lazySingleton<_i785.TokenRefreshService>(
       () => _i785.TokenRefreshService(gh<_i852.AuthLocalDataSource>()),
@@ -211,6 +234,9 @@ extension GetItInjectableX on _i174.GetIt {
       () =>
           _i771.RecordingsRepositoryImpl(gh<_i750.RecordingsLocalDataSource>()),
     );
+    gh.factory<_i525.CallHistoryCubit>(
+      () => _i525.CallHistoryCubit(gh<_i454.CallHistoryRepository>()),
+    );
     gh.lazySingleton<_i973.MapRepository>(
       () => _i457.MapRepositoryImpl(gh<_i341.MapRemoteDataSource>()),
     );
@@ -229,12 +255,6 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i907.TranslationSocketDataSource>(),
       ),
     );
-    gh.lazySingleton<_i104.CallCubit>(
-      () => _i104.CallCubit(
-        gh<_i917.SocketService>(),
-        gh<_i220.VideoCallRepository>(),
-      ),
-    );
     gh.factory<_i804.VideoCallCubit>(
       () => _i804.VideoCallCubit(gh<_i220.VideoCallRepository>()),
     );
@@ -243,6 +263,14 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i420.ChatRepository>(
       () => _i504.ChatRepositoryImpl(gh<_i980.ChatRemoteDataSource>()),
+    );
+    gh.lazySingleton<_i104.CallCubit>(
+      () => _i104.CallCubit(
+        gh<_i917.SocketService>(),
+        gh<_i220.VideoCallRepository>(),
+        gh<_i527.CallKitService>(),
+        gh<_i454.CallHistoryRepository>(),
+      ),
     );
     gh.factory<_i208.MusicCubit>(
       () => _i208.MusicCubit(gh<_i289.MusicRepository>()),

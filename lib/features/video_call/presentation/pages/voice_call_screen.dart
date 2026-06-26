@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,8 +10,10 @@ import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/services/call_audio_config.dart';
 import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
+import 'package:ciro_chat_app/core/services/audio_route_service.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../bloc/call_cubit.dart';
+import '../widgets/audio_route_picker_sheet.dart';
 
 class VoiceCallScreen extends StatefulWidget {
   final String contactName;
@@ -37,16 +41,20 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Room? _room;
   bool _isConnecting = true;
   late bool _isMicMuted;
-  late bool _isSpeakerOn;
   bool _hasRemoteParticipantJoined = false;
   bool _isUpgrading = false;
+  late final AudioRouteService _audioRoute = getIt<AudioRouteService>();
+  StreamSubscription<AudioRouteState>? _routeSub;
+  AudioRouteState _routeState = const AudioRouteState();
 
   @override
   void initState() {
     super.initState();
     _isMicMuted = widget.initialMicMuted;
-    _isSpeakerOn = widget.initialSpeakerOn;
-    
+    _routeSub = _audioRoute.routeStream.listen((s) {
+      if (mounted) setState(() => _routeState = s);
+    });
+
     if (widget.livekitToken.trim().isEmpty ||
         widget.livekitUrl.trim().isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -68,12 +76,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       // Publish local audio with initial state
       await _room!.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
 
-      // Set initial speaker state
-      try {
-        await Hardware.instance.setSpeakerphoneOn(_isSpeakerOn);
-      } catch (e) {
-        debugPrint('Failed to set speakerphone: $e');
-      }
+      // Default audio route: voice calls → earpiece, BT takes precedence
+      // (FR-VoIP-10). Output-only — never touches the 019 audio session.
+      await _audioRoute.start();
+      await _audioRoute.applyDefaultForCall(isVideo: false);
 
       if (mounted) {
         setState(() {
@@ -120,9 +126,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void dispose() {
     _room?.removeListener(_onRoomUpdate);
+    _routeSub?.cancel();
     if (!_isUpgrading) {
       _room?.disconnect();
       getIt<CallAudioSessionService>().deactivate();
+      _audioRoute.stop();
     }
     super.dispose();
   }
@@ -206,6 +214,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                         await _room!.localParticipant?.setMicrophoneEnabled(
                           !targetMuted,
                         );
+                        if (!mounted) return;
+                        context.read<CallCubit>().reportLocalMute(targetMuted);
                         setState(() => _isMicMuted = targetMuted);
                       } catch (e) {
                         debugPrint('Failed to toggle mic: $e');
@@ -213,22 +223,17 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     },
                   ),
                   SizedBox(width: 24.resW),
-                  // Speaker Toggle
+                  // Audio route — opens the Earpiece/Speaker/Bluetooth picker
+                  // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
                   _buildControlButton(
-                    _isSpeakerOn ? Icons.volume_up : Icons.volume_off,
-                    _isSpeakerOn ? Colors.white : Colors.white24,
-                    _isSpeakerOn ? Colors.green : Colors.white,
-                    onPressed: () async {
-                      try {
-                        final targetSpeaker = !_isSpeakerOn;
-                        await Hardware.instance.setSpeakerphoneOn(
-                          targetSpeaker,
-                        );
-                        setState(() => _isSpeakerOn = targetSpeaker);
-                      } catch (e) {
-                        debugPrint('Failed to toggle speaker: $e');
-                      }
-                    },
+                    speakerIconForRoute(_routeState.activeRoute),
+                    _routeState.activeRoute == AudioOutputRoute.earpiece
+                        ? Colors.white24
+                        : Colors.white,
+                    _routeState.activeRoute == AudioOutputRoute.earpiece
+                        ? Colors.white
+                        : Colors.green,
+                    onPressed: () => AudioRoutePickerSheet.show(context),
                   ),
                   SizedBox(width: 24.resW),
                   // Video Upgrade

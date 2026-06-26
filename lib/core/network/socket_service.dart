@@ -77,6 +77,9 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
+  // 020-native-voip-callkit: incoming 1:1 call was answered/declined on another
+  // device of the same user → suppress missed-call recording here (C2).
+  void Function(Map<String, dynamic> data)? onCallHandledElsewhere;
 
   /// Fired when an admin updates the group name or avatar via PATCH /chat/group/:roomId.
   void Function(Map<String, dynamic> data)? onChatRoomUpdated;
@@ -286,6 +289,12 @@ class SocketService {
       debugPrint('[CALL] callRejected: $data');
       if (data == null || data is! Map) return;
       onCallRejected?.call(Map<String, dynamic>.from(data));
+    });
+
+    _socket?.on('callHandledElsewhere', (data) {
+      debugPrint('[CALL] callHandledElsewhere: $data');
+      if (data == null || data is! Map) return;
+      onCallHandledElsewhere?.call(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('userStatus', (data) {

@@ -98,8 +98,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       final user =
           (authState.userData?['user'] as Map<String, dynamic>?) ??
           authState.userData;
-      _localUserId =
-          (user?['_id'] ?? user?['id'])?.toString() ?? '';
+      _localUserId = (user?['_id'] ?? user?['id'])?.toString() ?? '';
       _localUserName = user?['phoneNumber']?.toString() ?? '';
     }
 
@@ -200,9 +199,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         });
 
       await _room!.connect(url, token);
-      debugPrint('[GroupCallScreen] Room connected. Calling attachRoom with roomId: $chatRoomId');
+      debugPrint(
+        '[GroupCallScreen] Room connected. Calling attachRoom with roomId: $chatRoomId',
+      );
       _translationCubit.attachRoom(_room!, roomId: chatRoomId);
-      debugPrint('[GroupCallScreen] attachRoom done — TranslationCubit is now listening for captions.');
+      debugPrint(
+        '[GroupCallScreen] attachRoom done — TranslationCubit is now listening for captions.',
+      );
       _rawDataDebugSub = _room!.events.listen((event) {
         if (event is DataReceivedEvent) {
           debugPrint(
@@ -306,7 +309,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   // whichever pops second hits "nothing to pop". Guard with try/catch
                   // and fall back to /home if the stack has already unwound.
                   if (canPop) {
-                    try { router.pop(); } catch (_) { router.go('/home'); }
+                    try {
+                      router.pop();
+                    } catch (_) {
+                      router.go('/home');
+                    }
                   } else {
                     router.go('/home');
                   }
@@ -322,7 +329,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   if (_shownDeniedFor.add(entry.key)) {
                     final reason = entry.value.deniedReason ?? 'unknown';
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('translation_denied_$reason'.tr())),
+                      SnackBar(
+                        content: Text('translation_denied_$reason'.tr()),
+                      ),
                     );
                   }
                 } else {
@@ -742,7 +751,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         if (i < remoteParticipants.length) {
           return _buildRemoteTile(remoteParticipants[i], i);
         }
-        var idx = i - remoteParticipants.length; // 0..(1+remoteShare+localShare-1)
+        var idx =
+            i - remoteParticipants.length; // 0..(1+remoteShare+localShare-1)
         if (idx == 0) return _buildLocalTile();
         idx -= 1;
         if (showRemoteTile && idx == 0) {
@@ -817,7 +827,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         return _ParticipantTile(
           initial: initial,
           label: displayName,
-          color: _kTileColors[index % (_kTileColors.length - 1)], // exclude teal
+          color:
+              _kTileColors[index % (_kTileColors.length - 1)], // exclude teal
           isMuted: isMuted,
           videoTrack: videoTrack,
           caption: _translationCubit.captionNotifier(speakerId),
@@ -854,23 +865,31 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     switch (result) {
       case TranslationToggleOn(targetLanguage: final targetLanguage):
         if (!isEnabled) {
-          debugPrint('[GroupCallScreen] CC → subscribe(speakerId: $speakerId, targetLanguage: $targetLanguage)');
+          debugPrint(
+            '[GroupCallScreen] CC → subscribe(speakerId: $speakerId, targetLanguage: $targetLanguage)',
+          );
           _translationCubit.subscribe(
             speakerId: speakerId,
             targetLanguage: targetLanguage,
           );
         } else if (sub.targetLanguage != targetLanguage) {
-          debugPrint('[GroupCallScreen] CC → changeLanguage(speakerId: $speakerId, targetLanguage: $targetLanguage)');
+          debugPrint(
+            '[GroupCallScreen] CC → changeLanguage(speakerId: $speakerId, targetLanguage: $targetLanguage)',
+          );
           _translationCubit.changeLanguage(
             speakerId: speakerId,
             targetLanguage: targetLanguage,
           );
         } else {
-          debugPrint('[GroupCallScreen] CC → already enabled with same language ($targetLanguage), no-op.');
+          debugPrint(
+            '[GroupCallScreen] CC → already enabled with same language ($targetLanguage), no-op.',
+          );
         }
       case TranslationToggleOff():
         if (isEnabled) {
-          debugPrint('[GroupCallScreen] CC → unsubscribe(speakerId: $speakerId)');
+          debugPrint(
+            '[GroupCallScreen] CC → unsubscribe(speakerId: $speakerId)',
+          );
           _translationCubit.unsubscribe(speakerId);
         }
     }
@@ -940,11 +959,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 active: false,
                 onTap: () async {
                   try {
-                    final track = _room?.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                    final track = _room
+                        ?.localParticipant
+                        ?.videoTrackPublications
+                        .firstOrNull
+                        ?.track;
                     if (track is LocalVideoTrack) {
                       _isFrontCamera = !_isFrontCamera;
                       final options = CameraCaptureOptions(
-                        cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
+                        cameraPosition: _isFrontCamera
+                            ? CameraPosition.front
+                            : CameraPosition.back,
                       );
                       await track.restartTrack(options);
                       setState(() {});
@@ -969,17 +994,6 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                   setState(() => _isMicMuted = !_isMicMuted);
                   await _room?.localParticipant?.setMicrophoneEnabled(
                     !_isMicMuted,
-                  );
-                },
-              ),
-              // CC / Captions
-              _buildIconBtn(
-                icon: Icons.closed_caption_outlined,
-                label: 'CC',
-                active: false,
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Live Captions coming soon!')),
                   );
                 },
               ),
@@ -1138,7 +1152,11 @@ class _MoreOptionsSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.view_column_outlined, color: Colors.white70, size: 20),
+                  const Icon(
+                    Icons.view_column_outlined,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1160,7 +1178,11 @@ class _MoreOptionsSheet extends StatelessWidget {
                         color: Colors.white12,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.close, color: Colors.white70, size: 16),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
                     ),
                   ),
                 ],
@@ -1169,35 +1191,11 @@ class _MoreOptionsSheet extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // ── Toggle Views button ─────────────────────────────────────────
-            _MoreOptionsTile(
-              icon: Icons.sync_alt,
-              label: 'Toggle Views',
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Toggle Views')),
-                );
-              },
-            ),
-
             // ── Share Screen button ─────────────────────────────────────────
             _MoreOptionsTile(
               icon: Icons.ios_share,
               label: isSharing ? 'Stop Sharing' : 'Share Screen',
               onTap: onShareScreen,
-            ),
-
-            // ── CC button ───────────────────────────────────────
-            _MoreOptionsTile(
-              icon: Icons.closed_caption,
-              label: 'Turn on CC',
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Live Captions coming soon!')),
-                );
-              },
             ),
 
             const SizedBox(height: 16),
@@ -1461,62 +1459,62 @@ class _LocalShareTile extends StatelessWidget {
     return AspectRatio(
       aspectRatio: 0.9,
       child: Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (localShareTrack != null)
-            VideoTrackRenderer(localShareTrack!)
-          else
-            const ColoredBox(
-              color: Colors.black87,
-              child: Center(
-                child: Column(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (localShareTrack != null)
+              VideoTrackRenderer(localShareTrack!)
+            else
+              const ColoredBox(
+                color: Colors.black87,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.screen_share, color: Colors.white, size: 36),
+                      SizedBox(height: 8),
+                      Text(
+                        'Sharing\nyour screen',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.screen_share, color: Colors.white, size: 36),
-                    SizedBox(height: 8),
+                    Icon(
+                      Icons.screen_share_outlined,
+                      color: Colors.white70,
+                      size: 14,
+                    ),
+                    SizedBox(width: 4),
                     Text(
-                      'Sharing\nyour screen',
-                      textAlign: TextAlign.center,
+                      'You • Screen',
                       style: TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ],
                 ),
               ),
             ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.screen_share_outlined,
-                    color: Colors.white70,
-                    size: 14,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'You • Screen',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

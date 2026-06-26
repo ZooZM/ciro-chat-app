@@ -3,6 +3,12 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Native VoIP calls (020-native-voip-callkit): keep call audio alive in
+         background (FR-VoIP-03/14) + route to Bluetooth devices (FR-VoIP-07). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
 

@@ -273,6 +273,27 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     'CREATE INDEX IF NOT EXISTS idx_recordings_share_status ON recordings(share_status)',
   ];
 
+  // 020-native-voip-callkit: in-app call history (FR-VoIP-04/05, data-model.md)
+  static const _callHistorySchema = '''
+    CREATE TABLE IF NOT EXISTS call_history (
+      id                TEXT PRIMARY KEY,
+      contact_user_id   TEXT NOT NULL,
+      contact_name      TEXT NOT NULL,
+      avatar_url        TEXT,
+      avatar_color_seed INTEGER NOT NULL DEFAULT 0,
+      direction         TEXT NOT NULL,
+      outcome           TEXT NOT NULL,
+      call_type         TEXT NOT NULL,
+      is_group          INTEGER NOT NULL DEFAULT 0,
+      started_at        INTEGER NOT NULL,
+      duration_seconds  INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  static const _callHistoryIndexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_call_history_started_at ON call_history(started_at DESC)',
+  ];
+
   // ── DB lifecycle ────────────────────────────────────────────────────────────
 
   @override
@@ -284,17 +305,21 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
     _db = await openDatabase(
       path,
       version:
-          18, // v18: backfill statuses content_type/text_content/media_url/background_color/font_style/music_track_id
+          19, // v19: add call_history table (020-native-voip-callkit)
       onCreate: (db, version) async {
         await db.execute(_messagesSchema);
         await db.execute(_roomsSchema);
         await db.execute(_contactsSchema);
         await db.execute(_statusesSchema);
         await db.execute(_recordingsSchema);
+        await db.execute(_callHistorySchema);
         for (final stmt in _indexStatements) {
           await db.execute(stmt);
         }
         for (final stmt in _recordingsIndexStatements) {
+          await db.execute(stmt);
+        }
+        for (final stmt in _callHistoryIndexStatements) {
           await db.execute(stmt);
         }
       },
@@ -440,6 +465,17 @@ class ChatLocalDataSourceImpl implements ChatLocalDataSource {
             } catch (e) {
               debugPrint('Migration v18 error: $e');
             }
+          }
+        }
+        // v19: in-app call history table (020-native-voip-callkit)
+        if (oldVersion < 19) {
+          try {
+            await db.execute(_callHistorySchema);
+            for (final stmt in _callHistoryIndexStatements) {
+              await db.execute(stmt);
+            }
+          } catch (e) {
+            debugPrint('Migration v19 error: $e');
           }
         }
       },

@@ -14,6 +14,7 @@ import '../../../../core/theme/app_logo.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
+import 'package:ciro_chat_app/features/call_history/presentation/pages/calls_history_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -45,7 +46,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: _currentIndex == 2 ? null : AppBar(
+      appBar: (_currentIndex == 2 || _currentIndex == 3) ? null : AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 16.resW,
@@ -183,6 +184,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
     if (_currentIndex == 2) {
       return const MapScreen();
+    }
+    if (_currentIndex == 3) {
+      return const CallsHistoryScreen();
     }
     // Default to Chat List
     return Column(
