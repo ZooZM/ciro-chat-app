@@ -255,10 +255,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
               // Pill Search Bar
               Expanded(
                 child: Container(
-                  height: 40.resH,
+                  height: 32.resH,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20.resR),
+                    borderRadius: BorderRadius.circular(16.resR),
                     border: Border.all(
                       color: AppColors.primary.withOpacity(0.5),
                       width: 1.resW,
