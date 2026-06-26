@@ -46,125 +46,172 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: (_currentIndex == 2 || _currentIndex == 3) ? null : AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 16.resW,
-        title: ChatListAppBar(),
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.language,
-              color: AppColors.primary,
-              size: 24.resW,
+      appBar: (_currentIndex == 2 || _currentIndex == 3)
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              titleSpacing: 16.resW,
+              title: ChatListAppBar(),
+              actions: [
+                IconButton(
+                  icon: Icon(
+                    Icons.language,
+                    color: AppColors.primary,
+                    size: 24.resW,
+                  ),
+                  onPressed: () {
+                    if (context.locale.languageCode == 'en') {
+                      context.setLocale(const Locale('ar'));
+                    } else {
+                      context.setLocale(const Locale('en'));
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.logout,
+                    color: AppColors.textSecondary,
+                    size: 20.resW,
+                  ),
+                  onPressed: () async {
+                    await getIt<AuthCubit>().logOut();
+                    if (mounted) {
+                      context.go(AppRouterName.auth);
+                    }
+                  },
+                ),
+                Padding(
+                  padding: EdgeInsets.only(right: 16.resW),
+                  child: CircleAvatar(
+                    backgroundColor: AppColors.primary,
+                    radius: 18.resR,
+                    child: IconButton(
+                      icon: Icon(Icons.add, color: Colors.white, size: 20.resW),
+                      onPressed: () {
+                        context.push(AppRouterName.contacts);
+                      },
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            onPressed: () {
-              if (context.locale.languageCode == 'en') {
-                context.setLocale(const Locale('ar'));
-              } else {
-                context.setLocale(const Locale('en'));
-              }
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.logout,
-              color: AppColors.textSecondary,
-              size: 20.resW,
-            ),
-            onPressed: () async {
-              await getIt<AuthCubit>().logOut();
-              if (mounted) {
-                context.go(AppRouterName.auth);
-              }
-            },
-          ),
-          Padding(
-            padding: EdgeInsets.only(right: 16.resW),
-            child: CircleAvatar(
-              backgroundColor: AppColors.primary,
-              radius: 18.resR,
-              child: IconButton(
-                icon: Icon(Icons.add, color: Colors.white, size: 20.resW),
-                onPressed: () {
-                  context.push(AppRouterName.contacts);
-                },
-                padding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
-      ),
       body: _buildBody(context),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.green.withOpacity(0.15), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
+              color: Colors.green.withOpacity(0.05),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
             ),
           ],
-          color: Colors.white,
         ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.white,
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: Colors.grey[600],
-          selectedLabelStyle: AppTypography.caption.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: BottomNavigationBar(
+            backgroundColor: Colors.white,
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _currentIndex,
+            onTap: (index) => setState(() => _currentIndex = index),
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.grey[600],
+            selectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+            elevation: 0,
+            items: [
+              // ── 1. Chats — logo asset ──────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    AppLogo.assetPath,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    AppLogo.assetPath,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                label: 'nav_chats'.tr(),
+              ),
+              // ── 2. Updates ────────────────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.motion_photos_on_outlined, size: 28),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.motion_photos_on, size: 28),
+                ),
+                label: 'nav_updates'.tr(),
+              ),
+              // ── 3. Map ────────────────────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.location_on_outlined, size: 28),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.location_on, size: 28),
+                ),
+                label: 'nav_map'.tr(),
+              ),
+              // ── 4. Calls ──────────────────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.call_outlined, size: 28),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.call, size: 28),
+                ),
+                label: 'nav_calls'.tr(),
+              ),
+              // ── 5. Profile ────────────────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.person_outline, size: 28),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.person, size: 28),
+                ),
+                label: 'nav_profile'.tr(),
+              ),
+            ],
           ),
-          unselectedLabelStyle: AppTypography.caption.copyWith(fontSize: 11),
-          elevation: 0,
-          items: [
-            // ── 1. Chats — logo asset ──────────────────────────────────────
-            BottomNavigationBarItem(
-              icon: Image.asset(
-                AppLogo.assetPath,
-                width: 40.resW,
-                height: 40.resW,
-                fit: BoxFit.contain,
-              ),
-              activeIcon: Image.asset(
-                AppLogo.assetPath,
-                width: 40.resW,
-                height: 40.resW,
-                fit: BoxFit.contain,
-                // color: AppColors.primary,
-                colorBlendMode: BlendMode.srcIn,
-              ),
-              label: 'nav_chats'.tr(),
-            ),
-            // ── 2. Updates ────────────────────────────────────────────────
-            BottomNavigationBarItem(
-              icon: Icon(Icons.motion_photos_on_outlined, size: 24.resW),
-              activeIcon: Icon(Icons.motion_photos_on, size: 24.resW),
-              label: 'nav_updates'.tr(),
-            ),
-            // ── 3. Map ────────────────────────────────────────────────────
-            BottomNavigationBarItem(
-              icon: Icon(Icons.location_on_outlined, size: 24.resW),
-              activeIcon: Icon(Icons.location_on, size: 24.resW),
-              label: 'nav_map'.tr(),
-            ),
-            // ── 4. Calls ──────────────────────────────────────────────────
-            BottomNavigationBarItem(
-              icon: Icon(Icons.call_outlined, size: 24.resW),
-              activeIcon: Icon(Icons.call, size: 24.resW),
-              label: 'nav_calls'.tr(),
-            ),
-            // ── 5. Profile ────────────────────────────────────────────────
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline, size: 24.resW),
-              activeIcon: Icon(Icons.person, size: 24.resW),
-              label: 'nav_profile'.tr(),
-            ),
-          ],
         ),
       ),
       floatingActionButton: _currentIndex == 0

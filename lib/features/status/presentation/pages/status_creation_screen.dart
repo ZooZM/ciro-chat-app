@@ -19,6 +19,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 class StatusCreationScreen extends StatefulWidget {
   final StatusContentType initialMode;
@@ -81,6 +82,21 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
     return '#${color.value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
   }
 
+  Future<void> _pickMedia(StatusContentType mode) async {
+    final picker = ImagePicker();
+    if (mode == StatusContentType.image) {
+      final xfile = await picker.pickImage(source: ImageSource.gallery);
+      if (xfile != null) {
+        _cubit.attachMedia(xfile.path, mode);
+      }
+    } else if (mode == StatusContentType.video) {
+      final xfile = await picker.pickVideo(source: ImageSource.gallery);
+      if (xfile != null) {
+        _cubit.attachMedia(xfile.path, mode);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
@@ -122,11 +138,13 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
               ? _parseColor(draft.backgroundColor!)
               : Colors.black;
 
-          return Scaffold(
-            backgroundColor: bgColor,
-            resizeToAvoidBottomInset: false,
-            body: SafeArea(
-              child: Stack(
+          return GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Scaffold(
+              backgroundColor: bgColor,
+              resizeToAvoidBottomInset: false,
+              body: SafeArea(
+                child: Stack(
                 children: [
                   // Editor Content
                   Positioned.fill(
@@ -207,7 +225,6 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                               selectedColor: bgColor,
                               onColorSelected: (c) {
                                 _cubit.updateBackgroundColor(_toHex(c));
-                                setState(() => _showColorPalette = false);
                               },
                             ),
                           )
@@ -225,6 +242,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                                     onModeChanged: (mode) {
                                       _cubit.switchMode(mode);
                                       setState(() => _showColorPalette = false);
+                                      if (mode == StatusContentType.image || mode == StatusContentType.video) {
+                                        _pickMedia(mode);
+                                      }
                                     },
                                   ),
                                 ),
@@ -246,8 +266,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                 ],
               ),
             ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }
