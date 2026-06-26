@@ -167,7 +167,7 @@ void main() {
     await cubit.close();
   });
 
-  test('group call writes a history row marked isGroup, but never touches CallKit (R2)', () async {
+  test('group call writes a history row marked isGroup, and also registers with CallKit (iOS Recents)', () async {
     final cubit = build();
     incomingGroupCallCb!({
       'callerUserId': 'caller1',
@@ -176,23 +176,21 @@ void main() {
       'chatRoomId': 'room1',
       'groupName': 'Team',
     });
+
+    verify(() => callKit.showIncoming(
+          callId: any(named: 'callId'),
+          callerName: 'Team',
+          callerAvatarUrl: any(named: 'callerAvatarUrl'),
+          isVideo: false,
+        )).called(1);
+
     cubit.declineGroupCall();
 
     final captured = verify(() => historyRepo.add(captureAny())).captured.single as CallHistoryRecord;
     expect(captured.isGroup, true);
     expect(captured.outcome, CallOutcome.declined);
 
-    verifyNever(() => callKit.showIncoming(
-          callId: any(named: 'callId'),
-          callerName: any(named: 'callerName'),
-          callerAvatarUrl: any(named: 'callerAvatarUrl'),
-          isVideo: any(named: 'isVideo'),
-        ));
-    verifyNever(() => callKit.startOutgoing(
-          callId: any(named: 'callId'),
-          calleeName: any(named: 'calleeName'),
-          isVideo: any(named: 'isVideo'),
-        ));
+    verify(() => callKit.endCall(any())).called(1);
     await cubit.close();
   });
 }

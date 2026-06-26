@@ -226,8 +226,12 @@ CallKitParams buildCallKitParams({
         supportsHolding: true,
         supportsGrouping: false,
         supportsUngrouping: false,
-        // In-app history only — do not write to iOS Recents (clarification Q2).
-        includesCallsInRecents: false,
+        // 1:1 calls also surface in the iOS Phone app's Recents (revises the
+        // original in-app-only Q2 decision). Android still does NOT write to
+        // the native call log — that requires the sensitive WRITE_CALL_LOG
+        // permission and Play Store justification (FR-VoIP-05 stays in-app
+        // on Android only).
+        includesCallsInRecents: true,
       ),
     );
 

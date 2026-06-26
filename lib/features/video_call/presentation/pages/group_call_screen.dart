@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:livekit_client/livekit_client.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/services/audio_route_service.dart';
 import 'package:ciro_chat_app/core/services/call_audio_config.dart';
 import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
@@ -15,6 +16,7 @@ import 'package:ciro_chat_app/core/helpers/permission_service.dart';
 import '../bloc/call_cubit.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
+import '../widgets/audio_route_picker_sheet.dart';
 import '../widgets/screen_share_tile.dart';
 import '../widgets/screen_share_toggle_sheet.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
@@ -68,6 +70,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   String _localUserId = '';
   String _localUserName = '';
   String _prevSharerUserId = '';
+
+  // Audio output routing (020-native-voip-callkit) — speaker button (FR-VoIP-07/08)
+  late final AudioRouteService _audioRoute = getIt<AudioRouteService>();
+  StreamSubscription<AudioRouteState>? _routeSub;
+  AudioRouteState _routeState = const AudioRouteState();
 
   // Timer
   late final Stopwatch _callTimer;
@@ -125,6 +132,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               ),
             ),
           );
+        } else if (event is CallMuteRequested) {
+          // C1 — native CallKit mute toggle reflected onto the LiveKit track.
+          _room?.localParticipant?.setMicrophoneEnabled(!event.muted);
+          setState(() => _isMicMuted = event.muted);
         }
       });
 
@@ -222,6 +233,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       await _room!.localParticipant?.setMicrophoneEnabled(true);
       if (isVideo) await _room!.localParticipant?.setCameraEnabled(true);
 
+      // Default audio route: BT takes precedence, else video→speaker /
+      // voice→earpiece (FR-VoIP-10). Output-only — never touches the 019
+      // audio session configured above.
+      _routeSub = _audioRoute.routeStream.listen((s) {
+        if (mounted) setState(() => _routeState = s);
+      });
+      await _audioRoute.start();
+      await _audioRoute.applyDefaultForCall(isVideo: isVideo);
+
       if (mounted) {
         setState(() {
           _isConnecting = false;
@@ -269,6 +289,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _callTimer.stop();
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
+    _routeSub?.cancel();
     _roomEventsListener?.dispose();
     _rawDataDebugSub?.call();
     _translationCubit.detachRoom();
@@ -278,6 +299,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _room?.removeListener(_onRoomUpdate);
     _room?.disconnect();
     getIt<CallAudioSessionService>().deactivate();
+    _audioRoute.stop();
     super.dispose();
   }
 
@@ -991,11 +1013,21 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     : 'call_btn_mute'.tr(),
                 active: false,
                 onTap: () async {
-                  setState(() => _isMicMuted = !_isMicMuted);
+                  final targetMuted = !_isMicMuted;
+                  setState(() => _isMicMuted = targetMuted);
                   await _room?.localParticipant?.setMicrophoneEnabled(
-                    !_isMicMuted,
+                    !targetMuted,
                   );
+                  if (mounted) context.read<CallCubit>().reportLocalMute(targetMuted);
                 },
+              ),
+              // Audio route — opens Earpiece/Speaker/Bluetooth picker
+              // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
+              _buildIconBtn(
+                icon: speakerIconForRoute(_routeState.activeRoute),
+                label: 'call_btn_speaker'.tr(),
+                active: _routeState.activeRoute != AudioOutputRoute.earpiece,
+                onTap: () => AudioRoutePickerSheet.show(context),
               ),
               // More options ≡
               _buildIconBtn(

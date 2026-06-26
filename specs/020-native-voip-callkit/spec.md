@@ -14,6 +14,10 @@
 - Q: Which call types get native CallKit presentation? → A: One-to-one (1:1) voice & video calls use native presentation; group calls keep the existing in-app call screens.
 - Q: What should the default audio route be when a call first connects? → A: Voice calls default to the earpiece; video calls default to the speakerphone. A connected Bluetooth device takes precedence over the default when present.
 
+### Revision 2026-06-26 (post-implementation)
+
+- Q: Should 1:1 calls also appear in the iOS Phone app's native Recents list? → A: Yes — revises the original "in-app only" decision above. 1:1 calls now appear in **both** the iOS native Recents (via CallKit `includesCallsInRecents: true`) and the in-app Calls history screen. Android is unaffected and remains in-app-only, since writing to the Android system call log requires the sensitive `WRITE_CALL_LOG` permission and Play Store justification that was the original reason for the in-app-only decision.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Native Incoming Call & In-App Call History (Priority: P1)
@@ -116,7 +120,7 @@ As a user, I want a dedicated "Calls" tab where I can browse my recent call hist
   - a distinct visual treatment (e.g., red) for missed calls;
   - search that filters the list by contact;
   - an action to start a new call.
-- **FR-VoIP-05 (Call History Recording)**: System MUST record every call (1:1 and group, voice and video) in the in-app call history with the correct contact identity, direction, outcome, type, and timestamp. The app does NOT write to the operating system's native call log on either platform.
+- **FR-VoIP-05 (Call History Recording)**: System MUST record every call (1:1 and group, voice and video) in the in-app call history with the correct contact identity, direction, outcome, type, and timestamp. 1:1 calls additionally appear in the iOS native Recents (CallKit-managed); the app does NOT write to the Android system call log (see Revision 2026-06-26).
 - **FR-VoIP-06 (System Call Controls)**: System MUST allow ending an active 1:1 call and toggling mute from the native/system call controls and notification, with the in-app call state staying synchronized with those controls.
 - **FR-VoIP-07 (Audio Routing Control)**: Users MUST be able to route active-call audio between Earpiece, Speakerphone, and connected Bluetooth devices. Tapping the speaker button MUST open a route picker sheet that lists all currently available output routes, indicates the active route, and applies the route the user selects.
 - **FR-VoIP-08 (Speaker Button State & Icon)**: The active call screen MUST display a speaker button using a speaker icon that visually reflects the current audio output route (earpiece / speaker-on / Bluetooth) at all times.
@@ -156,6 +160,6 @@ As a user, I want a dedicated "Calls" tab where I can browse my recent call hist
 - Push-based wake-up (the platform's standard mechanism for waking an app for an incoming VoIP call) is available and provisioned for the app on both iOS and Android, used for 1:1 calls.
 - Bluetooth, microphone, and notification permissions are requested through the standard platform flows; users who deny them receive a degraded-but-safe experience rather than a crash.
 - Only one-to-one calls use native CallKit-style presentation; group calls remain on the existing in-app call screens.
-- "Call History" is maintained entirely inside the app; the app does not read from or write to the operating system's native call log on either platform.
+- "Call History" is maintained inside the app for both platforms; 1:1 calls are also surfaced in iOS's native Recents via CallKit. The app does not read from or write to the Android system call log.
 - The in-app Calls history derives its contact display (name, initials, avatar color) from existing contact/profile data already available in the app.
 - Target platforms are iOS and Android as used by the current app; desktop/web are out of scope for native VoIP presentation in this iteration.

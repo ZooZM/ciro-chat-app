@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
@@ -5,6 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 class AddStatusBottomSheet extends StatefulWidget {
   final VoidCallback onCameraTap;
@@ -27,11 +30,100 @@ class AddStatusBottomSheet extends StatefulWidget {
 }
 
 class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
-  // In a real app, you might use a package like `photo_manager` for a robust gallery grid.
-  // For this MVP, we use ImagePicker to pick a file, but the design calls for a grid.
-  // Since we only have image_picker, we will show a placeholder or call image_picker directly when a "Gallery" button is tapped.
-  // Alternatively, if we need a grid, we can just show a button for "Open Gallery" for MVP.
-  
+  static const int _pageSize = 60;
+
+  final ScrollController _scrollController = ScrollController();
+  List<AssetEntity> _assets = [];
+  AssetPathEntity? _assetPath;
+  int _page = 0;
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  bool _permissionDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _loadRecentAssets();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _loadingMore || _loading) return;
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+      _loadMoreAssets();
+    }
+  }
+
+  Future<void> _loadRecentAssets() async {
+    final permission = await PhotoManager.requestPermissionExtend();
+    if (!permission.hasAccess) {
+      if (!mounted) return;
+      setState(() {
+        _permissionDenied = true;
+        _loading = false;
+      });
+      return;
+    }
+
+    final paths = await PhotoManager.getAssetPathList(
+      type: RequestType.common,
+      onlyAll: true,
+    );
+    if (paths.isEmpty) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
+
+    _assetPath = paths.first;
+    final assets = await _assetPath!.getAssetListPaged(page: 0, size: _pageSize);
+
+    if (!mounted) return;
+    setState(() {
+      _assets = assets;
+      _page = 0;
+      _hasMore = assets.length == _pageSize;
+      _loading = false;
+    });
+  }
+
+  Future<void> _loadMoreAssets() async {
+    if (_assetPath == null) return;
+    _loadingMore = true;
+    final nextPage = _page + 1;
+    final assets = await _assetPath!.getAssetListPaged(page: nextPage, size: _pageSize);
+
+    if (!mounted) return;
+    setState(() {
+      _assets.addAll(assets);
+      _page = nextPage;
+      _hasMore = assets.length == _pageSize;
+      _loadingMore = false;
+    });
+  }
+
+  Future<void> _onAssetTap(AssetEntity asset) async {
+    final file = await asset.file;
+    if (file == null) return;
+    widget.onGalleryItemTap(XFile(file.path), asset.type == AssetType.video);
+  }
+
+  Future<void> _pickFromNativeGallery() async {
+    final picker = ImagePicker();
+    final xfile = await picker.pickImage(source: ImageSource.gallery);
+    if (xfile != null) {
+      widget.onGalleryItemTap(xfile, false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -124,7 +216,7 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Recently used',
+                'Gallery',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Colors.black54,
                   fontWeight: FontWeight.normal,
@@ -138,13 +230,14 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
           // Gallery Grid / Camera Tile
           Expanded(
             child: GridView.builder(
+              controller: _scrollController,
               padding: EdgeInsets.zero,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 crossAxisSpacing: 2.0,
                 mainAxisSpacing: 2.0,
               ),
-              itemCount: 12, // Camera + 11 mock images
+              itemCount: _loading ? 13 : (_permissionDenied ? 2 : 1 + _assets.length),
               itemBuilder: (context, index) {
                 if (index == 0) {
                   return InkWell(
@@ -167,21 +260,49 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
                       ),
                     ),
                   );
-                } else {
+                }
+
+                if (_loading || _permissionDenied) {
                   return InkWell(
-                    onTap: () async {
-                      final picker = ImagePicker();
-                      final xfile = await picker.pickImage(source: ImageSource.gallery);
-                      if (xfile != null) {
-                        widget.onGalleryItemTap(xfile, false);
-                      }
-                    },
+                    onTap: _permissionDenied ? _pickFromNativeGallery : null,
                     child: Container(
                       color: Colors.grey.shade200,
                       child: Icon(Icons.image, color: Colors.grey.shade400, size: 32),
                     ),
                   );
                 }
+
+                final asset = _assets[index - 1];
+                return InkWell(
+                  onTap: () => _onAssetTap(asset),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      FutureBuilder<Uint8List?>(
+                        future: asset.thumbnailDataWithSize(const ThumbnailSize.square(200)),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState != ConnectionState.done) {
+                            return Container(color: Colors.grey.shade200);
+                          }
+                          final bytes = snapshot.data;
+                          if (bytes == null) {
+                            return Container(
+                              color: Colors.grey.shade200,
+                              child: Icon(Icons.broken_image, color: Colors.grey.shade400, size: 32),
+                            );
+                          }
+                          return Image.memory(bytes, fit: BoxFit.cover);
+                        },
+                      ),
+                      if (asset.type == AssetType.video)
+                        const Positioned(
+                          bottom: 4,
+                          right: 4,
+                          child: Icon(Icons.videocam, color: Colors.white, size: 18),
+                        ),
+                    ],
+                  ),
+                );
               },
             ),
           ),

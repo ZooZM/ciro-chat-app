@@ -292,18 +292,33 @@ class CallCubit extends Cubit<CallState> {
     _ctx = null;
   }
 
-  /// Maps native CallKit actions onto existing cubit actions (1:1 only, R10/C1).
+  /// Maps native CallKit actions onto existing cubit actions (R10/C1). Both
+  /// 1:1 and group calls now register with CallKit (Recents support), so
+  /// every action must dispatch to the matching 1:1 vs. group method —
+  /// otherwise a native Accept/Decline/End on a group call would fire the
+  /// wrong socket event (e.g. `rejectCall` instead of `declineGroupCall`).
   void _bindCallKitActions() {
     _callKitSub = _callKit.actions.listen((action) {
       switch (action) {
         case CallKitAccept():
-          if (state is CallIncoming) acceptCall();
+          final s = state;
+          if (s is CallIncoming) {
+            s.isGroupCall ? acceptGroupCall() : acceptCall();
+          }
           break;
         case CallKitDecline():
-          if (state is CallIncoming) rejectCall();
+          final s = state;
+          if (s is CallIncoming) {
+            s.isGroupCall ? declineGroupCall() : rejectCall();
+          }
           break;
         case CallKitEnd():
-          endCall();
+          final s = state;
+          if (s is CallActive && s.isGroupCall) {
+            leaveGroupCall();
+          } else {
+            endCall();
+          }
           break;
         case CallKitTimeout():
           // Native ring timed out → missed.
@@ -406,7 +421,8 @@ class CallCubit extends Cubit<CallState> {
               data['chatRoomId'] as String? ?? '',
           participants: participants,
         ));
-        _markConnected(); // group: history duration only, no CallKit
+        _markConnected();
+        if (_ctx != null) _callKit.setConnected(_ctx!.callId);
         return;
       }
 
@@ -447,18 +463,24 @@ class CallCubit extends Cubit<CallState> {
     // ── Group call socket events ───────────────────────────────────────────────
 
     _socketService.onIncomingGroupCall = (data) {
-      _audioPlayer.playRingtone(looping: true); // group: in-app ringtone (no CallKit)
       final chatRoomId = data['chatRoomId'] as String? ?? '';
       final groupName = data['groupName'] as String? ?? '';
+      final displayName = groupName.isNotEmpty ? groupName : 'Group Call';
       final isVideo = data['isVideo'] == true;
+      final callId = _uuid.v4();
       _startContext(
-        callId: _uuid.v4(),
+        callId: callId,
         contactUserId: chatRoomId,
-        contactName: groupName.isNotEmpty ? groupName : 'Group Call',
+        contactName: displayName,
         direction: CallDirection.incoming,
         callType: isVideo ? CallType.video : CallType.voice,
         isGroup: true,
       );
+      // Group calls now also register with CallKit so they appear in the iOS
+      // Recents list. CallKit always shows its own native ring UI for an
+      // incoming call (Apple platform constraint) — no in-app ringtone here
+      // to avoid a double ring.
+      _callKit.showIncoming(callId: callId, callerName: displayName, isVideo: isVideo);
       emit(CallIncoming(
         callerId: data['callerUserId'] as String? ?? '',
         callerName: data['callerName'] as String? ?? 'Unknown',
@@ -650,14 +672,18 @@ class CallCubit extends Cubit<CallState> {
 
   /// Initiates a group call. Backend fans out `incomingGroupCall` to room members.
   void startGroupCall({required String chatRoomId, required bool isVideo}) {
+    final callId = _uuid.v4();
     _startContext(
-      callId: _uuid.v4(),
+      callId: callId,
       contactUserId: chatRoomId,
       contactName: 'Group Call',
       direction: CallDirection.outgoing,
       callType: isVideo ? CallType.video : CallType.voice,
       isGroup: true,
     );
+    // Outgoing CallKit registration is silent (no native UI takeover) — it
+    // only logs the call to Recents.
+    _callKit.startOutgoing(callId: callId, calleeName: 'Group Call', isVideo: isVideo);
     _socketService.requestGroupCall(chatRoomId: chatRoomId, isVideo: isVideo);
     emit(CallOutgoing(
       targetUserId: chatRoomId,
@@ -694,7 +720,9 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallIncoming || !s.isGroupCall) return;
     _stopRinging();
+    final callId = _ctx?.callId;
     _recordHistory(CallOutcome.declined);
+    if (callId != null) _callKit.endCall(callId);
     _socketService.declineGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallEnded(reason: 'rejected'));
   }
@@ -704,9 +732,11 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallActive || !s.isGroupCall) return;
     await _tearDownLocalScreenShare();
+    final callId = _ctx?.callId;
     await _recordHistory(
       _ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
     );
+    if (callId != null) await _callKit.endCall(callId);
     _socketService.leaveGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallIdle());
   }

@@ -13,6 +13,7 @@ import 'package:ciro_chat_app/features/status/presentation/widgets/color_palette
 import 'package:ciro_chat_app/features/status/presentation/widgets/mode_switcher_bar.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/status_toolbar.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/text_status_editor.dart';
+import 'package:ciro_chat_app/features/status/presentation/widgets/video_status_preview.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/voice_status_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +50,15 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
   void initState() {
     super.initState();
     _cubit = getIt<StatusCreationCubit>();
-    _cubit.initDraft(widget.initialMode);
+    _initializeDraft();
+  }
+
+  Future<void> _initializeDraft() async {
+    // `initDraft` resolves the author's name asynchronously, so calling
+    // `attachMedia` right after it (without awaiting) used to run while the
+    // cubit's state was still `StatusCreationIdle` — `attachMedia` silently
+    // no-ops outside `StatusCreationComposing`, dropping the picked media.
+    await _cubit.initDraft(widget.initialMode);
     if (widget.initialMediaPath != null) {
       _cubit.attachMedia(widget.initialMediaPath!, widget.initialMode);
     }
@@ -256,7 +265,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
             ? Center(child: Image.file(File(draft.mediaUrl!), fit: BoxFit.contain))
             : Center(child: Text('status.image'.tr(), style: const TextStyle(color: Colors.white)));
       case StatusContentType.video:
-        return Center(child: Text('status.image'.tr(), style: const TextStyle(color: Colors.white))); // Placeholder for media
+        return draft.mediaUrl != null
+            ? VideoStatusPreview(filePath: draft.mediaUrl!)
+            : Center(child: Text('status.video'.tr(), style: const TextStyle(color: Colors.white)));
       case StatusContentType.voice:
         return const VoiceStatusEditor();
     }

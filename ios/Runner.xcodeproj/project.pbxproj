@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -106,14 +106,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		00B8E1AD618D46F0B15DECE34D2F0051 /* Exceptions for "ScreenShareBroadcast" folder in "ScreenShareBroadcast" target */ = {
+		00B8E1AD618D46F0B15DECE34D2F0051 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 6C31B8E62FC4998700B4588D /* ScreenShareBroadcast */;
 		};
-		6C31B9092FC4998800B4588D /* Exceptions for "ScreenShareBroadcastSetupUI" folder in "ScreenShareBroadcastSetupUI" target */ = {
+		6C31B9092FC4998800B4588D /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -123,30 +123,8 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		6C31B8EA2FC4998700B4588D /* ScreenShareBroadcast */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				00B8E1AD618D46F0B15DECE34D2F0051 /* Exceptions for "ScreenShareBroadcast" folder in "ScreenShareBroadcast" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ScreenShareBroadcast;
-			sourceTree = "<group>";
-		};
-		6C31B8F62FC4998800B4588D /* ScreenShareBroadcastSetupUI */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				6C31B9092FC4998800B4588D /* Exceptions for "ScreenShareBroadcastSetupUI" folder in "ScreenShareBroadcastSetupUI" target */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = ScreenShareBroadcastSetupUI;
-			sourceTree = "<group>";
-		};
+		6C31B8EA2FC4998700B4588D /* ScreenShareBroadcast */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (00B8E1AD618D46F0B15DECE34D2F0051 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScreenShareBroadcast; sourceTree = "<group>"; };
+		6C31B8F62FC4998800B4588D /* ScreenShareBroadcastSetupUI */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (6C31B9092FC4998800B4588D /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ScreenShareBroadcastSetupUI; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -496,9 +474,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -529,9 +511,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -689,14 +675,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 6D6Y77227V;
+				DEVELOPMENT_TEAM = TY73VN2JFG;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad.ciroChat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad2.ciroChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -1125,14 +1111,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 6D6Y77227V;
+				DEVELOPMENT_TEAM = TY73VN2JFG;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad.ciroChat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad2.ciroChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -1152,14 +1138,14 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 6D6Y77227V;
+				DEVELOPMENT_TEAM = TY73VN2JFG;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad.ciroChat;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cirochat.zeyad2.ciroChat;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";

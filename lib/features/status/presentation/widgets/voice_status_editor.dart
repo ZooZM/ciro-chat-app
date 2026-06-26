@@ -1,5 +1,7 @@
+import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_constants.dart';
+import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_creation_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/widgets/waveform_visualizer.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -21,6 +23,23 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
   String? _recordedPath;
+  String _userInitials = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInitials();
+  }
+
+  Future<void> _loadUserInitials() async {
+    final name = await getIt<AuthCubit>().getCurrentUserName();
+    if (!mounted || name == null || name.isEmpty) return;
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final initials = parts.length == 1
+        ? parts.first.substring(0, 1).toUpperCase()
+        : (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    setState(() => _userInitials = initials);
+  }
 
   @override
   void dispose() {
@@ -108,7 +127,7 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
                     CircleAvatar(
                       radius: 20,
                       backgroundColor: Colors.blue,
-                      child: const Text('AK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text(_userInitials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                     Positioned(
                       bottom: 0,

@@ -8,11 +8,12 @@ All Technical Context unknowns are resolved below. Decisions are grounded in the
 - **Rationale**: Explicitly requested (FR-VoIP-01); de-facto standard for Flutter VoIP; integrates with FCM data pushes for wake-from-terminated (FR-VoIP-12). Avoids hand-writing platform channels for CallKit/ConnectionService.
 - **Alternatives considered**: `callkeep` (less maintained, heavier API); raw platform channels (high cost, reinvents the package); notification-only (fails lock-screen + Recents requirement).
 
-## R2. Scope to 1:1 only (group stays in-app)
+## R2. CallKit presentation scope (revised 2026-06-26: 1:1 and group)
 
-- **Decision**: `CallKitService.showIncoming/startOutgoing` is invoked **only** for 1:1 calls (`isGroupCall == false`). Group call paths in `CallCubit` (`onIncomingGroupCall`, `startGroupCall`) keep the existing in-app `flutter_ringtone_player` + in-app screens, and only write a history row.
-- **Rationale**: Clarification Q3. CallKit/ConnectionService model a single remote party; group semantics are awkward and platform-limited.
-- **Alternatives**: All-native (rejected — poor group fit); voice-only-native (rejected — user chose 1:1 voice+video native).
+- **Original decision (clarification Q3)**: `CallKitService.showIncoming/startOutgoing` invoked only for 1:1 calls; group calls stayed in-app-only (in-app ringtone, no Recents entry). Rationale: CallKit/ConnectionService model a single remote party, so group semantics seemed awkward.
+- **Revision**: Group calls now also register with CallKit (`showIncoming`/`startOutgoing`/`setConnected`/`endCall`), using the group name as the display name, so they appear in iOS Recents like 1:1 calls. The existing in-app group call screens (`incoming_group_call_screen.dart`, `group_call_screen.dart`) are unchanged — they still drive accept/decline/join/leave. The in-app `flutter_ringtone_player` ringtone for *incoming* group calls was removed to avoid a double ring, since CallKit always shows its own native ring UI for incoming calls (Apple platform constraint — there is no way to log a call to Recents without it). Outgoing group calls remain silent (CallKit's `startCall` doesn't show a takeover UI), so the in-app dial tone is untouched.
+- **Native action dispatch**: `CallCubit._bindCallKitActions()` checks `state.isGroupCall` and routes native Accept/Decline/End to `acceptGroupCall()/declineGroupCall()/leaveGroupCall()` instead of the 1:1 `acceptCall()/rejectCall()/endCall()` — otherwise a native button tap on a group call would fire the wrong socket event.
+- **Android unaffected**: still does not write to the native call log (requires the sensitive `WRITE_CALL_LOG` permission); in-app Calls history remains Android's only history surface for both 1:1 and group.
 
 ## R3. Background audio persistence (platform capabilities)
 
@@ -73,7 +74,7 @@ All Technical Context unknowns are resolved below. Decisions are grounded in the
 | Unknown | Resolution |
 |---|---|
 | Native UI package | `flutter_callkit_incoming` |
-| Group calls | In-app only; history row written |
+| Group calls | In-app UI unchanged; also registers with CallKit (history row + iOS Recents) |
 | iOS background | `UIBackgroundModes += audio, voip` |
 | Android background | call-type foreground service + FOREGROUND_SERVICE(_MICROPHONE), BLUETOOTH_CONNECT |
 | Routing API | LiveKit `Hardware.instance` (outputs + select + device-change) |
