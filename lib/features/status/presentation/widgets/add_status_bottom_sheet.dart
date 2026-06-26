@@ -37,14 +37,14 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
-        borderRadius: AppConstants.sheetRadius,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Drag handle
           Container(
-            width: 40.w,
+            width: 50.w,
             height: 4.h,
             margin: EdgeInsets.only(top: AppConstants.spacingSm, bottom: AppConstants.spacingMd),
             decoration: BoxDecoration(
@@ -56,16 +56,22 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
           // Title Row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Text(
-                  'status.add_status'.tr(),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Add Status', // Using literal string to match mockup exactly
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.black54),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ),
               ],
             ),
@@ -80,26 +86,30 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
             child: Row(
               children: [
                 _buildCategoryChip(
-                  icon: Icons.text_fields,
-                  label: 'status.text'.tr(),
+                  icon: Icons.edit_outlined, // Text is a pencil icon in the mockup
+                  iconColor: Colors.green,
+                  label: 'Text',
                   onTap: () => widget.onCategoryTap(StatusContentType.text),
                 ),
                 SizedBox(width: AppConstants.spacingSm),
                 _buildCategoryChip(
                   icon: Icons.music_note,
-                  label: 'status.music'.tr(),
+                  iconColor: Colors.green,
+                  label: 'Music',
                   onTap: widget.onMusicTap,
                 ),
                 SizedBox(width: AppConstants.spacingSm),
                 _buildCategoryChip(
-                  icon: Icons.mic,
-                  label: 'status.voice'.tr(),
+                  icon: Icons.mic_none,
+                  iconColor: Colors.green,
+                  label: 'voice',
                   onTap: () => widget.onCategoryTap(StatusContentType.voice),
                 ),
                 SizedBox(width: AppConstants.spacingSm),
                 _buildCategoryChip(
                   icon: Icons.auto_awesome,
-                  label: 'status.ai_image'.tr(),
+                  iconColor: Colors.grey, // Ai icon color is grey in mockup
+                  label: 'Ai image',
                   onTap: widget.onAITap,
                 ),
               ],
@@ -114,43 +124,51 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'status.recently_used'.tr(),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                'Recently used',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
             ),
           ),
           
           SizedBox(height: AppConstants.spacingMd),
           
-          // Gallery Grid / Camera Tile (Simplified for MVP using ImagePicker direct actions)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
+          // Gallery Grid / Camera Tile
+          Expanded(
+            child: GridView.builder(
+              padding: EdgeInsets.zero,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 2.0,
+                mainAxisSpacing: 2.0,
+              ),
+              itemCount: 12, // Camera + 11 mock images
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return InkWell(
                     onTap: widget.onCameraTap,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMd),
                     child: Container(
-                      height: 100.h,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+                        color: Colors.white,
+                        border: Border(
+                          right: BorderSide(color: Colors.grey.shade100, width: 2),
+                          bottom: BorderSide(color: Colors.grey.shade100, width: 2),
+                        ),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.camera_alt, size: 32),
-                          SizedBox(height: AppConstants.spacingSm),
-                          Text('status.camera'.tr()),
+                          const Icon(Icons.camera_alt_outlined, size: 28, color: Colors.green),
+                          SizedBox(height: AppConstants.spacingXs),
+                          const Text('Camera', style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
-                  ),
-                ),
-                SizedBox(width: AppConstants.spacingMd),
-                Expanded(
-                  child: InkWell(
+                  );
+                } else {
+                  return InkWell(
                     onTap: () async {
                       final picker = ImagePicker();
                       final xfile = await picker.pickImage(source: ImageSource.gallery);
@@ -158,43 +176,41 @@ class _AddStatusBottomSheetState extends State<AddStatusBottomSheet> {
                         widget.onGalleryItemTap(xfile, false);
                       }
                     },
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMd),
                     child: Container(
-                      height: 100.h,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppConstants.radiusMd),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.photo_library, size: 32),
-                          SizedBox(height: AppConstants.spacingSm),
-                          Text('status.image'.tr()),
-                        ],
-                      ),
+                      color: Colors.grey.shade200,
+                      child: Icon(Icons.image, color: Colors.grey.shade400, size: 32),
                     ),
-                  ),
-                ),
-              ],
+                  );
+                }
+              },
             ),
           ),
-          
-          SizedBox(height: AppConstants.spacingXxl),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryChip({required IconData icon, required String label, required VoidCallback onTap}) {
-    return ActionChip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-      onPressed: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radiusPill),
+  Widget _buildCategoryChip({required IconData icon, required String label, required VoidCallback onTap, Color iconColor = AppColors.primary}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 80.w,
+        padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingMd),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey.shade300, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 28, color: iconColor),
+            SizedBox(height: AppConstants.spacingXs),
+            Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
-      backgroundColor: Colors.grey.withOpacity(0.1),
     );
   }
 }

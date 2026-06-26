@@ -22,16 +22,11 @@ class ColorPalettePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 200,
-      padding: const EdgeInsets.all(AppConstants.spacingMd),
-      decoration: const BoxDecoration(
-        color: Colors.black87,
-        borderRadius: AppConstants.sheetRadius,
-      ),
-      child: GridView.builder(
+    return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 6,
+          crossAxisCount: 7,
           mainAxisSpacing: AppConstants.spacingXs,
           crossAxisSpacing: AppConstants.spacingXs,
         ),
@@ -63,7 +58,6 @@ class ColorPalettePicker extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
+      );
   }
 }

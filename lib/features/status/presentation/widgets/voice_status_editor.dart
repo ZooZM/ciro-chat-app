@@ -91,66 +91,94 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
     final cubit = context.watch<StatusCreationCubit>();
     final isRecording = cubit.isRecording;
 
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _formatDuration(_recordDuration),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+    return Stack(
+      children: [
+        Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: AppConstants.spacingXl),
+            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd, vertical: AppConstants.spacingMd),
+            decoration: BoxDecoration(
+              color: Colors.black45,
+              borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+            ),
+            child: Row(
+              children: [
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.blue,
+                      child: const Text('AK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.mic, size: 10, color: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: AppConstants.spacingMd),
+                Expanded(
+                  child: isRecording
+                      ? WaveformVisualizer(
+                          controller: cubit.recorderController,
+                          isRecording: isRecording,
+                        )
+                      : Text(
+                          _recordedPath != null ? 'status.preview'.tr() : '.......................................',
+                          style: const TextStyle(color: Colors.white70, fontSize: 18),
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                        ),
+                ),
+                if (_recordedPath != null)
+                  IconButton(
+                    icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                    color: Colors.white,
+                    onPressed: _togglePlayback,
+                  ),
+                if (isRecording)
+                  Padding(
+                    padding: const EdgeInsets.only(left: AppConstants.spacingSm),
+                    child: Text(
+                      _formatDuration(_recordDuration),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: AppConstants.spacingLg),
-          if (isRecording)
-            WaveformVisualizer(
-              controller: cubit.recorderController,
-              isRecording: isRecording,
-            )
-          else if (_recordedPath != null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                  color: Colors.white,
-                  iconSize: 48,
-                  onPressed: _togglePlayback,
-                ),
-                Text('status.preview'.tr(), style: const TextStyle(color: Colors.white)),
-              ],
-            )
-          else
-            const SizedBox(height: AppConstants.waveformHeight),
-          const SizedBox(height: AppConstants.spacingXxl),
-          GestureDetector(
+        ),
+        Positioned(
+          bottom: AppConstants.spacingMd,
+          right: AppConstants.spacingMd,
+          child: GestureDetector(
             onTap: isRecording ? _stopRecording : _startRecording,
             child: Container(
-              padding: const EdgeInsets.all(AppConstants.spacingXl),
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: isRecording ? Colors.red.withOpacity(0.2) : AppColors.primary.withOpacity(0.2),
+                color: isRecording ? Colors.red : Colors.black54,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                isRecording ? Icons.stop : Icons.mic,
-                color: isRecording ? Colors.red : AppColors.primary,
-                size: 64,
+              child: Center(
+                child: Icon(
+                  isRecording ? Icons.stop : Icons.mic,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: AppConstants.spacingMd),
-          Text(
-            isRecording ? 'status.tap_to_stop'.tr() : 'status.tap_to_record'.tr(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

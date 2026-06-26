@@ -131,9 +131,16 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                     right: 0,
                     child: StatusToolbar(
                       activeMode: draft.contentType,
+                      isColorPaletteOpen: _showColorPalette,
                       onClose: () {
-                        _cubit.reset();
-                        context.pop();
+                        if (_showColorPalette) {
+                          setState(() {
+                            _showColorPalette = false;
+                          });
+                        } else {
+                          _cubit.reset();
+                          context.pop();
+                        }
                       },
                       onPaletteTap: () {
                         setState(() {
@@ -184,12 +191,9 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                     bottom: AppConstants.spacingMd,
                     left: 0,
                     right: 0,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_showColorPalette)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: AppConstants.spacingMd),
+                    child: _showColorPalette
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd),
                             child: ColorPalettePicker(
                               selectedColor: bgColor,
                               onColorSelected: (c) {
@@ -197,39 +201,38 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                                 setState(() => _showColorPalette = false);
                               },
                             ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: AppConstants.spacingMd,
+                                    right: AppConstants.spacingSm,
+                                  ),
+                                  child: ModeSwitcherBar(
+                                    activeMode: draft.contentType,
+                                    onModeChanged: (mode) {
+                                      _cubit.switchMode(mode);
+                                      setState(() => _showColorPalette = false);
+                                    },
+                                  ),
+                                ),
+                              ),
+                              if (draft.contentType != StatusContentType.voice)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: AppConstants.spacingMd),
+                                  child: FloatingActionButton(
+                                    backgroundColor: AppColors.primary,
+                                    onPressed: isUploading ? null : _cubit.submitStatus,
+                                    child: isUploading
+                                        ? const CircularProgressIndicator(color: Colors.white)
+                                        : const Icon(Icons.send, color: Colors.white),
+                                  ),
+                                ),
+                            ],
                           ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: AppConstants.spacingMd,
-                                  right: AppConstants.spacingSm,
-                                ),
-                                child: ModeSwitcherBar(
-                                  activeMode: draft.contentType,
-                                  onModeChanged: (mode) {
-                                    _cubit.switchMode(mode);
-                                    setState(() => _showColorPalette = false);
-                                  },
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(right: AppConstants.spacingMd),
-                              child: FloatingActionButton(
-                                backgroundColor: AppColors.primary,
-                                onPressed: isUploading ? null : _cubit.submitStatus,
-                                child: isUploading
-                                    ? const CircularProgressIndicator(color: Colors.white)
-                                    : const Icon(Icons.send, color: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 class StatusToolbar extends StatelessWidget {
   final StatusContentType activeMode;
+  final bool isColorPaletteOpen;
   final VoidCallback onClose;
   final VoidCallback onPaletteTap;
   final VoidCallback onFontTap;
@@ -16,6 +17,7 @@ class StatusToolbar extends StatelessWidget {
   const StatusToolbar({
     super.key,
     required this.activeMode,
+    this.isColorPaletteOpen = false,
     required this.onClose,
     required this.onPaletteTap,
     required this.onFontTap,
@@ -30,32 +32,76 @@ class StatusToolbar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd, vertical: AppConstants.spacingLg),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: AppConstants.toolbarIconSize),
-            onPressed: onClose,
-          ),
           Row(
             children: [
-              PrivacyDropdown(
-                currentPrivacy: currentPrivacy,
-                onPrivacyChanged: onPrivacyChanged,
-                onSelectContacts: onSelectContacts,
-              ),
-              const SizedBox(width: AppConstants.spacingMd),
-              if (activeMode == StatusContentType.text)
-                IconButton(
-                  icon: const Icon(Icons.text_format, color: Colors.white, size: AppConstants.toolbarIconSize),
-                  onPressed: onFontTap,
+              if (!isColorPaletteOpen && (activeMode == StatusContentType.text || activeMode == StatusContentType.voice)) ...[
+                _buildToolbarButton(
+                  icon: Icons.palette,
+                  onTap: onPaletteTap,
                 ),
-              if (activeMode == StatusContentType.text || activeMode == StatusContentType.voice)
-                IconButton(
-                  icon: const Icon(Icons.palette, color: Colors.white, size: AppConstants.toolbarIconSize),
-                  onPressed: onPaletteTap,
+                const SizedBox(width: AppConstants.spacingSm),
+              ],
+              if (activeMode == StatusContentType.text) ...[
+                _buildToolbarButton(
+                  text: 'Aa',
+                  onTap: onFontTap,
+                ),
+                const SizedBox(width: AppConstants.spacingSm),
+              ],
+              if (!isColorPaletteOpen && activeMode == StatusContentType.text) ...[
+                _buildToolbarButton(
+                  text: '@',
+                  onTap: () {}, // TODO: Mention functionality
+                ),
+                const SizedBox(width: AppConstants.spacingSm),
+              ],
+              if (!isColorPaletteOpen)
+                PrivacyDropdown(
+                  currentPrivacy: currentPrivacy,
+                  onPrivacyChanged: onPrivacyChanged,
+                  onSelectContacts: onSelectContacts,
                 ),
             ],
           ),
+          if (isColorPaletteOpen)
+            GestureDetector(
+              onTap: onClose,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('Done', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+            )
+          else
+            _buildToolbarButton(
+              icon: Icons.close,
+              onTap: onClose,
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildToolbarButton({IconData? icon, String? text, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(
+          color: Colors.black45,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: icon != null
+              ? Icon(icon, color: Colors.white, size: 20)
+              : Text(text!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        ),
       ),
     );
   }

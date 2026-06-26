@@ -16,23 +16,16 @@ class ModeSwitcherBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingXs, vertical: AppConstants.spacingXs / 2),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(AppConstants.radiusPill),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildModeItem(context, StatusContentType.video, 'status.video'.tr()),
-            _buildModeItem(context, StatusContentType.image, 'status.image'.tr()),
-            _buildModeItem(context, StatusContentType.text, 'status.text'.tr()),
-            _buildModeItem(context, StatusContentType.voice, 'status.voice'.tr()),
-          ],
-        ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildModeItem(context, StatusContentType.video, 'status.video'.tr()),
+          _buildModeItem(context, StatusContentType.image, 'status.image'.tr()),
+          _buildModeItem(context, StatusContentType.text, 'status.text'.tr()),
+          _buildModeItem(context, StatusContentType.voice, 'status.voice'.tr()),
+        ],
       ),
     );
   }
@@ -42,16 +35,18 @@ class ModeSwitcherBar extends StatelessWidget {
     return GestureDetector(
       onTap: () => onModeChanged(mode),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd, vertical: AppConstants.spacingSm),
+        margin: const EdgeInsets.only(right: AppConstants.spacingSm),
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingLg, vertical: AppConstants.spacingMd),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.transparent,
+          color: isSelected ? Colors.black54 : Colors.black26,
           borderRadius: BorderRadius.circular(AppConstants.radiusPill),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white70,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontSize: 16,
           ),
         ),
       ),
