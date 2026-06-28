@@ -35,8 +35,8 @@ class ModeSwitcherBar extends StatelessWidget {
     return GestureDetector(
       onTap: () => onModeChanged(mode),
       child: Container(
-        margin: const EdgeInsets.only(right: AppConstants.spacingSm),
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingLg, vertical: AppConstants.spacingMd),
+        margin: const EdgeInsets.only(right: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
         decoration: BoxDecoration(
           color: isSelected ? Colors.black54 : Colors.black26,
           borderRadius: BorderRadius.circular(AppConstants.radiusPill),
@@ -46,7 +46,7 @@ class ModeSwitcherBar extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w500,
-            fontSize: 16,
+            fontSize: 14,
           ),
         ),
       ),

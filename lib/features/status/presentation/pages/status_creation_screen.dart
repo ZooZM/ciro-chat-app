@@ -38,6 +38,7 @@ class StatusCreationScreen extends StatefulWidget {
 class _StatusCreationScreenState extends State<StatusCreationScreen> {
   late final StatusCreationCubit _cubit;
   bool _showColorPalette = false;
+  final GlobalKey<VoiceStatusEditorState> _voiceEditorKey = GlobalKey<VoiceStatusEditorState>();
 
   final List<String> _fontFamilies = [
     '', // Default
@@ -249,17 +250,48 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
                                   ),
                                 ),
                               ),
-                              if (draft.contentType != StatusContentType.voice)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: AppConstants.spacingMd),
-                                  child: FloatingActionButton(
-                                    backgroundColor: AppColors.primary,
-                                    onPressed: isUploading ? null : _cubit.submitStatus,
+                              Padding(
+                                padding: const EdgeInsets.only(right: AppConstants.spacingMd),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (draft.contentType == StatusContentType.voice) {
+                                      final isRecording = _cubit.isRecording;
+                                      final hasRecorded = draft.mediaUrl != null && draft.mediaUrl!.isNotEmpty;
+                                      if (isRecording) {
+                                        _voiceEditorKey.currentState?.stopRecording();
+                                      } else if (hasRecorded) {
+                                        if (!isUploading) _cubit.submitStatus();
+                                      } else {
+                                        _voiceEditorKey.currentState?.startRecording();
+                                      }
+                                    } else {
+                                      if (!isUploading) _cubit.submitStatus();
+                                    }
+                                  },
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: _cubit.isRecording ? Colors.red : AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
                                     child: isUploading
-                                        ? const CircularProgressIndicator(color: Colors.white)
-                                        : const Icon(Icons.send, color: Colors.white),
+                                        ? const Padding(
+                                            padding: EdgeInsets.all(12.0),
+                                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                          )
+                                        : Icon(
+                                            draft.contentType == StatusContentType.voice
+                                                ? (_cubit.isRecording
+                                                    ? Icons.stop
+                                                    : ((draft.mediaUrl != null && draft.mediaUrl!.isNotEmpty) ? Icons.send : Icons.mic))
+                                                : Icons.send,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
                                   ),
                                 ),
+                              ),
                             ],
                           ),
                   ),
@@ -290,7 +322,7 @@ class _StatusCreationScreenState extends State<StatusCreationScreen> {
             ? VideoStatusPreview(filePath: draft.mediaUrl!)
             : Center(child: Text('status.video'.tr(), style: const TextStyle(color: Colors.white)));
       case StatusContentType.voice:
-        return const VoiceStatusEditor();
+        return VoiceStatusEditor(key: _voiceEditorKey);
     }
   }
 }

@@ -90,7 +90,7 @@
              solid white in the status bar anyway on API 21+. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
+            android:resource="@mipmap/ic_launcher" />
 
         <!-- Screen share foreground service (T032) -->
         <service

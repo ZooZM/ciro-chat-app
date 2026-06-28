@@ -91,7 +91,7 @@ class PushNotificationService {
 
   Future<void> _initLocalNotifications() async {
     const androidSettings =
-        AndroidInitializationSettings('@drawable/ic_notification');
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwinSettings = DarwinInitializationSettings();
     const initSettings = InitializationSettings(
       android: androidSettings,
@@ -177,7 +177,7 @@ class PushNotificationService {
           importance: Importance.high,
           priority: Priority.high,
           groupKey: roomId,
-          icon: '@drawable/ic_notification',
+          icon: '@mipmap/ic_launcher',
           color: const Color(0xFF4CAF50), // Green brand color
         ),
         iOS: const DarwinNotificationDetails(threadIdentifier: 'messages'),

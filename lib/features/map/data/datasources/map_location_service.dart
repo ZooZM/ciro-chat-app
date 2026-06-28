@@ -96,7 +96,7 @@ class MapLocationService {
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Sharing your location',
           notificationText: 'Ciro is sharing your live location with contacts.',
-          notificationIcon: AndroidResource(name: 'ic_notification', defType: 'drawable'),
+          notificationIcon: AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
           setOngoing: true,
           enableWakeLock: true,
         ),

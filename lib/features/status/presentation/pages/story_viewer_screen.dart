@@ -317,6 +317,14 @@ class _StoryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = status.backgroundColor != null
+        ? Color(int.parse(status.backgroundColor!.replaceAll('#', 'FF'), radix: 16))
+        : const Color(0xFFB3966D);
+    final isDark = bgColor.computeLuminance() < 0.5;
+    final iconColor = isDark ? Colors.white : Colors.black54;
+    final titleColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+
     return BlocBuilder<StatusCubit, StatusState>(
       buildWhen: (prev, curr) {
         // Only rebuild when the author name for this specific status changes.
@@ -332,7 +340,7 @@ class _StoryHeader extends StatelessWidget {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black54),
+                icon: Icon(Icons.arrow_back, color: iconColor),
                 onPressed: onBack,
               ),
               const SizedBox(width: 4),
@@ -361,8 +369,8 @@ class _StoryHeader extends StatelessWidget {
                 children: [
                   Text(
                     displayName,
-                    style: const TextStyle(
-                      color: Colors.black,
+                    style: TextStyle(
+                      color: titleColor,
                       fontWeight: FontWeight.w500,
                       fontSize: 16,
                     ),
@@ -370,7 +378,7 @@ class _StoryHeader extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     _formatTimestamp(status.timestamp),
-                    style: const TextStyle(color: Colors.black54, fontSize: 13),
+                    style: TextStyle(color: subtitleColor, fontSize: 13),
                   ),
                 ],
               ),

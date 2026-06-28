@@ -14,10 +14,10 @@ class VoiceStatusEditor extends StatefulWidget {
   const VoiceStatusEditor({super.key});
 
   @override
-  State<VoiceStatusEditor> createState() => _VoiceStatusEditorState();
+  State<VoiceStatusEditor> createState() => VoiceStatusEditorState();
 }
 
-class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
+class VoiceStatusEditorState extends State<VoiceStatusEditor> {
   Timer? _timer;
   int _recordDuration = 0;
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -53,7 +53,7 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
     _timer = Timer.periodic(const Duration(seconds: 1), (Timer t) {
       setState(() => _recordDuration++);
       if (_recordDuration >= AppConstants.statusMaxVoiceDuration.inSeconds) {
-        _stopRecording();
+        stopRecording();
       }
     });
   }
@@ -64,7 +64,7 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
-  void _startRecording() async {
+  void startRecording() async {
     final cubit = context.read<StatusCreationCubit>();
     await cubit.startRecording();
     setState(() {
@@ -73,7 +73,7 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
     _startTimer();
   }
 
-  void _stopRecording() async {
+  void stopRecording() async {
     _timer?.cancel();
     final cubit = context.read<StatusCreationCubit>();
     final path = await cubit.stopRecording();
@@ -172,28 +172,6 @@ class _VoiceStatusEditorState extends State<VoiceStatusEditor> {
                     ),
                   ),
               ],
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: AppConstants.spacingMd,
-          right: AppConstants.spacingMd,
-          child: GestureDetector(
-            onTap: isRecording ? _stopRecording : _startRecording,
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: isRecording ? Colors.red : Colors.black54,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(
-                  isRecording ? Icons.stop : Icons.mic,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
             ),
           ),
         ),

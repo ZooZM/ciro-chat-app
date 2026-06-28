@@ -29,65 +29,173 @@ class StatusToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.spacingMd, vertical: AppConstants.spacingLg),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacingMd,
+        vertical: AppConstants.spacingLg,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (!isColorPaletteOpen && (activeMode == StatusContentType.text || activeMode == StatusContentType.voice)) ...[
-                _buildToolbarButton(
-                  icon: Icons.palette,
-                  onTap: onPaletteTap,
-                ),
+              if (!isColorPaletteOpen &&
+                  (activeMode == StatusContentType.text ||
+                      activeMode == StatusContentType.voice)) ...[
+                _buildToolbarButton(icon: Icons.palette, onTap: onPaletteTap),
                 const SizedBox(width: AppConstants.spacingSm),
               ],
               if (activeMode == StatusContentType.text) ...[
-                _buildToolbarButton(
-                  text: 'Aa',
-                  onTap: onFontTap,
-                ),
+                _buildToolbarButton(text: 'Aa', onTap: onFontTap),
                 const SizedBox(width: AppConstants.spacingSm),
               ],
-              if (!isColorPaletteOpen && activeMode == StatusContentType.text) ...[
-                _buildToolbarButton(
-                  text: '@',
-                  onTap: () {}, // TODO: Mention functionality
+              if (!isColorPaletteOpen &&
+                  activeMode == StatusContentType.text) ...[
+                PopupMenuButton<StatusPrivacy>(
+                  onSelected: (privacy) {
+                    if (privacy == StatusPrivacy.private) {
+                      onSelectContacts();
+                    }
+                    onPrivacyChanged(privacy);
+                  },
+                  color: Colors.black54, // Matches the translucent grey look
+                  elevation: 0,
+                  offset: const Offset(
+                    0,
+                    48,
+                  ), // Opens below the button, shifted right
+                  constraints: const BoxConstraints(
+                    maxWidth: 220,
+                  ), // Reduce width
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: StatusPrivacy.public,
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Public ',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '(All contacts)',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: StatusPrivacy.private,
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: RichText(
+                        text: const TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Private ',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '(Select contacts)',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: StatusPrivacy.showOnMap,
+                      height: 36,
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'Show on Map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppConstants.spacingMd,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusPill,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _getPrivacyLabel(currentPrivacy),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: AppConstants.spacingSm),
               ],
-              if (!isColorPaletteOpen)
-                PrivacyDropdown(
-                  currentPrivacy: currentPrivacy,
-                  onPrivacyChanged: onPrivacyChanged,
-                  onSelectContacts: onSelectContacts,
-                ),
             ],
           ),
           if (isColorPaletteOpen)
             GestureDetector(
               onTap: onClose,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text('Done', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Done',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             )
           else
-            _buildToolbarButton(
-              icon: Icons.close,
-              onTap: onClose,
-            ),
+            _buildToolbarButton(icon: Icons.close, onTap: onClose),
         ],
       ),
     );
   }
 
-  Widget _buildToolbarButton({IconData? icon, String? text, required VoidCallback onTap}) {
+  Widget _buildToolbarButton({
+    IconData? icon,
+    String? text,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -100,9 +208,27 @@ class StatusToolbar extends StatelessWidget {
         child: Center(
           child: icon != null
               ? Icon(icon, color: Colors.white, size: 20)
-              : Text(text!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              : Text(
+                  text!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
         ),
       ),
     );
+  }
+
+  String _getPrivacyLabel(StatusPrivacy privacy) {
+    switch (privacy) {
+      case StatusPrivacy.public:
+        return 'Public';
+      case StatusPrivacy.private:
+        return 'Private';
+      case StatusPrivacy.showOnMap:
+        return 'Map';
+    }
   }
 }

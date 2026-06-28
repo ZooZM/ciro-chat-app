@@ -12,11 +12,12 @@ class StatusCreationIdle extends StatusCreationState {}
 
 class StatusCreationComposing extends StatusCreationState {
   final StatusEntity draft;
+  final bool isRecording;
 
-  const StatusCreationComposing(this.draft);
+  const StatusCreationComposing(this.draft, {this.isRecording = false});
 
   @override
-  List<Object?> get props => [draft];
+  List<Object?> get props => [draft, isRecording];
 }
 
 class StatusCreationUploading extends StatusCreationState {

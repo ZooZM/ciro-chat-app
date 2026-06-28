@@ -33,7 +33,8 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
     final authorName = await authCubit.getCurrentUserName() ?? 'Unknown';
     String authorAvatar = '';
     if (authCubit.state is Authenticated) {
-      authorAvatar = (authCubit.state as Authenticated).userData?['avatarUrl'] ?? '';
+      authorAvatar =
+          (authCubit.state as Authenticated).userData?['avatarUrl'] ?? '';
     }
 
     final draft = StatusEntity(
@@ -44,7 +45,7 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
       expiresAt: DateTime.now().add(const Duration(hours: 24)),
       contentType: mode,
       isMine: true,
-      backgroundColor: '#FF5722', // default color
+      backgroundColor: '#000000', // default color
     );
     emit(StatusCreationComposing(draft));
   }
@@ -52,7 +53,12 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
   void switchMode(StatusContentType mode) {
     if (state is StatusCreationComposing) {
       final currentDraft = (state as StatusCreationComposing).draft;
-      emit(StatusCreationComposing(currentDraft.copyWith(contentType: mode)));
+      emit(
+        StatusCreationComposing(
+          currentDraft.copyWith(contentType: mode),
+          isRecording: isRecording,
+        ),
+      );
     } else {
       initDraft(mode);
     }
@@ -84,15 +90,16 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
     result.fold(
       (_) {},
       (contacts) => _updateDraft(
-        (draft) => draft.copyWith(
-          audience: contacts.map((c) => c.userId).toList(),
-        ),
+        (draft) =>
+            draft.copyWith(audience: contacts.map((c) => c.userId).toList()),
       ),
     );
   }
 
   void attachMedia(String mediaUrl, StatusContentType type) {
-    _updateDraft((draft) => draft.copyWith(contentType: type, mediaUrl: mediaUrl));
+    _updateDraft(
+      (draft) => draft.copyWith(contentType: type, mediaUrl: mediaUrl),
+    );
   }
 
   void attachVoiceRecording(String filePath) {
@@ -105,7 +112,7 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
       await recorderController.record();
       isRecording = true;
       // Trigger a state emission to update UI if needed
-      _updateDraft((d) => d); 
+      _updateDraft((d) => d);
     }
   }
 
@@ -114,6 +121,8 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
     isRecording = false;
     if (path != null) {
       attachVoiceRecording(path);
+    } else {
+      _updateDraft((d) => d);
     }
     return path;
   }
@@ -146,10 +155,18 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
         }
         final position = await locationService.getCurrentPosition();
         if (position == null) {
-          emit(StatusCreationError(draft, 'Location permission is required to show on map.'));
+          emit(
+            StatusCreationError(
+              draft,
+              'Location permission is required to show on map.',
+            ),
+          );
           return;
         }
-        draft = draft.copyWith(longitude: position.longitude, latitude: position.latitude);
+        draft = draft.copyWith(
+          longitude: position.longitude,
+          latitude: position.latitude,
+        );
       }
 
       emit(StatusCreationUploading(draft));
@@ -169,7 +186,12 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
   void _updateDraft(StatusEntity Function(StatusEntity current) updater) {
     if (state is StatusCreationComposing) {
       final currentDraft = (state as StatusCreationComposing).draft;
-      emit(StatusCreationComposing(updater(currentDraft)));
+      emit(
+        StatusCreationComposing(
+          updater(currentDraft),
+          isRecording: isRecording,
+        ),
+      );
     }
   }
 
