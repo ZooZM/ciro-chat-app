@@ -29,33 +29,44 @@ class MapAvatarMarker extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: borderColor, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 28,
-                  backgroundColor: MapColorUtils.forId(user.id),
-                  backgroundImage: resolvedAvatarUrl.isNotEmpty
-                      ? CachedNetworkImageProvider(resolvedAvatarUrl)
-                      : null,
-                  child: resolvedAvatarUrl.isEmpty
-                      ? Text(
-                          user.initial,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        )
-                      : null,
+                // Outer status ring (WhatsApp/Instagram "active story"
+                // convention) — same accent color used in marker_icon_factory.
+                padding: user.hasActiveStatus ? const EdgeInsets.all(3) : EdgeInsets.zero,
+                decoration: user.hasActiveStatus
+                    ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFFF9800), width: 3),
+                      )
+                    : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: borderColor, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: MapColorUtils.forId(user.id),
+                    backgroundImage: resolvedAvatarUrl.isNotEmpty
+                        ? CachedNetworkImageProvider(resolvedAvatarUrl)
+                        : null,
+                    child: resolvedAvatarUrl.isEmpty
+                        ? Text(
+                            user.initial,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        : null,
+                  ),
                 ),
               ),
               if (user.isOnline)

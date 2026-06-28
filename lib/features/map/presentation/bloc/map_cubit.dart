@@ -272,16 +272,20 @@ class MapCubit extends Cubit<MapState> {
     unawaited(_deriveMarkers());
   }
 
-  /// A new "Show on Map" status was posted live (018-snap-map-realtime) —
-  /// only relevant to whoever is currently looking at Explore (a different,
-  /// status-based dataset from Following's, same scoping rationale as
-  /// _onLocationUpdate/_onLocationHidden above). The broadcast always carries
-  /// coarse coordinates (a single server-wide emit can't apply per-viewer
-  /// coarsening); if this viewer turns out to be a contact, the next full
-  /// Explore reload backfills the precise position.
+  /// A new "Show on Map" status was posted live (018-snap-map-realtime).
+  /// The broadcast always carries coarse coordinates (a single server-wide
+  /// emit can't apply per-viewer coarsening), which is fine for Explore's
+  /// own (already-coarse) dataset — merge it straight in. Following needs
+  /// precise, authorized-only data instead, so on that tab we just trigger
+  /// a normal REST reload; if the author isn't actually one of this viewer's
+  /// authorized contacts, getVisibleUsers simply won't include them (no-op).
   void _onExploreStatusAdded(MapUser user) {
-    if (state.selectedTab != MapTab.explore) return;
     if (user.id == _currentUserId) return;
+    if (state.selectedTab == MapTab.following) {
+      unawaited(loadFollowing());
+      return;
+    }
+    if (state.selectedTab != MapTab.explore) return;
     final resolved = user.copyWith(name: _resolveDisplayName(user));
     final index = state.allUsers.indexWhere((u) => u.id == user.id);
     final updated = List<MapUser>.from(state.allUsers);

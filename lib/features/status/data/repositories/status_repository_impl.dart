@@ -235,6 +235,8 @@ class StatusRepositoryImpl implements StatusRepository {
         authorId: currentUserId,
         audience: status.audience,
         syncStatus: 'pending',
+        longitude: status.longitude,
+        latitude: status.latitude,
       );
       // Optimistic local insert (FR-002/FR-016/Constitution III)
       await localDataSource.cacheStatus(statusModel);

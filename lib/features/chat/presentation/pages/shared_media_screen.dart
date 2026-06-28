@@ -224,7 +224,7 @@ class _LinkList extends StatelessWidget {
             style: AppTypography.body2.copyWith(color: AppColors.primary),
           ),
           subtitle: Text(
-            DateFormat('MMM d, yyyy').format(msg.timestamp),
+            DateFormat('MMM d, yyyy').format(msg.timestamp.toLocal()),
             style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
           ),
         );
@@ -279,7 +279,7 @@ class _DocList extends StatelessWidget {
             style: AppTypography.body2,
           ),
           subtitle: Text(
-            '$sizeLbl  •  ${DateFormat('MMM d, yyyy').format(msg.timestamp)}',
+            '$sizeLbl  •  ${DateFormat('MMM d, yyyy').format(msg.timestamp.toLocal())}',
             style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
           ),
         );

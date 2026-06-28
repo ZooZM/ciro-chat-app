@@ -318,6 +318,7 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i451.StatusCreationCubit(
         statusRepository: gh<_i171.StatusRepository>(),
         authCubit: gh<_i52.AuthCubit>(),
+        locationService: gh<_i248.MapLocationService>(),
       ),
     );
     return this;

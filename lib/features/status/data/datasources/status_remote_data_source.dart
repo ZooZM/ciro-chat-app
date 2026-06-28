@@ -124,6 +124,8 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
         if (status.musicTrackId != null) 'musicTrackId': status.musicTrackId!,
         if (status.caption != null) 'caption': status.caption!,
         if (status.privacy == StatusPrivacy.private) 'audience': jsonEncode(status.audience),
+        if (status.privacy == StatusPrivacy.showOnMap) 'longitude': status.longitude!,
+        if (status.privacy == StatusPrivacy.showOnMap) 'latitude': status.latitude!,
       };
       final formData = FormData.fromMap({
         ...fields,
@@ -139,6 +141,8 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
       'textContent': status.textContent,
       'privacy': status.privacy.name,
       if (status.privacy == StatusPrivacy.private) 'audience': status.audience,
+      if (status.privacy == StatusPrivacy.showOnMap) 'longitude': status.longitude,
+      if (status.privacy == StatusPrivacy.showOnMap) 'latitude': status.latitude,
     });
     return null;
   }

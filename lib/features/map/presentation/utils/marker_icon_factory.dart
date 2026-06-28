@@ -20,16 +20,21 @@ class _AvatarCompositeJob {
     required this.avatarBytes,
     required this.borderColorValue,
     required this.isOnline,
+    required this.hasActiveStatus,
   });
 
   final Uint8List avatarBytes;
   final int borderColorValue;
   final bool isOnline;
+  final bool hasActiveStatus;
 }
 
 const _kMarkerSize = 112; // logical px * device-independent scale baked in
 const _kBorderWidth = 6;
 const _kOnlineDotRadius = 10;
+// Distinct from both the per-user border color and the green online dot —
+// matches the WhatsApp/Instagram "active story" ring convention.
+const _kStatusRingColor = 0xFFFF9800;
 
 /// Decode → crop-to-circle → border + online-dot composite → PNG encode.
 /// Runs entirely on plain bytes so it is safe inside a background isolate.
@@ -57,6 +62,24 @@ Uint8List _compositeAvatarMarker(_AvatarCompositeJob job) {
     dstY: (_kMarkerSize - canvas.height) ~/ 2,
   );
   canvas = padded;
+
+  if (job.hasActiveStatus) {
+    // Outer status ring, drawn first so the per-user border below sits just
+    // inside it — same double-ring look WhatsApp/Instagram use for stories.
+    canvas = img.drawCircle(
+      canvas,
+      x: _kMarkerSize ~/ 2,
+      y: _kMarkerSize ~/ 2,
+      radius: _kMarkerSize ~/ 2 - 1,
+      color: img.ColorRgba8(
+        (_kStatusRingColor >> 16) & 0xFF,
+        (_kStatusRingColor >> 8) & 0xFF,
+        _kStatusRingColor & 0xFF,
+        255,
+      ),
+      antialias: true,
+    );
+  }
 
   final borderColor = img.ColorRgba8(
     (job.borderColorValue >> 16) & 0xFF,
@@ -127,7 +150,7 @@ class MarkerIconFactory {
   final Map<String, BitmapDescriptor> _cache = {};
 
   String _cacheKey(MapUser user) =>
-      '${user.id}_${user.avatarUrl}_${user.isOnline}';
+      '${user.id}_${user.avatarUrl}_${user.isOnline}_${user.hasActiveStatus}';
 
   BitmapDescriptor? cached(MapUser user) => _cache[_cacheKey(user)];
 
@@ -169,6 +192,7 @@ class MarkerIconFactory {
           avatarBytes: bytes,
           borderColorValue: MapColorUtils.forId(user.id).toARGB32() & 0xFFFFFF,
           isOnline: user.isOnline,
+          hasActiveStatus: user.hasActiveStatus,
         ),
       );
       final icon = BitmapDescriptor.bytes(pngBytes);

@@ -30,8 +30,21 @@ class _StubAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+// Success bodies go through the backend's GlobalResponseInterceptor, which
+// wraps them as {success, message, data: {...}} — tokens live under `data`.
+// Error bodies (4xx/5xx) come from Nest's exception filter instead, which is
+// NOT wrapped, so `message` stays at the top level for those.
 ResponseBody _jsonResponse(int status, Map<String, dynamic> body) {
-  final bytes = '{"accessToken":"${body['accessToken'] ?? ''}","refreshToken":"${body['refreshToken'] ?? ''}","message":"${body['message'] ?? ''}"}';
+  final String bytes;
+  if (status < 400) {
+    final accessToken = body['accessToken'] ?? '';
+    final refreshToken = body['refreshToken'] ?? '';
+    bytes = '{"success":true,"message":"Request successful",'
+        '"data":{"accessToken":"$accessToken","refreshToken":"$refreshToken"}}';
+  } else {
+    final message = body['message'] ?? '';
+    bytes = '{"statusCode":$status,"message":"$message","error":"Error"}';
+  }
   return ResponseBody.fromString(
     bytes,
     status,
@@ -214,6 +227,51 @@ void main() {
         expect(token, 'recovered');
         expect(error, isNull);
       });
+    });
+  });
+
+  group('TokenRefreshService — no refresh token in storage is terminal', () {
+    test('rejects immediately instead of retrying forever', () {
+      fakeAsync((async) {
+        when(() => authLocal.getRefreshToken()).thenAnswer((_) async => null);
+        final adapter = _StubAdapter((_) async => _jsonResponse(200, {
+              'accessToken': 'should-not-be-reached',
+            }));
+        dio.httpClientAdapter = adapter;
+
+        final service = buildService();
+        Object? error;
+        service.refreshTokens().catchError((e) {
+          error = e;
+          return '';
+        });
+
+        async.elapse(const Duration(seconds: 1));
+        async.flushMicrotasks();
+
+        expect(error, isA<RevocationException>());
+        expect(adapter.callCount, 0,
+            reason: 'must not call the backend with no refresh token');
+      });
+    });
+  });
+
+  group('TokenRefreshService — wrapped success envelope (data.accessToken)', () {
+    test('reads tokens from the GlobalResponseInterceptor envelope', () async {
+      final adapter = _StubAdapter((_) async => _jsonResponse(200, {
+            'accessToken': 'enveloped-access',
+            'refreshToken': 'enveloped-refresh',
+          }));
+      dio.httpClientAdapter = adapter;
+
+      final service = buildService();
+      final token = await service.refreshTokens();
+
+      expect(token, 'enveloped-access');
+      verify(() => authLocal.saveTokens(
+            accessToken: 'enveloped-access',
+            refreshToken: 'enveloped-refresh',
+          )).called(1);
     });
   });
 

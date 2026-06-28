@@ -247,8 +247,21 @@ class ChatCubit extends Cubit<ChatState> {
 
       // FR-031: If the user has left this room (no local record), ignore
       // any further socket traffic for it.
+      //
+      // For a brand-new room, the 'newChatRoom' event (which inserts the room
+      // locally via _onNewChatRoom) and this 'newMessage' event arrive back
+      // to back from the server. _onNewChatRoom is fire-and-forget, so its
+      // local save can still be in flight when this handler runs — without a
+      // short retry window the very first message in a new room gets
+      // mistaken for traffic on a left room and silently dropped.
       if (incomingRoomId.isNotEmpty) {
-        final knownRoom = await _localDataSource.getRoomById(incomingRoomId);
+        ChatSession? knownRoom = await _localDataSource.getRoomById(
+          incomingRoomId,
+        );
+        for (var attempt = 0; knownRoom == null && attempt < 5; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          knownRoom = await _localDataSource.getRoomById(incomingRoomId);
+        }
         if (knownRoom == null) {
           debugPrint('[ChatCubit] FR-031: ignoring message for unknown/left room $incomingRoomId');
           return;
@@ -1356,8 +1369,23 @@ class ChatCubit extends Cubit<ChatState> {
             msgResult.fold(
               (f) => debugPrint('[ChatCubit] Missed-message fetch failed for ${room.id}: $f'),
               (msgs) async {
+                // Messages picked up here arrived while we were backgrounded
+                // and never passed through onNewMessage's live socket path —
+                // the only other place that emits markDelivered. Without this,
+                // the sender's tick never promotes past "sent" until we
+                // eventually mark the room read, jumping straight to "seen".
+                final deliveredIds = <String>[];
                 for (final msg in msgs.reversed) {
                   await _localDataSource.saveMessage(msg, incrementUnread: true);
+                  if (msg.senderId != currentUserId) {
+                    deliveredIds.add(msg.clientMessageId);
+                  }
+                }
+                if (deliveredIds.isNotEmpty) {
+                  _socketService.markDelivered(
+                    roomId: room.id,
+                    messageIds: deliveredIds,
+                  );
                 }
                 debugPrint('[ChatCubit] Recovered ${msgs.length} message(s) for ${room.id}');
               },

@@ -41,7 +41,10 @@ class InviteToShareLocationPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final contacts = snapshot.data ?? [];
+          final currentUserId = context.read<ChatCubit>().currentUserId;
+          final contacts = (snapshot.data ?? [])
+              .where((c) => c.id != currentUserId)
+              .toList();
           if (contacts.isEmpty) {
             return Center(
               child: Text(
@@ -88,7 +91,11 @@ class InviteToShareLocationPage extends StatelessWidget {
                   context.push(
                     AppRouterName.chatRoom,
                     extra: ChatRoomLaunchArgs(
-                      contact,
+                      // id = '' signals the JIT path; contactUserId carries
+                      // the contact's MongoDB User _id so ChatCubit can call
+                      // createRoom(contactUserId) on first Send — same
+                      // pattern as ContactsScreen._startPrivateChat.
+                      contact.copyWith(id: '', contactUserId: contact.id),
                       initialDraftText: 'invite_share_location_draft'.tr(),
                     ),
                   );

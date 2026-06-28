@@ -1,4 +1,5 @@
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
+import 'package:ciro_chat_app/features/map/data/datasources/map_location_service.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/domain/entities/status_privacy.dart';
@@ -13,12 +14,14 @@ import 'package:uuid/uuid.dart';
 class StatusCreationCubit extends Cubit<StatusCreationState> {
   final StatusRepository statusRepository;
   final AuthCubit authCubit;
+  final MapLocationService locationService;
   late final RecorderController recorderController;
   bool isRecording = false;
 
   StatusCreationCubit({
     required this.statusRepository,
     required this.authCubit,
+    required this.locationService,
   }) : super(StatusCreationIdle()) {
     recorderController = RecorderController();
   }
@@ -129,10 +132,26 @@ class StatusCreationCubit extends Cubit<StatusCreationState> {
       // was created when the composer screen opened, which can be well
       // before the user finishes typing/picking media and hits send.
       final now = DateTime.now();
-      final draft = (state as StatusCreationComposing).draft.copyWith(
+      var draft = (state as StatusCreationComposing).draft.copyWith(
         timestamp: now,
         expiresAt: now.add(const Duration(hours: 24)),
       );
+
+      // "Show on Map" pins the status at wherever the device actually is
+      // right now, not whatever stale location was last shared — capture it
+      // at submit time rather than when the composer opened.
+      if (draft.privacy == StatusPrivacy.showOnMap) {
+        if (!await locationService.hasPermission()) {
+          await locationService.requestPermission();
+        }
+        final position = await locationService.getCurrentPosition();
+        if (position == null) {
+          emit(StatusCreationError(draft, 'Location permission is required to show on map.'));
+          return;
+        }
+        draft = draft.copyWith(longitude: position.longitude, latitude: position.latitude);
+      }
+
       emit(StatusCreationUploading(draft));
 
       final result = await statusRepository.uploadStatus(draft);

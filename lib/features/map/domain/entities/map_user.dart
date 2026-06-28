@@ -16,6 +16,7 @@ class MapUser extends Equatable {
     this.groupIds = const [],
     this.isCoarse = false,
     this.isCurrentUser = false,
+    this.hasActiveStatus = false,
   });
 
   final String id;
@@ -37,6 +38,10 @@ class MapUser extends Equatable {
   final bool isCoarse;
   final bool isCurrentUser;
 
+  /// True when the user has an active (non-expired) SHOW_ON_MAP status —
+  /// drives the status ring/badge on the marker.
+  final bool hasActiveStatus;
+
   /// One initial letter, used as the marker placeholder fallback (FR-027).
   String get initial => name.isNotEmpty ? name[0].toUpperCase() : '?';
 
@@ -50,6 +55,7 @@ class MapUser extends Equatable {
     DateTime? lastUpdatedAt,
     List<String>? groupIds,
     bool? isCoarse,
+    bool? hasActiveStatus,
   }) {
     return MapUser(
       id: id,
@@ -63,6 +69,7 @@ class MapUser extends Equatable {
       groupIds: groupIds ?? this.groupIds,
       isCoarse: isCoarse ?? this.isCoarse,
       isCurrentUser: isCurrentUser,
+      hasActiveStatus: hasActiveStatus ?? this.hasActiveStatus,
     );
   }
 
@@ -79,5 +86,6 @@ class MapUser extends Equatable {
     groupIds,
     isCoarse,
     isCurrentUser,
+    hasActiveStatus,
   ];
 }

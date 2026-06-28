@@ -14,6 +14,7 @@ class MapUserModel {
     required this.lastUpdatedAt,
     this.groupIds = const [],
     this.isCoarse = false,
+    this.hasActiveStatus = false,
   });
 
   final String id;
@@ -26,6 +27,7 @@ class MapUserModel {
   final DateTime lastUpdatedAt;
   final List<String> groupIds;
   final bool isCoarse;
+  final bool hasActiveStatus;
 
   factory MapUserModel.fromJson(Map<String, dynamic> json) {
     final location = json['location'] as Map<String, dynamic>?;
@@ -49,6 +51,7 @@ class MapUserModel {
           .map((e) => e.toString())
           .toList(),
       isCoarse: json['isCoarse'] == true,
+      hasActiveStatus: json['hasActiveStatus'] == true,
     );
   }
 
@@ -64,6 +67,7 @@ class MapUserModel {
       lastUpdatedAt: lastUpdatedAt,
       groupIds: groupIds,
       isCoarse: isCoarse,
+      hasActiveStatus: hasActiveStatus,
     );
   }
 }

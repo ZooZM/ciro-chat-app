@@ -103,7 +103,7 @@ class MessageBubbleWidget extends StatelessWidget {
   }
 
   Widget _buildFooter() {
-    final formattedTime = DateFormat('hh:mm a').format(message.timestamp);
+    final formattedTime = DateFormat('hh:mm a').format(message.timestamp.toLocal());
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

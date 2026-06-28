@@ -53,6 +53,10 @@ class TokenRefreshService {
           debugPrint('[TokenRefreshService] Refresh successful');
           completer.complete(newToken);
           return;
+        } on RevocationException catch (e) {
+          debugPrint('[TokenRefreshService] Revocation detected: logging out');
+          completer.completeError(e);
+          return;
         } on DioException catch (e) {
           if (_isRevocationResponse(e)) {
             debugPrint('[TokenRefreshService] Revocation detected: logging out');
@@ -94,15 +98,25 @@ class TokenRefreshService {
       data: {'refreshToken': refreshToken},
     );
 
-    final data = response.data;
-    if (data is! Map) {
+    final body = response.data;
+    if (body is! Map) {
       throw DioException(
         requestOptions: response.requestOptions,
         response: response,
         error: 'Malformed /auth/refresh response',
       );
     }
-    final map = Map<String, dynamic>.from(data);
+    // Backend wraps every response as {success, message, data: {...}} via
+    // GlobalResponseInterceptor — the tokens live under `data`, not at the root.
+    final payload = body['data'];
+    if (payload is! Map) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        error: 'Malformed /auth/refresh response',
+      );
+    }
+    final map = Map<String, dynamic>.from(payload);
     final newAccess = map['accessToken']?.toString();
     final newRefresh = map['refreshToken']?.toString() ?? refreshToken;
 

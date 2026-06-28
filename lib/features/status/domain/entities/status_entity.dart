@@ -31,6 +31,11 @@ class StatusEntity extends Equatable {
   final List<StatusViewer> viewers;
   final List<StatusReaction> reactions;
 
+  // Device GPS at post time — only set for StatusPrivacy.showOnMap, where it
+  // becomes the pin location on viewers' maps.
+  final double? longitude;
+  final double? latitude;
+
   const StatusEntity({
     required this.id,
     required this.authorName,
@@ -53,6 +58,8 @@ class StatusEntity extends Equatable {
     this.syncStatus = 'synced',
     this.viewers = const [],
     this.reactions = const [],
+    this.longitude,
+    this.latitude,
   });
 
   @override
@@ -78,6 +85,8 @@ class StatusEntity extends Equatable {
         syncStatus,
         viewers,
         reactions,
+        longitude,
+        latitude,
       ];
 
   StatusEntity copyWith({
@@ -102,6 +111,8 @@ class StatusEntity extends Equatable {
     String? syncStatus,
     List<StatusViewer>? viewers,
     List<StatusReaction>? reactions,
+    double? longitude,
+    double? latitude,
   }) {
     return StatusEntity(
       id: id ?? this.id,
@@ -125,6 +136,8 @@ class StatusEntity extends Equatable {
       syncStatus: syncStatus ?? this.syncStatus,
       viewers: viewers ?? this.viewers,
       reactions: reactions ?? this.reactions,
+      longitude: longitude ?? this.longitude,
+      latitude: latitude ?? this.latitude,
     );
   }
 }

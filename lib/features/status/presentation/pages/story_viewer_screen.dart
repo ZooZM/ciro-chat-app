@@ -121,7 +121,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final status = _currentStatus;
     return Scaffold(
       backgroundColor: status.backgroundColor != null
-          ? Color(int.parse(status.backgroundColor!.replaceAll('#', 'FF'), radix: 16))
+          ? Color(
+              int.parse(
+                status.backgroundColor!.replaceAll('#', 'FF'),
+                radix: 16,
+              ),
+            )
           : const Color(0xFFB3966D),
       body: SafeArea(
         child: Column(
@@ -163,7 +168,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             if (status.isMine)
               _StoryViewersBar(
                 statusId: status.id,
-                autoOpen: widget.openViewersOnStart && _currentIndex == widget.initialIndex,
+                autoOpen:
+                    widget.openViewersOnStart &&
+                    _currentIndex == widget.initialIndex,
               )
             else
               _StoryBottomBar(
@@ -300,9 +307,10 @@ class _StoryHeader extends StatelessWidget {
       ...state.viewedStatuses,
       ...state.myStatuses,
     ];
-    final latest = all
-        .cast<StatusEntity?>()
-        .firstWhere((s) => s?.id == status.id, orElse: () => null);
+    final latest = all.cast<StatusEntity?>().firstWhere(
+      (s) => s?.id == status.id,
+      orElse: () => null,
+    );
     final name = latest?.authorName ?? status.authorName;
     return name.isNotEmpty ? name : status.authorName;
   }
@@ -362,10 +370,7 @@ class _StoryHeader extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     _formatTimestamp(status.timestamp),
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: Colors.black54, fontSize: 13),
                   ),
                 ],
               ),
@@ -466,7 +471,9 @@ class _StoryBottomBarState extends State<_StoryBottomBar> {
                   ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                 ),
                 onTap: widget.onPause,
                 onSubmitted: (_) => _sendReply(),
@@ -517,9 +524,10 @@ class _StoryViewersBarState extends State<_StoryViewersBar> {
 
   StatusEntity? _findStatus(StatusState state) {
     if (state is! StatusLoaded) return null;
-    return state.myStatuses
-        .cast<StatusEntity?>()
-        .firstWhere((s) => s?.id == widget.statusId, orElse: () => null);
+    return state.myStatuses.cast<StatusEntity?>().firstWhere(
+      (s) => s?.id == widget.statusId,
+      orElse: () => null,
+    );
   }
 
   @override
@@ -550,12 +558,17 @@ class _StoryViewersBarState extends State<_StoryViewersBar> {
               ? () => _showViewersList(context, viewers, reactedUserIds)
               : null,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 12.0,
+            ),
             child: Row(
               children: [
-                const Icon(Icons.remove_red_eye_outlined,
-                    color: Colors.white70, size: 20),
+                const Icon(
+                  Icons.remove_red_eye_outlined,
+                  color: Colors.white70,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   viewers.isEmpty
@@ -565,8 +578,11 @@ class _StoryViewersBarState extends State<_StoryViewersBar> {
                 ),
                 if (viewers.isNotEmpty) ...[
                   const Spacer(),
-                  const Icon(Icons.chevron_right,
-                      color: Colors.white70, size: 20),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
                 ],
               ],
             ),
@@ -583,11 +599,13 @@ class _StoryViewersBarState extends State<_StoryViewersBar> {
   ) {
     showModalBottomSheet(
       context: context,
+
       backgroundColor: const Color(0xFF2C2C2C),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _ViewersSheet(viewers: viewers, reactedUserIds: reactedUserIds),
+      builder: (_) =>
+          _ViewersSheet(viewers: viewers, reactedUserIds: reactedUserIds),
     );
   }
 }
@@ -617,15 +635,19 @@ class _ViewersSheet extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
             children: [
-              const Icon(Icons.remove_red_eye_outlined,
-                  color: Colors.white70, size: 18),
+              const Icon(
+                Icons.remove_red_eye_outlined,
+                color: Colors.white70,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 '${viewers.length} ${'status.views'.tr()}',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
               ),
             ],
           ),
@@ -644,9 +666,11 @@ class _ViewersSheet extends StatelessWidget {
                       ? NetworkImage(viewer.avatarUrl)
                       : null,
                   child: viewer.avatarUrl.isEmpty
-                      ? Text(viewer.name.isNotEmpty
-                          ? viewer.name[0].toUpperCase()
-                          : '?')
+                      ? Text(
+                          viewer.name.isNotEmpty
+                              ? viewer.name[0].toUpperCase()
+                              : '?',
+                        )
                       : null,
                 ),
                 title: Text(
@@ -658,7 +682,11 @@ class _ViewersSheet extends StatelessWidget {
                   style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
                 trailing: hasLoved
-                    ? const Icon(Icons.favorite, color: Colors.redAccent, size: 20)
+                    ? const Icon(
+                        Icons.favorite,
+                        color: Colors.redAccent,
+                        size: 20,
+                      )
                     : null,
               );
             },

@@ -9,6 +9,8 @@ import 'package:ciro_chat_app/features/map/presentation/widgets/map_fab_column.d
 import 'package:ciro_chat_app/features/map/presentation/widgets/map_filter_sheet.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/map_top_bar.dart';
 import 'package:ciro_chat_app/features/map/presentation/widgets/user_details_sheet.dart';
+import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
+import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -223,6 +225,31 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showUserDetails(BuildContext context, MapUser user) {
+    // Tapping a marker with an active status ring opens the story viewer
+    // (same as the Updates tab), instead of the plain contact info sheet.
+    if (user.hasActiveStatus) {
+      final statusState = context.read<StatusCubit>().state;
+      if (statusState is StatusLoaded) {
+        final group = statusState.statusGroups[user.id];
+        if (group != null && group.isNotEmpty) {
+          final initialIndex = group.indexWhere((s) => !s.isViewed);
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(
+                  builder: (_) => StoryViewerScreen(
+                    statuses: group,
+                    initialIndex: initialIndex < 0 ? 0 : initialIndex,
+                  ),
+                ),
+              )
+              .whenComplete(() {
+                if (context.mounted) context.read<MapCubit>().selectUser(null);
+              });
+          return;
+        }
+      }
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -239,6 +266,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showFilterSheet(BuildContext context) {
+    // Refresh groups every time the filter is opened so newly created/joined
+    // groups show up — fire-and-forget, no loading indicator: the sheet's
+    // BlocBuilder just picks up the updated state.groups once it lands.
+    unawaited(context.read<MapCubit>().loadGroups());
     showGeneralDialog(
       context: context,
       barrierDismissible: true,

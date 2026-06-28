@@ -122,38 +122,6 @@ class _MapFilterSheetState extends State<MapFilterSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // Distance Section
-                _buildSectionCard(
-                  child: Column(
-                    children: [
-                      _buildSectionHeader('map_filter_distance'.tr(), Icons.near_me_outlined),
-                      const SizedBox(height: 8),
-                      _buildDistanceItem(
-                        'map_all_locations'.tr(),
-                        MapDistanceFilter.all,
-                        filter,
-                        cubit,
-                      ),
-                      _buildDistanceItem(
-                        'map_nearby_only'.tr(),
-                        MapDistanceFilter.nearby,
-                        filter,
-                        cubit,
-                        isLast: true,
-                        disabled: state.selfLocation == null,
-                      ),
-                      if (state.selfLocation == null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'map_nearby_needs_location'.tr(),
-                          style: AppTypography.caption.copyWith(color: Colors.grey.shade500),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
                 // Groups Section
                 _buildSectionCard(
                   child: Column(
@@ -260,41 +228,6 @@ class _MapFilterSheetState extends State<MapFilterSheet> {
                   const SizedBox(height: 2),
                   Text(subtitle, style: AppTypography.caption.copyWith(color: Colors.grey.shade500)),
                 ],
-              ),
-            ),
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF4CAF50) : Colors.grey.shade400,
-              size: 24,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDistanceItem(
-    String title,
-    MapDistanceFilter value,
-    MapFilter filter,
-    MapCubit cubit, {
-    bool isLast = false,
-    bool disabled = false,
-  }) {
-    final isSelected = filter.distance == value;
-    return InkWell(
-      onTap: disabled ? null : () => cubit.setDistanceFilter(value),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: isLast ? 0 : 12, top: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: AppTypography.body1.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: disabled ? Colors.grey.shade400 : Colors.black87,
-                ),
               ),
             ),
             Icon(

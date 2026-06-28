@@ -29,6 +29,8 @@ class StatusModel extends StatusEntity {
     super.syncStatus = 'synced',
     super.viewers = const [],
     super.reactions = const [],
+    super.longitude,
+    super.latitude,
   });
 
   factory StatusModel.fromJson(Map<String, dynamic> json) {

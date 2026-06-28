@@ -115,24 +115,26 @@ class UserDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              // Action buttons
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _ActionButton(
-                    icon: Icons.message_outlined,
-                    label: 'map_messaging'.tr(),
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                  const SizedBox(height: 8),
-                  _ActionButton(
-                    icon: Icons.call_outlined,
-                    label: 'map_call'.tr(),
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
+              if (!user.isCurrentUser) ...[
+                const SizedBox(width: 10),
+                // Action buttons
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _ActionButton(
+                      icon: Icons.message_outlined,
+                      label: 'map_messaging'.tr(),
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    const SizedBox(height: 8),
+                    _ActionButton(
+                      icon: Icons.call_outlined,
+                      label: 'map_call'.tr(),
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
