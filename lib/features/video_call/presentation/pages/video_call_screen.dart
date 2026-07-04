@@ -353,35 +353,32 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         color: Colors.black.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(40.resR),
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           // Left: Checkmark
-                          Positioned(
-                            left: 0,
-                            child: GestureDetector(
-                              onTap: () async {
-                                if (Navigator.of(context).canPop()) {
-                                  Navigator.of(context).pop();
-                                }
-                              },
-                              child: Container(
-                                width: 44.resR,
-                                height: 44.resR,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE5395A), // Solid dark red
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 26.resR,
-                                ),
+                          GestureDetector(
+                            onTap: () async {
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                            child: Container(
+                              width: 44.resR,
+                              height: 44.resR,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE5395A), // Solid dark red
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 26.resR,
                               ),
                             ),
                           ),
                           
-                          // Center: Info and Avatar
+                          // Right: Info and Avatar
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -429,17 +426,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                   ),
                                 ),
                               ),
+                              SizedBox(width: 4.resW),
+                              Icon(
+                                Icons.keyboard_arrow_down,
+                                color: Colors.white,
+                                size: 24.resR,
+                              ),
                             ],
-                          ),
-
-                          // Right: Down arrow
-                          Positioned(
-                            right: 4.resW,
-                            child: Icon(
-                              Icons.keyboard_arrow_down,
-                              color: Colors.white,
-                              size: 24.resR,
-                            ),
                           ),
                         ],
                       ),
@@ -568,13 +561,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                   isActive: isSharing,
                                   onTap: () => _onScreenShareTap(context),
                                 ),
-                                SizedBox(width: 8.resW),
                                 _buildIconBtn(
-                                  icon: speakerIconForRoute(_routeState.activeRoute),
-                                  isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
-                                  onTap: () => AudioRoutePickerSheet.show(context),
+                                  icon: Icons.sentiment_satisfied_alt,
+                                  onTap: () {
+                                    // Smiley face action (could be reactions or audio route picker)
+                                    AudioRoutePickerSheet.show(context);
+                                  },
                                 ),
-                                SizedBox(width: 8.resW),
                                 _buildIconBtn(
                                   icon: _isMicMuted ? Icons.mic_off : Icons.mic,
                                   isActive: _isMicMuted,
@@ -590,23 +583,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                     }
                                   },
                                 ),
-                                SizedBox(width: 8.resW),
                                 _buildIconBtn(
-                                  icon: _isCameraDisabled ? Icons.videocam_off : Icons.sync,
-                                  isActive: _isCameraDisabled,
-                                  onTap: () async {
-                                    try {
-                                      final targetDisabled = !_isCameraDisabled;
-                                      await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
-                                      setState(() => _isCameraDisabled = targetDisabled);
-                                    } catch (e) {
-                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                                    }
-                                  },
-                                ),
-                                SizedBox(width: 8.resW),
-                                _buildIconBtn(
-                                  icon: Icons.flip_camera_ios,
+                                  icon: Icons.sync,
                                   onTap: () async {
                                     try {
                                       final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
@@ -623,7 +601,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                     }
                                   },
                                 ),
-                                SizedBox(width: 8.resW),
                                 // End call button
                                 GestureDetector(
                                   onTap: () async {

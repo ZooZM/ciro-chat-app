@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:ui' as ui;
 import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,9 +47,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   StreamSubscription<AudioRouteState>? _routeSub;
   AudioRouteState _routeState = const AudioRouteState();
 
+  late final Stopwatch _callTimer;
+  Timer? _uiTimer;
+
   @override
   void initState() {
     super.initState();
+    _callTimer = Stopwatch()..start();
+    _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _isMicMuted = widget.initialMicMuted;
     _routeSub = _audioRoute.routeStream.listen((s) {
       if (mounted) setState(() => _routeState = s);
@@ -125,6 +132,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   @override
   void dispose() {
+    _uiTimer?.cancel();
+    _callTimer.stop();
     _room?.removeListener(_onRoomUpdate);
     _routeSub?.cancel();
     if (!_isUpgrading) {
@@ -135,16 +144,18 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     super.dispose();
   }
 
+  String get _elapsedLabel {
+    final s = _callTimer.elapsed;
+    final mm = s.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = s.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_room == null && !_isConnecting) {
-      return const Scaffold(backgroundColor: Color(0xFF555555));
+      return const Scaffold(backgroundColor: Color(0xFFEA4071));
     }
-
-    final isConnected =
-        !_isConnecting && _room != null && _hasRemoteParticipantJoined;
-
-    // (Removed the black screen transition here as per user's request for inline button update)
 
     return PopScope(
       canPop: false,
@@ -155,195 +166,241 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         if (context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(
-          0xFF555555,
-        ), // Dark grey background matching the image
+        backgroundColor: const Color(0xFFEA4071), // Solid dark pink background
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              const Spacer(flex: 3),
-              // Avatar
-              CircleAvatar(
-                radius: 65.resR,
-                backgroundColor: const Color(0xFF8E6FB1), // Muted purple
-                child: Text(
-                  widget.avatarInitials,
-                  style: AppTypography.headline1.copyWith(
-                    color: Colors.white,
-                    fontSize: 50,
-                    fontWeight: FontWeight.w500,
+              // Top Bar
+              Positioned(
+                top: 16.resH,
+                left: 16.resW,
+                right: 16.resW,
+                child: Container(
+                  height: 72.resH,
+                  padding: EdgeInsets.symmetric(horizontal: 12.resW),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(40.resR),
                   ),
-                ),
-              ),
-              SizedBox(height: 24.resH),
-              // Name
-              Text(
-                widget.contactName,
-                style: AppTypography.headline3.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 24,
-                ),
-              ),
-              SizedBox(height: 8.resH),
-              // Calling Status
-              Text(
-                _isConnecting
-                    ? 'Connecting...'
-                    : (!isConnected ? 'Ringing...' : 'Connected'),
-                style: AppTypography.body1.copyWith(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                ),
-              ),
-
-              const Spacer(flex: 4),
-
-              // ── Bottom Controls ──────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Mute / Mic Toggle
-                  _buildControlButton(
-                    _isMicMuted ? Icons.mic_off : Icons.mic,
-                    _isMicMuted ? Colors.white : Colors.white24,
-                    _isMicMuted ? Colors.red : Colors.white,
-                    onPressed: () async {
-                      try {
-                        final targetMuted = !_isMicMuted;
-                        await _room!.localParticipant?.setMicrophoneEnabled(
-                          !targetMuted,
-                        );
-                        if (!mounted) return;
-                        context.read<CallCubit>().reportLocalMute(targetMuted);
-                        setState(() => _isMicMuted = targetMuted);
-                      } catch (e) {
-                        debugPrint('Failed to toggle mic: $e');
-                      }
-                    },
-                  ),
-                  SizedBox(width: 24.resW),
-                  // Audio route — opens the Earpiece/Speaker/Bluetooth picker
-                  // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
-                  _buildControlButton(
-                    speakerIconForRoute(_routeState.activeRoute),
-                    _routeState.activeRoute == AudioOutputRoute.earpiece
-                        ? Colors.white24
-                        : Colors.white,
-                    _routeState.activeRoute == AudioOutputRoute.earpiece
-                        ? Colors.white
-                        : Colors.green,
-                    onPressed: () => AudioRoutePickerSheet.show(context),
-                  ),
-                  SizedBox(width: 24.resW),
-                  // Video Upgrade
-                  _isUpgrading
-                      ? Container(
-                          width: 60.resW,
-                          height: 60.resW,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Left: Checkmark
+                      GestureDetector(
+                        onTap: () async {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        child: Container(
+                          width: 44.resR,
+                          height: 44.resR,
                           decoration: const BoxDecoration(
-                            color: Colors.green, // Primary color when activated
+                            color: Color(0xFFE5395A), // Solid dark red
                             shape: BoxShape.circle,
                           ),
-                          child: const Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
+                          child: Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 26.resR,
+                          ),
+                        ),
+                      ),
+                      
+                      // Right: Info and Avatar
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.chevron_left,
+                                    color: Colors.white,
+                                    size: 20.resR,
+                                  ),
+                                  SizedBox(width: 4.resW),
+                                  Text(
+                                    widget.contactName,
+                                    style: AppTypography.subtitle1.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 18.resSp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                _elapsedLabel,
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white70,
+                                  fontSize: 13.resSp,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(width: 12.resW),
+                          CircleAvatar(
+                            radius: 20.resR,
+                            backgroundColor: Colors.transparent,
+                            child: Text(
+                              widget.contactName.isNotEmpty ? widget.contactName[0].toUpperCase() : '?',
+                              style: AppTypography.subtitle2.copyWith(
                                 color: Colors.white,
-                                strokeWidth: 2,
+                                fontSize: 14.resSp,
                               ),
                             ),
                           ),
-                        )
-                      : _buildControlButton(
-                          Icons.videocam_off, // Starts as videocam_off
-                          Colors.white24, // Greyish background initially
-                          Colors.white,
-                          onPressed: () async {
-                            if (context.mounted) {
-                              final status = await Permission.camera.request();
-                              if (status.isGranted) {
-                                setState(() => _isUpgrading = true);
-                                try {
-                                  // Enable camera and simulate connection delay
-                                  await Future.wait([
-                                    _room?.localParticipant?.setCameraEnabled(
-                                          true,
-                                        ) ??
-                                        Future.value(),
-                                    Future.delayed(const Duration(seconds: 1)),
-                                  ]);
-                                } catch (e) {
-                                  debugPrint(
-                                    'Failed to enable camera before upgrade: $e',
-                                  );
-                                }
-
-                                if (context.mounted) {
-                                  // Navigate to VideoCallScreen
-                                  context.pushReplacement(
-                                    AppRouterName.videoCall,
-                                    extra: {
-                                      'contactName': widget.contactName,
-                                      'livekitUrl': widget.livekitUrl,
-                                      'livekitToken': widget.livekitToken,
-                                    },
-                                  );
-                                }
-                              } else {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Camera permission is required to switch to video.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            }
-                          },
-                        ),
-                ],
+                          SizedBox(width: 4.resW),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white,
+                            size: 24.resR,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              SizedBox(height: 32.resH),
 
-              // ── End Call Button ──────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40.resW),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56.resH,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      await context.read<CallCubit>().endCall();
-                      await _room?.disconnect();
-                      if (context.mounted) context.go(AppRouterName.home);
-                    },
-                    icon: const Icon(Icons.phone_missed, color: Colors.white),
-                    label: const Text(
-                      'End Call',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(
-                        0xFFE53935,
-                      ), // Exact red from design
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28.resR),
-                      ),
-                      elevation: 0,
+              // PIP Avatar (Left)
+              Positioned(
+                left: 16.resW,
+                top: 110.resH,
+                child: Container(
+                  width: 100.resR,
+                  height: 170.resR,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF35C8D),
+                    borderRadius: BorderRadius.circular(24.resR),
+                  ),
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  child: CircleAvatar(
+                    radius: 35.resR,
+                    backgroundColor: Colors.black12,
+                    child: Text(
+                      'Me',
+                      style: AppTypography.headline2.copyWith(color: Colors.white),
                     ),
                   ),
                 ),
               ),
-              SizedBox(height: 48.resH),
+
+              // Large Center Avatar
+              Center(
+                child: Container(
+                  width: 280.resR,
+                  height: 280.resR,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withOpacity(0.12),
+                  ),
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  child: CircleAvatar(
+                    radius: 110.resR,
+                    backgroundColor: Colors.transparent,
+                    child: Text(
+                      widget.contactName.isNotEmpty ? widget.contactName[0].toUpperCase() : '?',
+                      style: AppTypography.headline1.copyWith(
+                        color: Colors.white,
+                        fontSize: 64.resSp,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Bottom White Circle
+              Positioned(
+                bottom: 150.resH,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    width: 80.resR,
+                    height: 80.resR,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4.5.resR),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Bottom Control Bar
+              Positioned(
+                bottom: 24.resH,
+                left: 16.resW,
+                right: 16.resW,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(40.resR),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 12.resH, horizontal: 16.resW),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildIconBtn(
+                            icon: Icons.arrow_upward_rounded,
+                            onTap: () {},
+                          ),
+                          _buildIconBtn(
+                            icon: Icons.sentiment_satisfied_alt,
+                            onTap: () => AudioRoutePickerSheet.show(context),
+                          ),
+                          _buildIconBtn(
+                            icon: _isMicMuted ? Icons.mic_off : Icons.mic,
+                            isActive: _isMicMuted,
+                            onTap: () async {
+                              try {
+                                final targetMuted = !_isMicMuted;
+                                await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                                if (!mounted) return;
+                                context.read<CallCubit>().reportLocalMute(targetMuted);
+                                setState(() => _isMicMuted = targetMuted);
+                              } catch (e) {
+                                debugPrint('Failed to toggle mic: $e');
+                              }
+                            },
+                          ),
+                          _buildIconBtn(
+                            icon: Icons.sync,
+                            onTap: () {},
+                          ),
+                          // End call button
+                          GestureDetector(
+                            onTap: () async {
+                              await context.read<CallCubit>().endCall();
+                              await _room?.disconnect();
+                              if (context.mounted) context.go(AppRouterName.home);
+                            },
+                            child: Container(
+                              width: 52.resR,
+                              height: 52.resR,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.videocam_off, color: const Color(0xFFE33451), size: 26.resR),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -351,21 +408,17 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     );
   }
 
-  Widget _buildControlButton(
-    IconData icon,
-    Color bgColor,
-    Color iconColor, {
-    VoidCallback? onPressed,
-  }) {
+  Widget _buildIconBtn({required IconData icon, required VoidCallback onTap, bool isActive = false}) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: onTap,
       child: Container(
-        width: 60.resW,
-        height: 60.resW,
-        decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-        child: Center(
-          child: Icon(icon, color: iconColor, size: 28.resW),
+        width: 52.resR,
+        height: 52.resR,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.2),
+          shape: BoxShape.circle,
         ),
+        child: Icon(icon, color: Colors.white, size: 24.resR),
       ),
     );
   }
