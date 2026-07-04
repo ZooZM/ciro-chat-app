@@ -72,6 +72,27 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- 021-reels-video-feed: reel deep links (FR-038/FR-039).
+                 autoVerify requires assetlinks.json hosted at
+                 https://ciro.chat/.well-known/assetlinks.json — until that
+                 domain hosting exists, use the cirochat:// scheme below for
+                 local testing. go_router matches routes on Uri.path alone,
+                 so use the empty-authority form so the path lines up with
+                 the registered `/reels/:id` route:
+                 adb shell am start -a android.intent.action.VIEW -d "cirochat:///reels/reel-1" -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="ciro.chat" android:pathPrefix="/reels"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="cirochat"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

@@ -18,6 +18,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/chat_cubit.dart';
 import '../../domain/value_objects/voice_waveform.dart';
 import 'media_gallery_viewer.dart';
+import 'reel_share_bubble.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main bubble widget
@@ -359,6 +360,12 @@ class MessageBubbleWidget extends StatelessWidget {
         );
       case MessageType.poll:
         return _PollBubble(
+          message: message,
+          isMine: _isMine,
+          footer: _buildFooter(),
+        );
+      case MessageType.reelShare:
+        return ReelShareBubble(
           message: message,
           isMine: _isMine,
           footer: _buildFooter(),

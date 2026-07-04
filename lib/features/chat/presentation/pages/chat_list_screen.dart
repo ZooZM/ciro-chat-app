@@ -15,7 +15,12 @@ import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../../status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:ciro_chat_app/features/call_history/presentation/pages/calls_history_screen.dart';
+import 'package:ciro_chat_app/features/reels/presentation/pages/reels_feed_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+/// Bottom-nav tab index for Reels — inserted after Calls per the
+/// "keep the Call icon/tab as-is and add Reels directly after it" clarification.
+const int kReelsTabIndex = 4;
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -45,8 +50,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: (_currentIndex == 2 || _currentIndex == 3)
+      // Black on Reels: the bottom nav Container's rounded top corners clip
+      // to reveal whatever sits behind them — with a white Scaffold, that
+      // was showing as a white sliver at the corners even though the
+      // Container's own decoration was already black.
+      backgroundColor: _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
+      appBar: (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == kReelsTabIndex)
           ? null
           : AppBar(
               backgroundColor: Colors.white,
@@ -100,26 +109,38 @@ class _ChatListScreenState extends State<ChatListScreen> {
       body: _buildBody(context),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          // Dark-themed while viewing Reels — matches the inner
+          // BottomNavigationBar below so no white/light edge shows through
+          // at the rounded top corners or border (spec.md clarification
+          // 2026-07-02).
+          color: _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: Colors.green.withOpacity(0.15), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withOpacity(0.05),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
+          border: _currentIndex == kReelsTabIndex
+              ? null
+              : Border.all(color: Colors.green.withOpacity(0.15), width: 1.5),
+          boxShadow: _currentIndex == kReelsTabIndex
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
         ),
         child: ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           child: BottomNavigationBar(
-            backgroundColor: Colors.white,
+            // Dark-themed while viewing Reels so the bar blends with the
+            // full-screen video behind it (spec.md clarification 2026-07-02).
+            backgroundColor:
+                _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
             type: BottomNavigationBarType.fixed,
             currentIndex: _currentIndex,
             onTap: (index) => setState(() => _currentIndex = index),
             selectedItemColor: AppColors.primary,
-            unselectedItemColor: Colors.grey[600],
+            unselectedItemColor:
+                _currentIndex == kReelsTabIndex ? Colors.white70 : Colors.grey[600],
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -196,7 +217,21 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
                 label: 'nav_calls'.tr(),
               ),
-              // ── 5. Profile ────────────────────────────────────────────────
+              // ── 5. Reels ──────────────────────────────────────────────────
+              BottomNavigationBarItem(
+                icon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.play_circle_outline, size: 28),
+                ),
+                activeIcon: Container(
+                  height: 40,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.play_circle, size: 28),
+                ),
+                label: 'nav_reels'.tr(),
+              ),
+              // ── 6. Profile ────────────────────────────────────────────────
               BottomNavigationBarItem(
                 icon: Container(
                   height: 40,
@@ -234,6 +269,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
     if (_currentIndex == 3) {
       return const CallsHistoryScreen();
+    }
+    if (_currentIndex == kReelsTabIndex) {
+      return const ReelsFeedScreen();
     }
     // Default to Chat List
     return Column(

@@ -32,10 +32,14 @@
 	<string>We need camera access for video calls.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>We need access to your contacts to help you find friends to chat with.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.cirochat.zooz.chinaparts.task</string>
+	</array>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn't in the foreground.</string>
+	<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn&apos;t in the foreground.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn't in the foreground.</string>
+	<string>We need your location in the background so your contacts can keep seeing you on the map while sharing is on, even when the app isn&apos;t in the foreground.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We need your location to send location messages and show you on the map.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -43,9 +47,9 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photo library to allow you to send photos and videos in chats.</string>
 	<key>RTCAppGroupIdentifier</key>
-	<string>group.com.cirochat.zeyad.shared</string>
+	<string>group.com.cirochat.zeyad.chinaparts.shared</string>
 	<key>RTCScreenSharingExtension</key>
-	<string>com.cirochat.zeyad.ciroChat.ScreenShareBroadcast</string>
+	<string>com.cirochat.zooz.chinaparts.ScreenShareBroadcast</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -61,6 +65,22 @@
 	<string>Main</string>
 	<key>UIStatusBarHidden</key>
 	<false/>
+	<!-- 021-reels-video-feed: cirochat:// scheme fallback for reel deep links
+	     during development, until Universal Links (Runner.entitlements) are
+	     fully hosted. Use the empty-authority form so the URI's path lines
+	     up with the registered `/reels/:id` route:
+	     xcrun simctl openurl booted "cirochat:///reels/reel-1" -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>chat.ciro.reels</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cirochat</string>
+			</array>
+		</dict>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
