@@ -12,7 +12,7 @@ class AppConstants {
       dotenv.maybeGet('API_URL') ??
       const String.fromEnvironment(
         'API_URL',
-        defaultValue: 'https://vella-niftier-gertrude.ngrok-free.dev',
+        defaultValue: 'https://cirochat.com',
       );
 
   static String get liveKitWsUrl =>

@@ -1,3 +1,4 @@
+import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
@@ -30,6 +31,10 @@ import '../../features/video_call/presentation/pages/avatar_incoming_call_screen
 import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
 import '../../features/video_call/presentation/bloc/call_cubit.dart';
 import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
+import '../../features/reels/presentation/pages/creator_profile_screen.dart';
+import '../../features/reels/presentation/pages/reels_feed_screen.dart';
+import '../../features/reels/presentation/pages/search_screen.dart';
+import '../../features/reels/presentation/pages/upload_reel_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -69,10 +74,30 @@ class AppRouterName {
   static const String avatarIncomingCall = '/avatar_incoming_call';
   static const String avatarActiveCall = '/avatar_active_call';
   static const String recordings = '/recordings';
+  static const String reelDeepLink = '/reels/:id';
+  static const String reelCreatorFeed = '/reels/creator/:id';
+  static const String creatorProfile = '/reels/profile/:id';
+  static const String reelHashtagFeed = '/reels/hashtag/:tag';
+  static const String reelLikedFeed = '/reels/liked';
+  static const String reelSavedFeed = '/reels/saved';
+  static const String reelSearch = '/reels/search';
+  // v3 (FR-060): declared before `/reels/:id` for the same reason as the
+  // other static 2-segment reels paths above.
+  static const String reelUpload = '/reels/upload';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
     GlobalKey<NavigatorState>();
+
+/// Lets a still-mounted screen detect "a route pushed on top of me was just
+/// popped, I'm visible again" (`RouteAware.didPopNext`) — unlike `initState`,
+/// which only runs once per widget instance and therefore misses this signal
+/// for a screen that was never rebuilt (e.g. the Reels tab body sitting under
+/// a pushed Creator Profile / scoped-feed route). Used by `ReelsFeedScreen`
+/// to re-sync its scope against the shared `ReelsFeedBloc` singleton, which a
+/// pushed scoped feed (creator/hashtag/liked/saved) may have mutated.
+final RouteObserver<PageRoute<dynamic>> reelsRouteObserver =
+    RouteObserver<PageRoute<dynamic>>();
 
 /// Checks if the app was launched by tapping a push notification (terminated state).
 /// If so, navigates directly to the referenced chat room or status.
@@ -84,6 +109,19 @@ Future<void> handleInitialNotification() async {
   if (type == 'statusReaction') {
     final statusId = message.data['statusId'] as String?;
     if (statusId != null) await navigateToStatusReaction(statusId);
+    return;
+  }
+  if (type == 'newFollower' || type == 'reelLike' || type == 'reelMention') {
+    final payload = type == 'newFollower'
+        ? 'reelProfile:${message.data['actorId']}'
+        : 'reel:${message.data['reelId']}';
+    await navigateToReelsNotification(payload);
+    return;
+  }
+  // v3 (FR-064): rejection is system-originated (no actorId) — resolved to
+  // the current user's own profile at navigation time (see below).
+  if (type == 'reelRejected') {
+    await navigateToReelsNotification('reelOwnProfile:');
     return;
   }
 
@@ -122,8 +160,29 @@ Future<void> navigateToStatusReaction(String statusId) async {
   appRouter.go(AppRouterName.updates);
 }
 
+/// FR-054/FR-064: routes a tapped Reels notification — `reel:<id>` opens
+/// that reel (deep-link entry, FR-040); `reelProfile:<id>` opens that
+/// user's profile; `reelOwnProfile:` (no id — the rejection push carries no
+/// actorId, FR-064) opens the *current* user's own profile, resolved here
+/// at navigation time. Used by both the FCM cold/background tap handler and
+/// the locally-shown foreground banner tap (mirrors the `status:`-prefixed
+/// payload convention).
+Future<void> navigateToReelsNotification(String payload) async {
+  if (payload.startsWith('reelOwnProfile:')) {
+    final userId = await getIt<AuthLocalDataSource>().getUserId();
+    if (userId != null && userId.isNotEmpty) {
+      appRouter.push('/reels/profile/$userId');
+    }
+  } else if (payload.startsWith('reelProfile:')) {
+    appRouter.push('/reels/profile/${payload.substring('reelProfile:'.length)}');
+  } else if (payload.startsWith('reel:')) {
+    appRouter.push('/reels/${payload.substring('reel:'.length)}');
+  }
+}
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: globalNavigatorKey,
+  observers: [reelsRouteObserver],
   initialLocation: AppRouterName.splash,
   // GoRouterRefreshStream bridges AuthCubit state changes to GoRouter.
   // Every time AuthCubit emits a new state, the redirect guard below is re-run.
@@ -154,13 +213,25 @@ final GoRouter appRouter = GoRouter(
     // Eject from splash/auth screens into the app; don't disturb any other screen.
     if (authState is Authenticated) {
       await context.read<ChatCubit>().hydrateRooms();
-      if (isAuthRoute) return AppRouterName.home;
+      if (isAuthRoute) {
+        // FR-043: a reel deep link opened while logged out completes the
+        // normal login flow first, then continues to the linked reel —
+        // restricted to /reels/ targets so this can't become an open redirect.
+        final target = state.uri.queryParameters['redirect'];
+        if (target != null && target.startsWith('/reels/')) return target;
+        return AppRouterName.home;
+      }
       return null;
     }
 
     // ── RULE 3: Unauthenticated or AuthError ──────────────────────────────────
     // Redirect to /auth only if not already there.
-    if (!isAuthRoute && !isSplash) return AppRouterName.auth;
+    if (!isAuthRoute && !isSplash) {
+      if (location.startsWith('/reels/')) {
+        return '${AppRouterName.auth}?redirect=${Uri.encodeComponent(location)}';
+      }
+      return AppRouterName.auth;
+    }
     return null;
   },
   routes: [
@@ -362,6 +433,66 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.recordings,
       builder: (context, state) => const RecordingsListPage(),
+    ),
+    // Declared before the single-segment `/reels/:id` route below so the
+    // literal `creator` segment is matched first (FR-026).
+    GoRoute(
+      path: AppRouterName.reelCreatorFeed,
+      builder: (context, state) {
+        final creatorId = state.pathParameters['id'] ?? '';
+        final startReelId = state.uri.queryParameters['start'];
+        return ReelsFeedScreen(creatorId: creatorId, initialReelId: startReelId);
+      },
+    ),
+    // Declared before `/reels/:id` for the same reason as the route above.
+    GoRoute(
+      path: AppRouterName.creatorProfile,
+      builder: (context, state) {
+        final userId = state.pathParameters['id'] ?? '';
+        return CreatorProfileScreen(userId: userId);
+      },
+    ),
+    // Declared before `/reels/:id` for the same reason as the routes above.
+    GoRoute(
+      path: AppRouterName.reelHashtagFeed,
+      builder: (context, state) {
+        final tag = state.pathParameters['tag'] ?? '';
+        return ReelsFeedScreen(hashtag: tag);
+      },
+    ),
+    // `/reels/liked` and `/reels/saved` are also 2-segment paths, colliding
+    // with `/reels/:id` — declared before it for the same reason.
+    GoRoute(
+      path: AppRouterName.reelLikedFeed,
+      builder: (context, state) => ReelsFeedScreen(
+        listSource: 'liked',
+        initialReelId: state.uri.queryParameters['start'],
+      ),
+    ),
+    GoRoute(
+      path: AppRouterName.reelSavedFeed,
+      builder: (context, state) => ReelsFeedScreen(
+        listSource: 'saved',
+        initialReelId: state.uri.queryParameters['start'],
+      ),
+    ),
+    GoRoute(
+      path: AppRouterName.reelSearch,
+      builder: (context, state) => const ReelsSearchScreen(),
+    ),
+    // v3 (FR-060): declared before `/reels/:id` — same static-route-first
+    // reasoning as the routes above.
+    GoRoute(
+      path: AppRouterName.reelUpload,
+      builder: (context, state) => const UploadReelScreen(),
+    ),
+    // Deep-link entry point (FR-038/FR-040): `https://ciro.chat/reels/:id`.
+    GoRoute(
+      path: AppRouterName.reelDeepLink,
+      builder: (context, state) {
+        final reelId = state.pathParameters['id'] ?? '';
+        return ReelsFeedScreen(initialReelId: reelId);
+      },
     ),
     GoRoute(
       path: AppRouterName.avatarIncomingCall,

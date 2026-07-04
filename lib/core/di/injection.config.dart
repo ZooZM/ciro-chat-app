@@ -66,6 +66,24 @@ import '../../features/payment/data/repositories/payment_repository_impl.dart'
 import '../../features/payment/domain/repositories/payment_repository.dart'
     as _i639;
 import '../../features/payment/presentation/bloc/payment_cubit.dart' as _i420;
+import '../../features/reels/data/datasources/reels_prefetch_service.dart'
+    as _i192;
+import '../../features/reels/data/datasources/reels_remote_datasource.dart'
+    as _i876;
+import '../../features/reels/data/repositories/reels_repository_impl.dart'
+    as _i1070;
+import '../../features/reels/domain/repositories/reels_repository.dart'
+    as _i695;
+import '../../features/reels/presentation/bloc/comments_cubit.dart' as _i1035;
+import '../../features/reels/presentation/bloc/creator_profile_cubit.dart'
+    as _i1035;
+import '../../features/reels/presentation/bloc/reels_feed_bloc.dart' as _i1020;
+import '../../features/reels/presentation/bloc/reels_interaction_cubit.dart'
+    as _i851;
+import '../../features/reels/presentation/bloc/search_cubit.dart' as _i981;
+import '../../features/reels/presentation/bloc/upload_cubit.dart' as _i645;
+import '../../features/reels/presentation/services/reels_player_pool.dart'
+    as _i210;
 import '../../features/status/data/datasources/music_remote_data_source.dart'
     as _i1015;
 import '../../features/status/data/datasources/status_local_data_source.dart'
@@ -141,6 +159,10 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i248.MapLocationService(),
     );
     gh.lazySingleton<_i548.MarkerIconFactory>(() => _i548.MarkerIconFactory());
+    gh.lazySingleton<_i192.ReelsPrefetchService>(
+      () => _i192.ReelsPrefetchService(),
+    );
+    gh.lazySingleton<_i210.ReelsPlayerPool>(() => _i210.ReelsPlayerPool());
     gh.lazySingleton<_i137.StatusLocalDataSource>(
       () => _i137.StatusLocalDataSourceImpl(),
     );
@@ -199,6 +221,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i907.TranslationSocketDataSource>(
       () => _i907.TranslationSocketDataSource(gh<_i917.SocketService>()),
     );
+    gh.lazySingleton<_i876.ReelsRemoteDataSource>(
+      () => _i876.ReelsRemoteDataSourceImpl(gh<_i667.DioClient>()),
+    );
     gh.lazySingleton<_i639.PaymentRepository>(
       () => _i265.PaymentRepositoryImpl(gh<_i811.PaymentRemoteDataSource>()),
     );
@@ -220,6 +245,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i750.RecordingsLocalDataSource>(
       () => _i750.RecordingsLocalDataSourceImpl(gh<_i94.ChatLocalDataSource>()),
+    );
+    gh.lazySingleton<_i695.ReelsRepository>(
+      () => _i1070.ReelsRepositoryImpl(gh<_i876.ReelsRemoteDataSource>()),
     );
     gh.factory<_i420.PaymentCubit>(
       () => _i420.PaymentCubit(gh<_i639.PaymentRepository>()),
@@ -299,10 +327,27 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i484.StatusCubit>(
       () => _i484.StatusCubit(gh<_i171.StatusRepository>()),
     );
+    gh.lazySingleton<_i851.ReelsInteractionCubit>(
+      () => _i851.ReelsInteractionCubit(gh<_i695.ReelsRepository>()),
+    );
+    gh.factory<_i981.SearchCubit>(
+      () => _i981.SearchCubit(gh<_i695.ReelsRepository>()),
+    );
+    gh.factory<_i645.UploadCubit>(
+      () => _i645.UploadCubit(gh<_i695.ReelsRepository>()),
+    );
     gh.lazySingleton<_i52.AuthCubit>(
       () => _i52.AuthCubit(
         gh<_i787.AuthRepository>(),
         gh<_i852.AuthLocalDataSource>(),
+      ),
+    );
+    gh.lazySingleton<_i1020.ReelsFeedBloc>(
+      () => _i1020.ReelsFeedBloc(
+        gh<_i695.ReelsRepository>(),
+        gh<_i210.ReelsPlayerPool>(),
+        gh<_i192.ReelsPrefetchService>(),
+        gh<_i851.ReelsInteractionCubit>(),
       ),
     );
     gh.factory<_i708.ChatCubit>(
@@ -319,6 +364,18 @@ extension GetItInjectableX on _i174.GetIt {
         statusRepository: gh<_i171.StatusRepository>(),
         authCubit: gh<_i52.AuthCubit>(),
         locationService: gh<_i248.MapLocationService>(),
+      ),
+    );
+    gh.factory<_i1035.CommentsCubit>(
+      () => _i1035.CommentsCubit(
+        gh<_i695.ReelsRepository>(),
+        gh<_i851.ReelsInteractionCubit>(),
+      ),
+    );
+    gh.factory<_i1035.CreatorProfileCubit>(
+      () => _i1035.CreatorProfileCubit(
+        gh<_i695.ReelsRepository>(),
+        gh<_i851.ReelsInteractionCubit>(),
       ),
     );
     return this;

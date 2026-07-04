@@ -16,6 +16,9 @@ enum MessageType {
   poll,
   event,
   video,
+  /// 021-reels-video-feed: in-app reel share, rendered as a rich preview
+  /// card (FR-021c). Metadata keys: reelId, thumbnailUrl, creatorName, deepLink.
+  reelShare,
 }
 
 /// Maps a raw string from SQLite / socket payload to a [MessageType].
@@ -45,6 +48,9 @@ MessageType messageTypeFromString(String? raw) {
       return MessageType.event;
     case 'video':
       return MessageType.video;
+    case 'reel_share':
+    case 'reelshare':
+      return MessageType.reelShare;
     default:
       return MessageType.text;
   }
@@ -73,6 +79,8 @@ String messageTypeToString(MessageType type) {
       return 'event';
     case MessageType.video:
       return 'video';
+    case MessageType.reelShare:
+      return 'reel_share';
     case MessageType.text:
       return 'text';
   }

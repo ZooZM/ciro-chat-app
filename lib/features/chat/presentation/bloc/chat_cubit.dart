@@ -1069,6 +1069,54 @@ class ChatCubit extends Cubit<ChatState> {
     );
   }
 
+  // ── sendReelShare (021-reels-video-feed) ────────────────────────────────────
+
+  /// Sends a `reelShare` rich-preview-card message to an explicitly chosen
+  /// [room] — used by the Reels share sheet, which lets the user pick any
+  /// recent chat rather than only the currently open one. Bypasses
+  /// `_activeRoomId`/`_ensureRoom` (unlike every other `sendXMessage`
+  /// method) for exactly that reason.
+  Future<void> sendReelShare(
+    ChatSession room, {
+    required String reelId,
+    required String thumbnailUrl,
+    required String creatorName,
+    required String deepLink,
+  }) async {
+    final msgId = _uuid.v4();
+    final message = Message(
+      id: msgId,
+      clientMessageId: msgId,
+      roomId: room.id,
+      senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+      text: deepLink,
+      timestamp: DateTime.now(),
+      status: MessageStatus.pending,
+      type: MessageType.reelShare,
+      metadata: {
+        'reelId': reelId,
+        'thumbnailUrl': thumbnailUrl,
+        'creatorName': creatorName,
+        'deepLink': deepLink,
+      },
+    );
+
+    await _localDataSource.saveMessage(
+      message,
+      roomName: room.name,
+      roomAvatarUrl: room.avatarUrl,
+      roomPhoneNumber: room.phoneNumber,
+    );
+
+    _socketService.sendMessage(
+      roomId: room.id,
+      messageId: msgId,
+      text: message.text,
+      type: messageTypeToString(MessageType.reelShare),
+      metadata: message.metadata,
+    );
+  }
+
   // ── sendAudioMessage ────────────────────────────────────────────────────────
 
   Future<void> sendAudioMessage(BuildContext context) async {

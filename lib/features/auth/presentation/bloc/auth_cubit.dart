@@ -15,6 +15,8 @@ import '../../../map/presentation/bloc/map_cubit.dart';
 import '../../../video_call/presentation/bloc/call_cubit.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 import '../../../chat/data/datasources/chat_local_data_source.dart';
+import '../../../reels/presentation/bloc/reels_feed_bloc.dart';
+import '../../../reels/presentation/bloc/reels_interaction_cubit.dart';
 import '../../../../core/network/socket_service.dart';
 import '../../../../core/network/dio_client.dart' show globalOnUnauthorizedRedirect;
 import '../../../../core/di/injection.dart';
@@ -167,6 +169,10 @@ class AuthCubit extends Cubit<AuthState> {
       getIt<ChatCubit>().reset();
       getIt<CallCubit>().reset();
       await getIt<MapCubit>().reset();
+      // 021-reels-video-feed: disposes the player pool (constitution V) and
+      // clears likes/comments/shares/follows so the next login starts blank.
+      getIt<ReelsFeedBloc>().resetForLogout();
+      getIt<ReelsInteractionCubit>().reset();
 
       // 2. Disconnect Network & unregister push
       getIt<SocketService>().disconnect();

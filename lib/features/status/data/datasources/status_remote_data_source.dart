@@ -172,6 +172,12 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
   @override
   Future<List<StatusModel>> getFeed() async {
     final response = await dioClient.dio.get('/status/feed');
+    // TODO: Fix missing GlobalResponseInterceptor unwrapping to prevent runtime exception
+    // main.ts wraps every controller response as `{ success, message, data }`.
+    // If this route is actually passed through that interceptor, response.data
+    // is a Map, not a List, and this cast throws at runtime. Verify against a
+    // live backend and unwrap via response.data['data'] if confirmed — see
+    // specs/021-reels-video-feed/contracts/reels-api.md ("Response envelope").
     final data = response.data as List<dynamic>;
     return data.map((e) {
       final json = Map<String, dynamic>.from(e as Map<String, dynamic>);
@@ -186,6 +192,12 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
   @override
   Future<List<StatusViewerModel>> getViewers(String statusId) async {
     final response = await dioClient.dio.get('/status/$statusId/viewers');
+    // TODO: Fix missing GlobalResponseInterceptor unwrapping to prevent runtime exception
+    // main.ts wraps every controller response as `{ success, message, data }`.
+    // If this route is actually passed through that interceptor, response.data
+    // is a Map, not a List, and this cast throws at runtime. Verify against a
+    // live backend and unwrap via response.data['data'] if confirmed — see
+    // specs/021-reels-video-feed/contracts/reels-api.md ("Response envelope").
     final data = response.data as List<dynamic>;
     return data
         .map((e) => StatusViewerModel.fromJson(e as Map<String, dynamic>))
@@ -195,6 +207,12 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
   @override
   Future<List<StatusReactionModel>> getReactions(String statusId) async {
     final response = await dioClient.dio.get('/status/$statusId/reactions');
+    // TODO: Fix missing GlobalResponseInterceptor unwrapping to prevent runtime exception
+    // main.ts wraps every controller response as `{ success, message, data }`.
+    // If this route is actually passed through that interceptor, response.data
+    // is a Map, not a List, and this cast throws at runtime. Verify against a
+    // live backend and unwrap via response.data['data'] if confirmed — see
+    // specs/021-reels-video-feed/contracts/reels-api.md ("Response envelope").
     final data = response.data as List<dynamic>;
     return data
         .map((e) => StatusReactionModel.fromJson(e as Map<String, dynamic>))
@@ -204,6 +222,12 @@ class StatusRemoteDataSourceImpl implements StatusRemoteDataSource {
   @override
   Future<List<StatusAudienceContactModel>> getDefaultAudience() async {
     final response = await dioClient.dio.get('/status/audience/default');
+    // TODO: Fix missing GlobalResponseInterceptor unwrapping to prevent runtime exception
+    // main.ts wraps every controller response as `{ success, message, data }`.
+    // If this route is actually passed through that interceptor, response.data
+    // is a Map, not a List, and this cast throws at runtime. Verify against a
+    // live backend and unwrap via response.data['data'] if confirmed — see
+    // specs/021-reels-video-feed/contracts/reels-api.md ("Response envelope").
     final data = response.data as List<dynamic>;
     return data
         .map((e) => StatusAudienceContactModel.fromJson(e as Map<String, dynamic>))

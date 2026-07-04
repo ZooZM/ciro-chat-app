@@ -10,7 +10,12 @@ import 'package:injectable/injectable.dart';
 import '../di/injection.dart';
 import '../network/dio_client.dart';
 import '../routing/app_router.dart'
-    show AppRouterName, appRouter, handleInitialNotification, navigateToStatusReaction;
+    show
+        AppRouterName,
+        appRouter,
+        handleInitialNotification,
+        navigateToReelsNotification,
+        navigateToStatusReaction;
 import '../services/callkit_service.dart';
 import '../../features/chat/presentation/bloc/chat_cubit.dart';
 
@@ -104,6 +109,10 @@ class PushNotificationService {
         if (payload == null || payload.isEmpty) return;
         if (payload.startsWith('status:')) {
           navigateToStatusReaction(payload.substring('status:'.length)).ignore();
+        } else if (payload.startsWith('reel:') ||
+            payload.startsWith('reelProfile:') ||
+            payload.startsWith('reelOwnProfile:')) {
+          navigateToReelsNotification(payload).ignore();
         } else {
           _navigateToRoom(payload).ignore();
         }
@@ -140,6 +149,34 @@ class PushNotificationService {
 
   void handleForegroundMessage(RemoteMessage message) {
     final type = message.data['type'] as String?;
+
+    // 021-reels-video-feed (v2, FR-054): new follower / new like / mention.
+    // v3 (FR-064): reelRejected — a moderation violation on the uploader's
+    // own reel.
+    if (type == 'newFollower' ||
+        type == 'reelLike' ||
+        type == 'reelMention' ||
+        type == 'reelRejected') {
+      final notification = message.notification;
+      if (notification == null) return;
+      _localNotifications.show(
+        notification.hashCode,
+        notification.title,
+        notification.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'ciro_chat_reels',
+            'Reels',
+            channelDescription: 'Likes, follows, and mentions on Reels',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(threadIdentifier: 'reels'),
+        ),
+        payload: _reelsNotificationPayload(type!, message.data),
+      );
+      return;
+    }
 
     // Incoming 1:1 call push — show the native UI. Idempotent on callId, so it
     // is safe even when the socket path also fires (FR-VoIP-01, E2).
@@ -193,8 +230,31 @@ class PushNotificationService {
       if (statusId != null) navigateToStatusReaction(statusId).ignore();
       return;
     }
+    if (type == 'newFollower' ||
+        type == 'reelLike' ||
+        type == 'reelMention' ||
+        type == 'reelRejected') {
+      navigateToReelsNotification(_reelsNotificationPayload(type!, message.data)).ignore();
+      return;
+    }
     final roomId = message.data['roomId'] as String?;
     if (roomId != null) _navigateToRoom(roomId).ignore();
+  }
+
+  /// FR-054/FR-064: `reelLike`/`reelMention` → the reel; `newFollower` → the
+  /// follower's profile; `reelRejected` → the current user's own profile
+  /// (system-originated, no actorId — resolved at navigation time).
+  /// Encoded as a payload string so the same routing logic serves both the
+  /// FCM tap handler and the locally-shown banner tap (mirrors the existing
+  /// `status:`-prefixed payload convention).
+  String _reelsNotificationPayload(String type, Map<String, dynamic> data) {
+    if (type == 'newFollower') {
+      return 'reelProfile:${data['actorId']}';
+    }
+    if (type == 'reelRejected') {
+      return 'reelOwnProfile:';
+    }
+    return 'reel:${data['reelId']}';
   }
 
   Future<void> _navigateToRoom(String roomId) async {
