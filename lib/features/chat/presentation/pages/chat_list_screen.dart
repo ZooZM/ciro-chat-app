@@ -51,7 +51,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           : AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
-              titleSpacing: 16.resW,
+              titleSpacing: 0, // Shift the entire logo to the left
               title: ChatListAppBar(),
               actions: [
                 IconButton(
@@ -381,7 +381,7 @@ class ChatListAppBar extends StatelessWidget {
         ),
         // ── CIRO / CONNECT stacked text — right side of logo ─────────────
         Transform.translate(
-          offset: Offset(-6.resW, 0),
+          offset: Offset(-12.resW, 0), // Shift left
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,6 +389,7 @@ class ChatListAppBar extends StatelessWidget {
               Text(
                 'ciro',
                 style: AppTypography.logoMark.copyWith(
+                  fontFamily: 'GeometrySoftPro',
                   fontSize: 26,
                   height: 1.1,
                   letterSpacing: -1.0,

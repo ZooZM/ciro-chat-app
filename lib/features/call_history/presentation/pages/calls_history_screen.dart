@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -40,23 +41,8 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
     super.dispose();
   }
 
-  /// Tapping a row redials the contact using the record's call type (T038).
-  /// Group-call rows have no single callee to redial — fall back to contacts.
-  void _redial(BuildContext context, CallHistoryRecord record) {
-    if (record.isGroup) {
-      context.push(AppRouterName.contacts);
-      return;
-    }
-    getIt<CallCubit>().initiateCall(
-      targetUserId: record.contactUserId,
-      targetName: record.contactName,
-      targetAvatarUrl: record.avatarUrl ?? '',
-      isVideo: record.callType == CallType.video,
-    );
-    context.push(
-      AppRouterName.outgoingCall,
-      extra: {'contactName': record.contactName, 'avatarUrl': record.avatarUrl ?? ''},
-    );
+  void _openCallInfo(BuildContext context, CallHistoryRecord record) {
+    context.push(AppRouterName.callInfo, extra: record);
   }
 
   @override
@@ -64,9 +50,12 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
     return Scaffold(
       backgroundColor: Colors.white,
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.green,
-        onPressed: () => context.push(AppRouterName.contacts),
-        child: const Icon(Icons.call, color: Colors.white),
+        backgroundColor: const Color(0xFF4CAF50),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        onPressed: () => context.push(AppRouterName.selectContact),
+        child: const Icon(Icons.add_call, color: Colors.white, size: 28),
       ),
       body: SafeArea(
         child: Column(
@@ -74,34 +63,57 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text(
-                'calls_title'.tr(),
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (q) => context.read<CallHistoryCubit>().search(q),
-                decoration: InputDecoration(
-                  hintText: 'calls_search_hint'.tr(),
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'calls_title'.tr(),
+                    style: GoogleFonts.inter(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0,
+                      letterSpacing: 0,
+                      color: Colors.black,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
+                  SizedBox(
+                    width: 225,
+                    height: 30,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (q) => context.read<CallHistoryCubit>().search(q),
+                      textAlignVertical: TextAlignVertical.center,
+                      decoration: InputDecoration(
+                        hintText: 'calls_search_hint'.tr(),
+                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                        prefixIcon: Padding(
+                          padding: const EdgeInsets.only(left: 10, right: 10),
+                          child: Icon(Icons.search, color: Colors.grey[400], size: 16),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 30),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.only(top: 10, bottom: 10, left: 10, right: 15),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: Colors.green.withOpacity(0.3), width: 2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: const BorderSide(color: Colors.green, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
                 'calls_recent'.tr(),
-                style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500),
               ),
             ),
             Expanded(
@@ -124,7 +136,7 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
                           final record = records[index];
                           return CallHistoryTile(
                             record: record,
-                            onTap: () => _redial(context, record),
+                            onTap: () => _openCallInfo(context, record),
                           );
                         },
                       );

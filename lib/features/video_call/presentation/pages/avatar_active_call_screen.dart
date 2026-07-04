@@ -46,229 +46,275 @@ class AvatarActiveCallScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE57373), // Coral/Red top
-              Color(0xFFD32F2F), // Darker red bottom
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Main content
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Top Bar
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 16.resH),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 28.resR),
-                          onPressed: onMinimize,
-                        ),
-                        Expanded(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircleAvatar(
-                                radius: 14.resR,
-                                backgroundColor: Colors.white24,
-                                backgroundImage: remoteAvatarUrl.isNotEmpty
-                                    ? CachedNetworkImageProvider(remoteAvatarUrl)
-                                    : null,
-                                child: remoteAvatarUrl.isEmpty
-                                    ? Text(
-                                        _getInitials(remoteName),
-                                        style: AppTypography.subtitle2.copyWith(color: Colors.white, fontSize: 10.resSp),
-                                      )
-                                    : null,
-                              ),
-                              SizedBox(width: 8.resW),
-                              Flexible(
-                                child: Text(
-                                  remoteName,
-                                  style: AppTypography.subtitle1.copyWith(color: Colors.white),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              SizedBox(width: 8.resW),
-                              Text(
-                                callDuration,
-                                style: AppTypography.subtitle2.copyWith(color: Colors.white70),
-                              ),
-                            ],
+      backgroundColor: const Color(0xFFEA4071), // Adjusted dark pink background
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Top Bar
+            Positioned(
+              top: 16.resH,
+              left: 16.resW,
+              right: 16.resW,
+              child: Container(
+                height: 72.resH,
+                padding: EdgeInsets.symmetric(horizontal: 12.resW),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(40.resR),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Left: Checkmark
+                    Positioned(
+                      left: 0,
+                      child: GestureDetector(
+                        onTap: onMinimize,
+                        child: Container(
+                          width: 44.resR,
+                          height: 44.resR,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE5395A), // Solid dark red
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 26.resR,
                           ),
                         ),
-                        Icon(Icons.volume_up, color: Colors.white, size: 24.resR),
+                      ),
+                    ),
+                    
+                    // Center: Info and Avatar
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.chevron_left,
+                                  color: Colors.white,
+                                  size: 20.resR,
+                                ),
+                                SizedBox(width: 4.resW),
+                                Text(
+                                  remoteName,
+                                  style: AppTypography.subtitle1.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 18.resSp,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              callDuration,
+                              style: AppTypography.subtitle2.copyWith(
+                                color: Colors.white70,
+                                fontSize: 13.resSp,
+                              ),
+                            ),
+                          ],
+                        ),
                         SizedBox(width: 12.resW),
+                        CircleAvatar(
+                          radius: 20.resR,
+                          backgroundColor: Colors.transparent,
+                          backgroundImage: remoteAvatarUrl.isNotEmpty
+                              ? CachedNetworkImageProvider(remoteAvatarUrl)
+                              : null,
+                          child: remoteAvatarUrl.isEmpty
+                              ? Text(
+                                  _getInitials(remoteName),
+                                  style: AppTypography.subtitle2.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 14.resSp,
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
+
+                    // Right: Down arrow
+                    Positioned(
+                      right: 4.resW,
+                      child: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.white,
+                        size: 24.resR,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // PIP Avatar (Left)
+            Positioned(
+              left: 16.resW,
+              top: 110.resH,
+              child: Container(
+                width: 100.resR,
+                height: 170.resR,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF35C8D), // Matches the image PIP background
+                  borderRadius: BorderRadius.circular(24.resR),
+                ),
+                alignment: Alignment.center,
+                child: CircleAvatar(
+                  radius: 35.resR,
+                  backgroundColor: Colors.black12,
+                  backgroundImage: localAvatarUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(localAvatarUrl)
+                      : null,
+                  child: localAvatarUrl.isEmpty
+                      ? Text(
+                          _getInitials(localName),
+                          style: AppTypography.headline2.copyWith(
+                            color: Colors.white,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+
+            // Large Center Avatar
+            Center(
+              child: Container(
+                width: 280.resR,
+                height: 280.resR,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(0.12), // More visible darker circle
+                ),
+                alignment: Alignment.center,
+                child: CircleAvatar(
+                  radius: 110.resR,
+                  backgroundColor: Colors.transparent,
+                  backgroundImage: remoteAvatarUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(remoteAvatarUrl)
+                      : null,
+                  child: remoteAvatarUrl.isEmpty
+                      ? Text(
+                          _getInitials(remoteName),
+                          style: AppTypography.headline1.copyWith(
+                            color: Colors.white,
+                            fontSize: 64.resSp,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+            ),
+
+            // Bottom White Circle
+            Positioned(
+              bottom: 150.resH,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  width: 80.resR,
+                  height: 80.resR,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 4.5.resR),
+                  ),
+                ),
+              ),
+            ),
+
+            // Bottom Control Bar
+            Positioned(
+              bottom: 24.resH,
+              left: 16.resW,
+              right: 16.resW,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(40.resR),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      vertical: 12.resH,
+                      horizontal: 16.resW,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildIconBtn(
+                          Icons.arrow_upward_rounded,
+                          onTap: () {},
+                        ), // Upload arrow
+                        _buildIconBtn(
+                          Icons.sentiment_satisfied_alt,
+                          onTap: () {},
+                        ), // Smiley face
+                        _buildIconBtn(
+                          isMuted ? Icons.mic_off : Icons.mic,
+                          onTap: onToggleMute,
+                          isActive: isMuted,
+                        ), // Microphone
+                        _buildIconBtn(
+                          Icons.sync,
+                          onTap: onToggleCamera,
+                        ), // Reverse camera
+                        // White round button with red camera icon
                         GestureDetector(
                           onTap: onEndCall,
                           child: Container(
-                            padding: EdgeInsets.all(8.resR),
+                            width: 52.resR,
+                            height: 52.resR,
                             decoration: const BoxDecoration(
-                              color: AppColors.error,
+                              color: Colors.white,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.call_end, color: Colors.white, size: 20.resR),
+                            child: Icon(
+                              Icons.videocam_off,
+                              color: const Color(0xFFE33451),
+                              size: 26.resR,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  
-                  const Spacer(),
-                  
-                  // Large Avatar
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.1),
-                    ),
-                    padding: EdgeInsets.all(24.resR),
-                    child: CircleAvatar(
-                      radius: 100.resR,
-                      backgroundColor: AppColors.primary,
-                      backgroundImage: remoteAvatarUrl.isNotEmpty
-                          ? CachedNetworkImageProvider(remoteAvatarUrl)
-                          : null,
-                      child: remoteAvatarUrl.isEmpty
-                          ? Text(
-                              _getInitials(remoteName),
-                              style: AppTypography.headline1.copyWith(color: Colors.white, fontSize: 64.resSp),
-                            )
-                          : null,
-                    ),
-                  ),
-                  
-                  const Spacer(),
-                  
-                  // Camera Shutter Placeholder
-                  Container(
-                    width: 64.resR,
-                    height: 64.resR,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4.resR),
-                    ),
-                  ),
-                  
-                  SizedBox(height: 100.resH), // Space for bottom controls
-                ],
-              ),
-              
-              // PIP Avatar (Bottom-left)
-              Positioned(
-                left: 24.resW,
-                bottom: 120.resH,
-                child: Container(
-                  width: 80.resR,
-                  height: 120.resR,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(12.resR),
-                    border: Border.all(color: Colors.white, width: 2.resR),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _getInitials(localName),
-                    style: AppTypography.subtitle1.copyWith(color: AppColors.primary),
-                  ),
                 ),
               ),
-              
-              // Bottom Control Bar
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: ClipRRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(vertical: 24.resH, horizontal: 16.resW),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildControlButton(
-                            icon: isCameraOff ? Icons.videocam_off : Icons.videocam,
-                            label: 'call_btn_camera'.tr(),
-                            isActive: isCameraOff,
-                            onTap: onToggleCamera,
-                          ),
-                          _buildControlButton(
-                            icon: Icons.flip_camera_ios,
-                            label: 'Flip', // No specific requirement to translate this
-                            isActive: false,
-                            onTap: () {},
-                          ),
-                          _buildControlButton(
-                            icon: isMuted ? Icons.mic_off : Icons.mic,
-                            label: 'call_btn_mute'.tr(),
-                            isActive: isMuted,
-                            onTap: onToggleMute,
-                          ),
-                          _buildControlButton(
-                            icon: Icons.emoji_emotions_outlined,
-                            label: 'Emoji',
-                            isActive: false,
-                            onTap: () {},
-                          ),
-                          _buildControlButton(
-                            icon: Icons.screen_share_outlined,
-                            label: 'Share',
-                            isActive: false,
-                            onTap: () {},
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildControlButton({
-    required IconData icon,
-    required String label,
-    required bool isActive,
-    required VoidCallback onTap,
+  Widget _buildIconBtn(
+    IconData icon, {
+    VoidCallback? onTap,
+    bool isActive = false,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: EdgeInsets.all(12.resR),
-            decoration: BoxDecoration(
-              color: isActive ? AppColors.error : Colors.white24,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: Colors.white, size: 24.resR),
-          ),
-          SizedBox(height: 8.resH),
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(color: Colors.white),
-          ),
-        ],
+      child: Container(
+        width: 52.resR,
+        height: 52.resR,
+        decoration: BoxDecoration(
+          color: isActive
+              ? Colors.white.withOpacity(0.4)
+              : Colors.white.withOpacity(0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 24.resR),
       ),
     );
   }

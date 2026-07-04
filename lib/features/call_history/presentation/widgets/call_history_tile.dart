@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/utils/url_utils.dart';
 import '../../domain/entities/call_history_record.dart';
+import 'contact_avatar.dart';
 
 /// One row of the Calls history list (FR-VoIP-04): leading avatar, contact
 /// name + direction/time subtitle (red when missed), trailing call-type icon.
@@ -12,48 +13,40 @@ class CallHistoryTile extends StatelessWidget {
 
   const CallHistoryTile({super.key, required this.record, required this.onTap});
 
-  static const _avatarPalette = [
-    Color(0xFF8E6FB1),
-    Color(0xFF4F8A6E),
-    Color(0xFFB14F6F),
-    Color(0xFF6F8AB1),
-    Color(0xFFB1956F),
-    Color(0xFF6FB18E),
-  ];
-
-  Color get _avatarColor => _avatarPalette[record.avatarColorSeed.abs() % _avatarPalette.length];
-
   @override
   Widget build(BuildContext context) {
     final missed = record.isMissed;
-    final nameColor = missed ? Colors.red : Colors.black;
-    final arrow = record.direction == CallDirection.outgoing ? '↗' : '↙';
+    final isOutgoing = record.direction == CallDirection.outgoing;
+    
+    // User request: name should be red ONLY if the other person called (incoming)
+    final nameColor = (missed && !isOutgoing) ? Colors.red : Colors.black;
+    // Similarly for the arrow to match the name
+    final arrowColor = (missed && !isOutgoing) ? Colors.red : const Color(0xFF4CAF50);
+    final arrowIcon = isOutgoing ? Icons.call_made : Icons.call_received;
 
     return ListTile(
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: _avatarColor,
-        backgroundImage: record.avatarUrl != null && record.avatarUrl!.isNotEmpty
-            ? CachedNetworkImageProvider(UrlUtils.resolveMediaUrl(record.avatarUrl))
-            : null,
-        child: (record.avatarUrl == null || record.avatarUrl!.isEmpty)
-            ? Text(record.initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))
-            : null,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: ContactAvatar(
+        initials: record.initials,
+        avatarUrl: record.avatarUrl,
+        colorSeed: record.avatarColorSeed,
+        radius: 26,
       ),
       title: Text(
         record.contactName,
-        style: TextStyle(color: nameColor, fontWeight: FontWeight.w600, fontSize: 16),
+        style: TextStyle(color: nameColor, fontWeight: FontWeight.w500, fontSize: 16),
       ),
       subtitle: Row(
         children: [
-          Text(arrow, style: TextStyle(color: missed ? Colors.red : Colors.green)),
+          Icon(arrowIcon, color: arrowColor, size: 16),
           const SizedBox(width: 4),
-          Text(_relativeTime(record.startedAt), style: const TextStyle(color: Colors.grey)),
+          Text(_relativeTime(record.startedAt), style: const TextStyle(color: Colors.grey, fontSize: 13)),
         ],
       ),
       trailing: Icon(
         record.callType == CallType.video ? Icons.videocam_outlined : Icons.call_outlined,
         color: Colors.grey[700],
+        size: 26,
       ),
       onTap: onTap,
     );

@@ -30,6 +30,11 @@ import '../../features/video_call/presentation/pages/avatar_incoming_call_screen
 import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
 import '../../features/video_call/presentation/bloc/call_cubit.dart';
 import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
+import '../../features/call_history/presentation/pages/call_information_screen.dart';
+import '../../features/call_history/presentation/pages/select_contact_screen.dart';
+import '../../features/call_history/presentation/pages/dialpad_screen.dart';
+import '../../features/call_history/presentation/pages/new_contact_screen.dart';
+import '../../features/call_history/domain/entities/call_history_record.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -69,6 +74,10 @@ class AppRouterName {
   static const String avatarIncomingCall = '/avatar_incoming_call';
   static const String avatarActiveCall = '/avatar_active_call';
   static const String recordings = '/recordings';
+  static const String callInfo = '/call_info';
+  static const String selectContact = '/select_contact';
+  static const String dialpad = '/dialpad';
+  static const String newContact = '/new_contact';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -421,6 +430,25 @@ final GoRouter appRouter = GoRouter(
           },
         );
       },
+    ),
+    GoRoute(
+      path: AppRouterName.callInfo,
+      builder: (context, state) {
+        final record = state.extra as CallHistoryRecord;
+        return CallInformationScreen(record: record);
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.selectContact,
+      builder: (context, state) => const SelectContactScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.dialpad,
+      builder: (context, state) => const DialpadScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.newContact,
+      builder: (context, state) => const NewContactScreen(),
     ),
   ],
 );

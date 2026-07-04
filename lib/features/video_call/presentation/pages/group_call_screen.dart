@@ -29,10 +29,11 @@ import '../../../translation/presentation/widgets/caption_overlay.dart';
 import '../../../translation/presentation/widgets/subtitle_overlay_widget.dart';
 import '../../../translation/presentation/widgets/translation_toggle_sheet.dart';
 
+import 'dart:ui';
 // ─────────────────────────────────────────────────────────────────────────────
 // Palette (matches the mockup exactly)
 // ─────────────────────────────────────────────────────────────────────────────
-const _kBg = Color(0xFF616161); // dark gray background
+const _kBg = Color(0xFFEA4071); // dark pink background
 const _kControlsBg = Color(0xFF3B3B3B); // controls panel
 const _kGreen = Color(0xFF4CAF50);
 const _kBtnGray = Color(0xFF757575);
@@ -920,151 +921,97 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   // ── Controls ───────────────────────────────────────────────────────────────
 
   Widget _buildControls({required bool isSharing}) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: 16.resH,
-        bottom: 28.resH,
-        left: 20.resW,
-        right: 20.resW,
-      ),
-      decoration: const BoxDecoration(
-        color: _kControlsBg,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Drag handle ────────────────────────────────────────────────
-          Container(
-            width: 40.resW,
-            height: 4.resH,
-            margin: EdgeInsets.only(bottom: 16.resH),
+    return Padding(
+      padding: EdgeInsets.only(bottom: 24.resH, left: 16.resW, right: 16.resW, top: 8.resH),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+              color: Colors.white.withOpacity(0.15),
             ),
-          ),
-          // ── 5 icon buttons row (matches screenshot) ─────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // Camera toggle
-              _buildIconBtn(
-                icon: _isCameraDisabled
-                    ? Icons.videocam_off
-                    : Icons.videocam_outlined,
-                label: 'call_btn_video'.tr(),
-                active: !_isCameraDisabled,
-                onTap: () async {
-                  final target = _isCameraDisabled;
-                  if (target) {
-                    final granted = await PermissionService.requestSingle(
-                      Permission.camera,
-                    );
-                    if (!granted && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Camera permission is required.'),
-                        ),
-                      );
-                      return;
-                    }
-                  }
-                  setState(() => _isCameraDisabled = !target);
-                  await _room?.localParticipant?.setCameraEnabled(target);
-                },
-              ),
-              // Flip / Toggle Views
-              _buildIconBtn(
-                icon: Icons.flip_camera_android_outlined,
-                label: 'Toggle',
-                active: false,
-                onTap: () async {
-                  try {
-                    final track = _room
-                        ?.localParticipant
-                        ?.videoTrackPublications
-                        .firstOrNull
-                        ?.track;
-                    if (track is LocalVideoTrack) {
-                      _isFrontCamera = !_isFrontCamera;
-                      final options = CameraCaptureOptions(
-                        cameraPosition: _isFrontCamera
-                            ? CameraPosition.front
-                            : CameraPosition.back,
-                      );
-                      await track.restartTrack(options);
-                      setState(() {});
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to switch camera: $e')),
-                      );
-                    }
-                  }
-                },
-              ),
-              // Mic toggle
-              _buildIconBtn(
-                icon: _isMicMuted ? Icons.mic_off : Icons.mic_none,
-                label: _isMicMuted
-                    ? 'call_btn_muted'.tr()
-                    : 'call_btn_mute'.tr(),
-                active: false,
-                onTap: () async {
-                  final targetMuted = !_isMicMuted;
-                  setState(() => _isMicMuted = targetMuted);
-                  await _room?.localParticipant?.setMicrophoneEnabled(
-                    !targetMuted,
-                  );
-                  if (mounted) context.read<CallCubit>().reportLocalMute(targetMuted);
-                },
-              ),
-              // Audio route — opens Earpiece/Speaker/Bluetooth picker
-              // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
-              _buildIconBtn(
-                icon: speakerIconForRoute(_routeState.activeRoute),
-                label: 'call_btn_speaker'.tr(),
-                active: _routeState.activeRoute != AudioOutputRoute.earpiece,
-                onTap: () => AudioRoutePickerSheet.show(context),
-              ),
-              // More options ≡
-              _buildIconBtn(
-                icon: Icons.menu,
-                label: 'More',
-                active: false,
-                onTap: () => _showMoreOptions(isSharing: isSharing),
-              ),
-            ],
-          ),
-
-          SizedBox(height: 20.resH),
-
-          // ── End Call button ──────────────────────────────────────────────
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53935),
-                padding: EdgeInsets.symmetric(vertical: 14.resH),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: _endCall,
-              icon: const Icon(Icons.call_end, color: Colors.white),
-              label: Text(
-                'call_action_end'.tr(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildIconBtn2(
+                    icon: _isCameraDisabled ? Icons.videocam_off : Icons.cameraswitch_outlined,
+                    isActive: !_isCameraDisabled,
+                    onTap: () async {
+                      final target = _isCameraDisabled;
+                      if (target) {
+                        final granted = await PermissionService.requestSingle(Permission.camera);
+                        if (!granted && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera permission required.')));
+                          return;
+                        }
+                      }
+                      setState(() => _isCameraDisabled = !target);
+                      await _room?.localParticipant?.setCameraEnabled(target);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildIconBtn2(
+                    icon: Icons.sync,
+                    isActive: false,
+                    onTap: () async {
+                      try {
+                        final track = _room?.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                        if (track is LocalVideoTrack) {
+                          _isFrontCamera = !_isFrontCamera;
+                          final options = CameraCaptureOptions(cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back);
+                          await track.restartTrack(options);
+                          setState(() {});
+                        }
+                      } catch (e) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildIconBtn2(
+                    icon: _isMicMuted ? Icons.mic_off : Icons.mic,
+                    isActive: _isMicMuted,
+                    onTap: () async {
+                      final targetMuted = !_isMicMuted;
+                      setState(() => _isMicMuted = targetMuted);
+                      await _room?.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                      if (mounted) context.read<CallCubit>().reportLocalMute(targetMuted);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildIconBtn2(
+                    icon: speakerIconForRoute(_routeState.activeRoute),
+                    isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
+                    onTap: () => AudioRoutePickerSheet.show(context),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildIconBtn2(
+                    icon: Icons.menu,
+                    isActive: false,
+                    onTap: () => _showMoreOptions(isSharing: isSharing),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _endCall,
+                    child: Container(
+                      width: 52.resR,
+                      height: 52.resR,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.videocam_off, color: const Color(0xFFE33451), size: 26.resR),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1106,38 +1053,28 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
+  Widget _buildIconBtn2({required IconData icon, required VoidCallback onTap, bool isActive = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 52.resR,
+        height: 52.resR,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 24.resR),
+      ),
+    );
+  }
+
   Widget _buildIconBtn({
     required IconData icon,
     required String label,
     required bool active,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 52.resW,
-            height: 52.resW,
-            decoration: BoxDecoration(
-              color: active ? Colors.white : _kBtnGray,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: active ? _kGreen : Colors.white,
-              size: 24.resW,
-            ),
-          ),
-          SizedBox(height: 6.resH),
-          Text(
-            label,
-            style: TextStyle(color: Colors.white70, fontSize: 11.resSp),
-          ),
-        ],
-      ),
-    );
+    return _buildIconBtn2(icon: icon, onTap: onTap, isActive: active);
   }
 }
 
