@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/routing/app_router.dart';
 import 'package:ciro_chat_app/core/services/audio_route_service.dart';
 import 'package:ciro_chat_app/core/services/call_audio_config.dart';
 import 'package:ciro_chat_app/core/services/call_audio_session_service.dart';
 import 'package:ciro_chat_app/core/theme/app_colors.dart';
+import 'package:ciro_chat_app/core/theme/app_typography.dart';
+import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -50,9 +53,18 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   StreamSubscription<AudioRouteState>? _routeSub;
   AudioRouteState _routeState = const AudioRouteState();
 
+  // Timer
+  late final Stopwatch _callTimer;
+  Timer? _uiTimer;
+
   @override
   void initState() {
     super.initState();
+    _callTimer = Stopwatch()..start();
+    _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+
     // Resolve local user identity for screen share metadata
     final authState = getIt<AuthCubit>().state;
     if (authState is Authenticated) {
@@ -231,6 +243,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
+    _uiTimer?.cancel();
+    _callTimer.stop();
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _routeSub?.cancel();
@@ -244,11 +258,18 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     super.dispose();
   }
 
+  String get _elapsedLabel {
+    final s = _callTimer.elapsed;
+    final mm = s.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = s.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isConnecting || _room == null) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFFEA4071),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -273,15 +294,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         if (context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: const Color(0xFFEA4071), // Solid dark pink background
         body: BlocBuilder<CallCubit, CallState>(
           builder: (context, callState) {
             final isSharing = callState is CallActive && callState.isLocallySharingScreen;
 
-            // Source of truth = the Room. Find the first remote participant
-            // with a screen-share publication instead of relying on the cubit's
-            // activeSharerUserId (which depends on socket events arriving and
-            // user IDs matching LiveKit participant identities exactly).
             String remoteSharerUserId = '';
             String remoteSharerName = '';
             VideoTrack? remoteShareTrack;
@@ -306,13 +323,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
             final isMutedLocally = callState is CallActive &&
                 callState.mutedScreenAudioBySharerId.contains(remoteSharerUserId);
 
-            debugPrint(
-              '[VideoCallScreen] remoteParticipants=${_room?.remoteParticipants.values.map((p) => '${p.identity}:vid=${p.videoTrackPublications.map((pub) => '${pub.source}/sub=${pub.subscribed}/track=${pub.track?.runtimeType}').toList()}').toList()}, showRemoteTile=$showRemoteTile',
-            );
-
-            // Resolve local screen-share track so sharer can preview what they're sharing.
-            // Use two strategies because livekit_client's iOS broadcast flow doesn't
-            // always tag the publication with TrackSource.screenShareVideo cleanly.
             VideoTrack? localShareTrack;
             if (isSharing) {
               final local = _room?.localParticipant;
@@ -325,307 +335,339 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                     .firstOrNull;
                 final t = pub?.track;
                 if (t is VideoTrack) localShareTrack = t;
-                debugPrint(
-                  '[VideoCallScreen] isSharing=true, localPubs=${local.videoTrackPublications.map((p) => '${p.source}/${p.track?.runtimeType}').toList()}, picked=$localShareTrack',
-                );
               }
             }
 
-            return Stack(
-              children: [
-                // Background: full-screen screen share when remote is sharing; remote camera otherwise
-                Positioned.fill(
-                  child: showRemoteTile
-                      ? (remoteShareTrack != null
-                          ? VideoTrackRenderer(remoteShareTrack)
-                          : Container(
-                              color: Colors.black,
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const CircularProgressIndicator(color: Colors.white54),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '$remoteSharerName is sharing…',
-                                      style: const TextStyle(color: Colors.white54),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ))
-                      : _ParticipantVideoView(
-                          participant: remoteParticipant,
-                          name: widget.contactName,
-                        ),
-                ),
-
-                // Screen share label + per-receiver audio mute (top-left, over background)
-                if (showRemoteTile)
+            return SafeArea(
+              child: Stack(
+                children: [
+                  // Top Bar
                   Positioned(
-                    top: 60,
-                    left: 20,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.screen_share_outlined, color: Colors.white70, size: 14),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$remoteSharerName • Screen',
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (remoteSharerHasAudio) ...[
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () => context
-                                .read<CallCubit>()
-                                .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
-                            child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                isMutedLocally ? Icons.volume_off : Icons.volume_up,
-                                color: Colors.white,
-                                size: 18,
+                    top: 16.resH,
+                    left: 16.resW,
+                    right: 16.resW,
+                    child: Container(
+                      height: 72.resH,
+                      padding: EdgeInsets.symmetric(horizontal: 12.resW),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(40.resR),
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Left: Checkmark
+                          Positioned(
+                            left: 0,
+                            child: GestureDetector(
+                              onTap: () async {
+                                if (Navigator.of(context).canPop()) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                              child: Container(
+                                width: 44.resR,
+                                height: 44.resR,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFE5395A), // Solid dark red
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 26.resR,
+                                ),
                               ),
                             ),
                           ),
+                          
+                          // Center: Info and Avatar
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.chevron_left,
+                                        color: Colors.white,
+                                        size: 20.resR,
+                                      ),
+                                      SizedBox(width: 4.resW),
+                                      Text(
+                                        widget.contactName,
+                                        style: AppTypography.subtitle1.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 18.resSp,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    _elapsedLabel,
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white70,
+                                      fontSize: 13.resSp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(width: 12.resW),
+                              CircleAvatar(
+                                radius: 20.resR,
+                                backgroundColor: Colors.transparent,
+                                child: Text(
+                                  widget.contactName.isNotEmpty ? widget.contactName[0].toUpperCase() : '?',
+                                  style: AppTypography.subtitle2.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 14.resSp,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Right: Down arrow
+                          Positioned(
+                            right: 4.resW,
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                              size: 24.resR,
+                            ),
+                          ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
 
-                // Remote camera PiP when screen share is the full-screen background
-                if (showRemoteTile)
+                  // Screen share per-receiver audio mute (top-right under the pill)
+                  if (showRemoteTile && remoteSharerHasAudio)
+                    Positioned(
+                      top: 70,
+                      right: 16,
+                      child: GestureDetector(
+                        onTap: () => context
+                            .read<CallCubit>()
+                            .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isMutedLocally ? Icons.volume_off : Icons.volume_up,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // PIP Avatar (Left)
                   Positioned(
-                    top: 105,
-                    left: 20,
-                    width: 100,
-                    height: 140,
+                    left: 16.resW,
+                    top: 110.resH,
                     child: Container(
+                      width: 100.resR,
+                      height: 170.resR,
                       decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white24),
+                        color: const Color(0xFFF35C8D),
+                        borderRadius: BorderRadius.circular(24.resR),
                       ),
+                      alignment: Alignment.center,
                       clipBehavior: Clip.antiAlias,
-                      child: _ParticipantVideoView(
-                        participant: remoteParticipant,
-                        name: widget.contactName,
-                      ),
-                    ),
-                  ),
-
-                // Local PiP: screen share preview when sharing locally, camera otherwise.
-                // When sharing but the track hasn't appeared yet (iOS broadcast extension
-                // publishes asynchronously), show a clear placeholder so the sharer
-                // sees immediate feedback.
-                Positioned(
-                  top: 60,
-                  right: 20,
-                  width: 120,
-                  height: 180,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSharing ? AppColors.primary : Colors.white24,
-                        width: isSharing ? 2 : 1,
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: isSharing
+                      child: isSharing
                         ? (localShareTrack != null
                             ? VideoTrackRenderer(localShareTrack)
                             : Container(
                                 color: Colors.black87,
                                 child: const Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.screen_share, color: Colors.white, size: 36),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'Sharing\nyour screen',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(color: Colors.white, fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
+                                  child: Icon(Icons.screen_share, color: Colors.white),
                                 ),
                               ))
                         : _ParticipantVideoView(
-                            participant: localParticipant,
-                            isLocal: true,
-                            name: 'Me',
-                          ),
+                          participant: localParticipant,
+                          isLocal: true,
+                          name: 'Me',
+                        ),
+                    ),
                   ),
-                ),
 
-                // T019 — "You are sharing" banner
-                if (isSharing)
+                  // Large Center Avatar
+                  Center(
+                    child: Container(
+                      width: 280.resR,
+                      height: 280.resR,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withOpacity(0.12),
+                      ),
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.antiAlias,
+                      child: showRemoteTile
+                          ? (remoteShareTrack != null
+                              ? VideoTrackRenderer(remoteShareTrack)
+                              : Container(
+                                  color: Colors.black,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(color: Colors.white54),
+                                  ),
+                                ))
+                          : _ParticipantVideoView(
+                              participant: remoteParticipant,
+                              name: widget.contactName,
+                            ),
+                    ),
+                  ),
+
+                  // Bottom White Circle
                   Positioned(
-                    top: 0,
+                    bottom: 150.resH,
                     left: 0,
                     right: 0,
-                    child: Material(
-                      color: AppColors.primary,
-                      child: SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.screen_share, color: Colors.white, size: 18),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'You are sharing your screen',
-                                  style: TextStyle(color: Colors.white, fontSize: 13),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => context.read<CallCubit>().stopScreenShare(
-                                      localUserId: _localUserId,
-                                      localUserName: _localUserName,
-                                    ),
-                                child: const Text('Stop', style: TextStyle(color: Colors.white)),
-                              ),
-                            ],
-                          ),
+                    child: Center(
+                      child: Container(
+                        width: 80.resR,
+                        height: 80.resR,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 4.5.resR),
                         ),
                       ),
                     ),
                   ),
 
-                // Control Bar
-                Positioned(
-                  bottom: 40,
-                  left: 20,
-                  right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _isMicMuted ? Icons.mic_off : Icons.mic,
-                            color: _isMicMuted ? Colors.red : Colors.white,
+                  // Bottom Control Bar
+                  Positioned(
+                    bottom: 24.resH,
+                    left: 16.resW,
+                    right: 16.resW,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(40.resR),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(vertical: 12.resH, horizontal: 16.resW),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
                           ),
-                          onPressed: () async {
-                            try {
-                              final targetMuted = !_isMicMuted;
-                              await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
-                              if (!mounted) return;
-                              context.read<CallCubit>().reportLocalMute(targetMuted);
-                              setState(() => _isMicMuted = targetMuted);
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to toggle microphone: $e')),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                        // Audio route — opens Earpiece/Speaker/Bluetooth picker
-                        // (FR-VoIP-07); icon reflects the active route (FR-VoIP-08).
-                        IconButton(
-                          icon: Icon(
-                            speakerIconForRoute(_routeState.activeRoute),
-                            color: _routeState.activeRoute == AudioOutputRoute.earpiece
-                                ? Colors.white
-                                : AppColors.primary,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildIconBtn(
+                                  icon: isSharing ? Icons.stop_screen_share : Icons.arrow_upward_rounded,
+                                  isActive: isSharing,
+                                  onTap: () => _onScreenShareTap(context),
+                                ),
+                                SizedBox(width: 8.resW),
+                                _buildIconBtn(
+                                  icon: speakerIconForRoute(_routeState.activeRoute),
+                                  isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
+                                  onTap: () => AudioRoutePickerSheet.show(context),
+                                ),
+                                SizedBox(width: 8.resW),
+                                _buildIconBtn(
+                                  icon: _isMicMuted ? Icons.mic_off : Icons.mic,
+                                  isActive: _isMicMuted,
+                                  onTap: () async {
+                                    try {
+                                      final targetMuted = !_isMicMuted;
+                                      await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                                      if (!mounted) return;
+                                      context.read<CallCubit>().reportLocalMute(targetMuted);
+                                      setState(() => _isMicMuted = targetMuted);
+                                    } catch (e) {
+                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                                    }
+                                  },
+                                ),
+                                SizedBox(width: 8.resW),
+                                _buildIconBtn(
+                                  icon: _isCameraDisabled ? Icons.videocam_off : Icons.sync,
+                                  isActive: _isCameraDisabled,
+                                  onTap: () async {
+                                    try {
+                                      final targetDisabled = !_isCameraDisabled;
+                                      await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                                      setState(() => _isCameraDisabled = targetDisabled);
+                                    } catch (e) {
+                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                                    }
+                                  },
+                                ),
+                                SizedBox(width: 8.resW),
+                                _buildIconBtn(
+                                  icon: Icons.flip_camera_ios,
+                                  onTap: () async {
+                                    try {
+                                      final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                                      if (track is LocalVideoTrack) {
+                                        _isFrontCamera = !_isFrontCamera;
+                                        final options = CameraCaptureOptions(
+                                          cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
+                                        );
+                                        await track.restartTrack(options);
+                                        setState(() {});
+                                      }
+                                    } catch (e) {
+                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                                    }
+                                  },
+                                ),
+                                SizedBox(width: 8.resW),
+                                // End call button
+                                GestureDetector(
+                                  onTap: () async {
+                                    await context.read<CallCubit>().endCall();
+                                    await _room?.disconnect();
+                                    if (context.mounted) context.go(AppRouterName.home);
+                                  },
+                                  child: Container(
+                                    width: 52.resR,
+                                    height: 52.resR,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.videocam_off, color: const Color(0xFFE33451), size: 26.resR),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          onPressed: () => AudioRoutePickerSheet.show(context),
                         ),
-                        // T018 — Screen share icon
-                        IconButton(
-                          icon: Icon(
-                            isSharing ? Icons.stop_screen_share : Icons.screen_share_outlined,
-                            color: isSharing ? AppColors.primary : Colors.white,
-                          ),
-                          onPressed: () => _onScreenShareTap(context),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.call_end, color: Colors.white, size: 32),
-                          style: IconButton.styleFrom(backgroundColor: Colors.red),
-                          onPressed: () async {
-                            await context.read<CallCubit>().endCall();
-                            await _room?.disconnect();
-                            if (context.mounted) context.go(AppRouterName.home);
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
-                            color: _isCameraDisabled ? Colors.red : Colors.white,
-                          ),
-                          onPressed: () async {
-                            try {
-                              final targetDisabled = !_isCameraDisabled;
-                              await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
-                              setState(() => _isCameraDisabled = targetDisabled);
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to toggle camera: $e')),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
-                          onPressed: () async {
-                            try {
-                              final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
-                              if (track is LocalVideoTrack) {
-                                _isFrontCamera = !_isFrontCamera;
-                                final options = CameraCaptureOptions(
-                                  cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
-                                );
-                                await track.restartTrack(options);
-                                setState(() {});
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to switch camera: $e')),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildIconBtn({required IconData icon, required VoidCallback onTap, bool isActive = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 52.resR,
+        height: 52.resR,
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 24.resR),
       ),
     );
   }

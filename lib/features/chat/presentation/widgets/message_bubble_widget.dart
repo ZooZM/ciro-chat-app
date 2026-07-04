@@ -49,7 +49,9 @@ class MessageBubbleWidget extends StatelessWidget {
   Future<String> _resolveGroupSenderLabel(BuildContext context) async {
     final phone = message.senderPhone;
     if (phone.isNotEmpty) {
-      final contactName = await context.read<ChatCubit>().getLocalContactName(phone);
+      final contactName = await context.read<ChatCubit>().getLocalContactName(
+        phone,
+      );
       if (contactName.isNotEmpty && contactName != phone) return contactName;
       if (message.senderName.isNotEmpty) return '$phone ~${message.senderName}';
       return phone;
@@ -64,11 +66,14 @@ class MessageBubbleWidget extends StatelessWidget {
           ? '${message.senderPhone} ~${message.senderName}'
           : message.senderPhone;
     }
-    return message.senderName.isNotEmpty ? message.senderName : message.senderId;
+    return message.senderName.isNotEmpty
+        ? message.senderName
+        : message.senderId;
   }
 
-  Color get _bgColor =>
-      _isMediaBubble ? Colors.transparent : (_isMine ? AppColors.primaryLight : AppColors.surface);
+  Color get _bgColor => _isMediaBubble
+      ? Colors.transparent
+      : (_isMine ? AppColors.primaryLight : AppColors.surface);
 
   BorderRadius _borderRadius() {
     final r = Radius.circular(12.resR);
@@ -104,19 +109,26 @@ class MessageBubbleWidget extends StatelessWidget {
   }
 
   Widget _buildFooter() {
-    final formattedTime = DateFormat('hh:mm a').format(message.timestamp.toLocal());
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          formattedTime,
-          style: AppTypography.caption.copyWith(
-            fontSize: 10.resSp,
-            color: AppColors.textSecondary,
+    final formattedTime = DateFormat(
+      'hh:mm a',
+    ).format(message.timestamp.toLocal());
+    return Container(
+      height: 19.resH,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            formattedTime,
+            style: AppTypography.caption.copyWith(
+              fontSize: 10.resSp,
+              color: AppColors.textSecondary,
+              height: 1.0,
+            ),
           ),
-        ),
-        if (_isMine) ...[SizedBox(width: 4.resW), _buildStatusIcon()],
-      ],
+          if (_isMine) ...[SizedBox(width: 8.resW), _buildStatusIcon()],
+        ],
+      ),
     );
   }
 
@@ -237,8 +249,8 @@ class MessageBubbleWidget extends StatelessWidget {
 
   void _showDeleteMenu(BuildContext context) {
     final cubit = context.read<ChatCubit>();
-    final canDeleteForEveryone = _isMine &&
-        DateTime.now().difference(message.timestamp).inHours < 1;
+    final canDeleteForEveryone =
+        _isMine && DateTime.now().difference(message.timestamp).inHours < 1;
 
     showModalBottomSheet(
       context: context,
@@ -252,7 +264,10 @@ class MessageBubbleWidget extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent,
+                ),
                 title: const Text('Delete for me'),
                 onTap: () {
                   Navigator.pop(context);
@@ -269,7 +284,10 @@ class MessageBubbleWidget extends StatelessWidget {
                   },
                 ),
               ListTile(
-                leading: Icon(Icons.cancel_outlined, color: AppColors.textSecondary),
+                leading: Icon(
+                  Icons.cancel_outlined,
+                  color: AppColors.textSecondary,
+                ),
                 title: const Text('Cancel'),
                 onTap: () => Navigator.pop(context),
               ),
@@ -449,10 +467,7 @@ class _ImageBubble extends StatelessWidget {
                   children: [
                     // Image
                     hasLocal
-                        ? Image.file(
-                            File(localPath),
-                            fit: BoxFit.cover,
-                          )
+                        ? Image.file(File(localPath), fit: BoxFit.cover)
                         : CachedNetworkImage(
                             imageUrl: url,
                             fit: BoxFit.cover,
@@ -915,7 +930,9 @@ class _VoiceBubbleState extends State<_VoiceBubble>
           });
         }
       } catch (e) {
-        debugPrint('[VoiceBubble] prepare error (non-fatal, voice will play without waveform): $e');
+        debugPrint(
+          '[VoiceBubble] prepare error (non-fatal, voice will play without waveform): $e',
+        );
         if (mounted) {
           setState(() {
             _isPrepared = true;
@@ -1234,7 +1251,9 @@ class _LocationBubble extends StatelessWidget {
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(12.resR),
                 border: hasCoords
-                    ? Border.all(color: AppColors.primary.withValues(alpha: 0.3))
+                    ? Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                      )
                     : null,
               ),
               child: Column(
@@ -1356,7 +1375,10 @@ class _PollBubble extends StatelessWidget {
     final question = meta['question'] as String? ?? 'Poll';
     final options = (meta['options'] as List<dynamic>?)?.cast<String>() ?? [];
     final votes = (meta['votes'] as Map?)?.cast<String, List>() ?? {};
-    final totalVotes = votes.values.fold<int>(0, (sum, list) => sum + list.length);
+    final totalVotes = votes.values.fold<int>(
+      0,
+      (sum, list) => sum + list.length,
+    );
 
     // Poll bubble uses the same green bubble background as regular messages.
     final textColor = AppColors.textPrimary;
@@ -1384,11 +1406,7 @@ class _PollBubble extends StatelessWidget {
               // "Select one or more" hint
               Row(
                 children: [
-                  Icon(
-                    Icons.checklist_rounded,
-                    size: 14.resW,
-                    color: dimColor,
-                  ),
+                  Icon(Icons.checklist_rounded, size: 14.resW, color: dimColor),
                   SizedBox(width: 4.resW),
                   Text(
                     'Select one or more',
@@ -1417,10 +1435,7 @@ class _PollBubble extends StatelessWidget {
                             height: 20.resW,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                color: dimColor,
-                                width: 1.5,
-                              ),
+                              border: Border.all(color: dimColor, width: 1.5),
                             ),
                           ),
                           SizedBox(width: 10.resW),
@@ -1508,8 +1523,18 @@ class _EventBubble extends StatelessWidget {
   String _formatEventDateRange(DateTime? start) {
     if (start == null) return '';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final now = DateTime.now();
     String fmtDay(DateTime d) {
@@ -1525,7 +1550,9 @@ class _EventBubble extends StatelessWidget {
       return '${d.day} ${months[d.month - 1]}';
     }
 
-    final h = start.hour == 0 ? 12 : (start.hour > 12 ? start.hour - 12 : start.hour);
+    final h = start.hour == 0
+        ? 12
+        : (start.hour > 12 ? start.hour - 12 : start.hour);
     final m = start.minute.toString().padLeft(2, '0');
     final ampm = start.hour < 12 ? 'AM' : 'PM';
     // Show end as 2 hours later by default
@@ -1707,7 +1734,8 @@ class _CachedVoiceWaveformDisplay extends StatefulWidget {
       _CachedVoiceWaveformDisplayState();
 }
 
-class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay> {
+class _CachedVoiceWaveformDisplayState
+    extends State<_CachedVoiceWaveformDisplay> {
   List<double>? _waveformSamples;
   bool _isExtracting = false;
 
@@ -1728,8 +1756,10 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
       // T010: Prefer sender-provided waveform data
       final rawSamples = meta['waveformSamples'];
       if (rawSamples is List && rawSamples.isNotEmpty) {
-        final samples =
-            rawSamples.whereType<num>().map((e) => e.toDouble()).toList();
+        final samples = rawSamples
+            .whereType<num>()
+            .map((e) => e.toDouble())
+            .toList();
         if (mounted) {
           setState(() => _waveformSamples = samples);
           cubit.cacheSessionWaveform(
@@ -1750,7 +1780,9 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
           setState(() {
             _waveformSamples = sessionCached.samples;
           });
-          debugPrint('[VoiceWaveformDisplay] Cache hit for message ${widget.message.id}');
+          debugPrint(
+            '[VoiceWaveformDisplay] Cache hit for message ${widget.message.id}',
+          );
         }
         return;
       }
@@ -1785,9 +1817,8 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
 
       if (path != null && widget.playerController != null) {
         try {
-          final extracted =
-              await widget.playerController!.waveformExtraction
-                  .extractWaveformData(path: path, noOfSamples: 50);
+          final extracted = await widget.playerController!.waveformExtraction
+              .extractWaveformData(path: path, noOfSamples: 50);
 
           if (extracted.isNotEmpty) {
             if (mounted) {
@@ -1809,7 +1840,8 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
           }
         } catch (e) {
           debugPrint(
-              '[VoiceWaveformDisplay] Extraction failed (waveform will show as empty): $e');
+            '[VoiceWaveformDisplay] Extraction failed (waveform will show as empty): $e',
+          );
         }
       }
     } finally {
@@ -1821,7 +1853,10 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
   Widget build(BuildContext context) {
     return SizedBox(
       height: widget.height,
-      child: _waveformSamples != null && _waveformSamples!.isNotEmpty && widget.playerController != null
+      child:
+          _waveformSamples != null &&
+              _waveformSamples!.isNotEmpty &&
+              widget.playerController != null
           ? AudioFileWaveforms(
               size: Size(widget.width, widget.height),
               playerController: widget.playerController!,
@@ -1836,26 +1871,21 @@ class _CachedVoiceWaveformDisplayState extends State<_CachedVoiceWaveformDisplay
               ),
             )
           : widget.isLoading
-              ? AnimatedBuilder(
-                  animation: widget.shimmerController,
-                  builder: (context, _) {
-                    final opacity =
-                        0.3 + (0.7 * widget.shimmerController.value);
-                    return Container(
-                      height: 2.resH,
-                      width: widget.width,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300
-                            .withValues(alpha: opacity),
-                        borderRadius: BorderRadius.circular(1),
-                      ),
-                    );
-                  },
-                )
-              : Container(
+          ? AnimatedBuilder(
+              animation: widget.shimmerController,
+              builder: (context, _) {
+                final opacity = 0.3 + (0.7 * widget.shimmerController.value);
+                return Container(
                   height: 2.resH,
-                  color: Colors.grey.shade300,
-                ),
+                  width: widget.width,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300.withValues(alpha: opacity),
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                );
+              },
+            )
+          : Container(height: 2.resH, color: Colors.grey.shade300),
     );
   }
 }

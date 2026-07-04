@@ -31,6 +31,11 @@ import '../../features/video_call/presentation/pages/avatar_incoming_call_screen
 import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
 import '../../features/video_call/presentation/bloc/call_cubit.dart';
 import '../../features/call_recording/presentation/pages/recordings_list_page.dart';
+import '../../features/call_history/presentation/pages/call_information_screen.dart';
+import '../../features/call_history/presentation/pages/select_contact_screen.dart';
+import '../../features/call_history/presentation/pages/dialpad_screen.dart';
+import '../../features/call_history/presentation/pages/new_contact_screen.dart';
+import '../../features/call_history/domain/entities/call_history_record.dart';
 import '../../features/reels/presentation/pages/creator_profile_screen.dart';
 import '../../features/reels/presentation/pages/reels_feed_screen.dart';
 import '../../features/reels/presentation/pages/search_screen.dart';
@@ -74,6 +79,10 @@ class AppRouterName {
   static const String avatarIncomingCall = '/avatar_incoming_call';
   static const String avatarActiveCall = '/avatar_active_call';
   static const String recordings = '/recordings';
+  static const String callInfo = '/call_info';
+  static const String selectContact = '/select_contact';
+  static const String dialpad = '/dialpad';
+  static const String newContact = '/new_contact';
   static const String reelDeepLink = '/reels/:id';
   static const String reelCreatorFeed = '/reels/creator/:id';
   static const String creatorProfile = '/reels/profile/:id';
@@ -174,7 +183,9 @@ Future<void> navigateToReelsNotification(String payload) async {
       appRouter.push('/reels/profile/$userId');
     }
   } else if (payload.startsWith('reelProfile:')) {
-    appRouter.push('/reels/profile/${payload.substring('reelProfile:'.length)}');
+    appRouter.push(
+      '/reels/profile/${payload.substring('reelProfile:'.length)}',
+    );
   } else if (payload.startsWith('reel:')) {
     appRouter.push('/reels/${payload.substring('reel:'.length)}');
   }
@@ -283,9 +294,12 @@ final GoRouter appRouter = GoRouter(
         // missing extra). Cast as nullable and redirect to home instead of
         // throwing a TypeError.
         final extra = state.extra;
-        final chat = extra is ChatRoomLaunchArgs ? extra.chat : extra as ChatSession?;
-        final initialDraftText =
-            extra is ChatRoomLaunchArgs ? extra.initialDraftText : null;
+        final chat = extra is ChatRoomLaunchArgs
+            ? extra.chat
+            : extra as ChatSession?;
+        final initialDraftText = extra is ChatRoomLaunchArgs
+            ? extra.initialDraftText
+            : null;
         if (chat == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (context.mounted) context.go(AppRouterName.home);
@@ -293,7 +307,10 @@ final GoRouter appRouter = GoRouter(
           return const Scaffold(body: SizedBox.shrink());
         }
         // ChatRoomScreen.initState calls cubit.openRoom — do NOT call it here too.
-        return ChatRoomScreen(chatData: chat, initialDraftText: initialDraftText);
+        return ChatRoomScreen(
+          chatData: chat,
+          initialDraftText: initialDraftText,
+        );
       },
     ),
     GoRoute(
@@ -337,13 +354,16 @@ final GoRouter appRouter = GoRouter(
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
@@ -380,13 +400,16 @@ final GoRouter appRouter = GoRouter(
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
@@ -420,10 +443,16 @@ final GoRouter appRouter = GoRouter(
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
@@ -441,7 +470,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final creatorId = state.pathParameters['id'] ?? '';
         final startReelId = state.uri.queryParameters['start'];
-        return ReelsFeedScreen(creatorId: creatorId, initialReelId: startReelId);
+        return ReelsFeedScreen(
+          creatorId: creatorId,
+          initialReelId: startReelId,
+        );
       },
     ),
     // Declared before `/reels/:id` for the same reason as the route above.
@@ -509,13 +541,16 @@ final GoRouter appRouter = GoRouter(
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
               child: child,
             );
           },
@@ -552,6 +587,25 @@ final GoRouter appRouter = GoRouter(
           },
         );
       },
+    ),
+    GoRoute(
+      path: AppRouterName.callInfo,
+      builder: (context, state) {
+        final record = state.extra as CallHistoryRecord;
+        return CallInformationScreen(record: record);
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.selectContact,
+      builder: (context, state) => const SelectContactScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.dialpad,
+      builder: (context, state) => const DialpadScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.newContact,
+      builder: (context, state) => const NewContactScreen(),
     ),
   ],
 );

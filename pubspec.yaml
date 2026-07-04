@@ -102,6 +102,11 @@ flutter:
     - assets/translations/
     - .env
 
+  fonts:
+    - family: GeometrySoftPro
+      fonts:
+        - asset: assets/GeometrySoftPro-LightA.ttf
+
 flutter_launcher_icons:
   android: true
   ios: true
