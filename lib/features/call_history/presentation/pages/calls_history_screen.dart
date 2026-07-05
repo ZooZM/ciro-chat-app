@@ -77,31 +77,33 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(
-                    width: 225,
-                    height: 30,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (q) => context.read<CallHistoryCubit>().search(q),
-                      textAlignVertical: TextAlignVertical.center,
-                      decoration: InputDecoration(
-                        hintText: 'calls_search_hint'.tr(),
-                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-                        prefixIcon: Padding(
-                          padding: const EdgeInsets.only(left: 10, right: 10),
-                          child: Icon(Icons.search, color: Colors.grey[400], size: 16),
-                        ),
-                        prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 30),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.only(top: 10, bottom: 10, left: 10, right: 15),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.green.withOpacity(0.3), width: 2),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: const BorderSide(color: Colors.green, width: 2),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: SizedBox(
+                      height: 30,
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (q) => context.read<CallHistoryCubit>().search(q),
+                        textAlignVertical: TextAlignVertical.center,
+                        decoration: InputDecoration(
+                          hintText: 'calls_search_hint'.tr(),
+                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                          prefixIcon: Padding(
+                            padding: const EdgeInsets.only(left: 10, right: 10),
+                            child: Icon(Icons.search, color: Colors.grey[400], size: 16),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 30),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.only(top: 10, bottom: 10, left: 10, right: 15),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide(color: Colors.green.withOpacity(0.3), width: 2),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: const BorderSide(color: Colors.green, width: 2),
+                          ),
                         ),
                       ),
                     ),

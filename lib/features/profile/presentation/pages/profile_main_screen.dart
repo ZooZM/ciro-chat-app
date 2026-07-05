@@ -4,6 +4,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/routing/app_router.dart';
+import '../../../../core/di/injection.dart';
+import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../data/mock_profile_data.dart';
 import '../widgets/wallet_card.dart';
 import '../widgets/profile_completion_bar.dart';
@@ -100,7 +102,7 @@ class ProfileMainScreen extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            'Ciro ID: ',
+                            'profile_ciro_id'.tr(),
                             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                           ),
                           Text(
@@ -136,40 +138,109 @@ class ProfileMainScreen extends StatelessWidget {
             // Settings List
             _buildSettingsItem(
               icon: Icons.palette_outlined,
-              title: 'Appearance',
-              subtitle: 'Theme, Colors, Background',
+              title: 'profile_appearance'.tr(),
+              subtitle: 'profile_appearance_subtitle'.tr(),
               onTap: () => context.push(AppRouterName.appearance),
             ),
             _buildSettingsItem(
-              icon: Icons.devices,
-              title: 'Linked Devices',
-              subtitle: 'Manage your devices',
-              onTap: () {},
-            ),
-            _buildSettingsItem(
               icon: Icons.person_add_outlined,
-              title: 'Invite a Friend',
-              subtitle: 'Share the app with friends',
-              onTap: () {},
+              title: 'profile_invite_friend'.tr(),
+              subtitle: 'profile_invite_friend_subtitle'.tr(),
+              onTap: () {
+                context.push(AppRouterName.inviteFriend);
+              },
             ),
             _buildSettingsItem(
               icon: Icons.language,
-              title: 'Language',
-              subtitle: 'App Language',
+              title: 'profile_language'.tr(),
+              subtitle: 'profile_language_subtitle'.tr(),
               onTap: () => context.push(AppRouterName.language),
+            ),
+            _buildSettingsItem(
+              icon: Icons.receipt_long_outlined,
+              title: 'profile_billing_info'.tr(),
+              subtitle: 'profile_billing_info_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.account_balance_outlined,
+              title: 'profile_bank_account'.tr(),
+              subtitle: 'profile_bank_account_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.badge_outlined,
+              title: 'profile_identity_verification'.tr(),
+              subtitle: 'profile_identity_verification_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.credit_card_outlined,
+              title: 'profile_payments_method'.tr(),
+              subtitle: 'profile_payments_method_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.payments_outlined,
+              title: 'profile_payments_history'.tr(),
+              subtitle: 'profile_payments_history_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.lock_outline,
+              title: 'profile_privacy'.tr(),
+              subtitle: 'profile_privacy_subtitle'.tr(),
+              onTap: () {
+                context.push(AppRouterName.privacy);
+              },
+            ),
+            _buildSettingsItem(
+              icon: Icons.notifications_none_outlined,
+              title: 'profile_notifications'.tr(),
+              subtitle: 'profile_notifications_subtitle'.tr(),
+              onTap: () {
+                context.push(AppRouterName.notifications);
+              },
+            ),
+            _buildSettingsItem(
+              icon: Icons.settings_phone_outlined,
+              title: 'profile_change_phone'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.help_outline,
+              title: 'profile_help_feedback'.tr(),
+              subtitle: 'profile_help_feedback_subtitle'.tr(),
+              onTap: () {},
+            ),
+            _buildSettingsItem(
+              icon: Icons.logout,
+              title: 'profile_logout'.tr(),
+              iconColor: Colors.red,
+              titleColor: Colors.red,
+              iconBackgroundColor: const Color(0xFFFFF0F0),
+              showTrailing: false,
+              onTap: () {
+                context.push(AppRouterName.logout);
+              },
             ),
             const SizedBox(height: 32),
           ],
         ),
       ),
     );
+
   }
 
   Widget _buildSettingsItem({
     required IconData icon,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required VoidCallback onTap,
+    Color? iconColor,
+    Color? titleColor,
+    Color? iconBackgroundColor,
+    bool showTrailing = true,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -184,20 +255,22 @@ class ProfileMainScreen extends StatelessWidget {
           leading: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: iconBackgroundColor ?? Colors.grey[100],
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.black87, size: 24),
+            child: Icon(icon, color: iconColor ?? Colors.black87, size: 24),
           ),
           title: Text(
             title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black87),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: titleColor ?? Colors.black87),
           ),
-          subtitle: Text(
-            subtitle,
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
-          ),
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
+          subtitle: subtitle != null
+              ? Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                )
+              : null,
+          trailing: showTrailing ? const Icon(Icons.chevron_right, color: Colors.grey, size: 24) : null,
           onTap: onTap,
         ),
       ),

@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -40,7 +41,7 @@ class CallHistoryTile extends StatelessWidget {
         children: [
           Icon(arrowIcon, color: arrowColor, size: 16),
           const SizedBox(width: 4),
-          Text(_relativeTime(record.startedAt), style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(_relativeTime(record.startedAt, context), style: const TextStyle(color: Colors.grey, fontSize: 13)),
         ],
       ),
       trailing: Icon(
@@ -52,21 +53,25 @@ class CallHistoryTile extends StatelessWidget {
     );
   }
 
-  static String _relativeTime(int epochMs) {
+  static String _relativeTime(int epochMs, BuildContext context) {
     final dt = DateTime.fromMillisecondsSinceEpoch(epochMs);
     final now = DateTime.now();
     final hh = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final mm = dt.minute.toString().padLeft(2, '0');
-    final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+    
+    final isArabic = context.locale.languageCode == 'ar';
+    final ampm = dt.hour >= 12 
+        ? (isArabic ? 'م' : 'PM') 
+        : (isArabic ? 'ص' : 'AM');
     final time = '$hh:$mm $ampm';
 
     final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
-    if (isToday) return 'Today $time';
+    if (isToday) return '${'calls_today'.tr()} $time';
 
     final yesterday = now.subtract(const Duration(days: 1));
     final isYesterday =
         dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
-    if (isYesterday) return 'Yesterday $time';
+    if (isYesterday) return '${'calls_yesterday'.tr()} $time';
 
     return '${dt.month}/${dt.day}/${dt.year} $time';
   }

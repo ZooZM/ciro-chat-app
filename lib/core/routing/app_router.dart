@@ -46,6 +46,12 @@ import '../../features/profile/presentation/pages/profile_info_screen.dart';
 import '../../features/profile/presentation/pages/appearance_screen.dart';
 import '../../features/profile/presentation/pages/chat_theme_preview_screen.dart';
 import '../../features/profile/presentation/pages/language_screen.dart';
+import '../../features/profile/presentation/pages/logout_screen.dart';
+import '../../features/profile/presentation/pages/invite_friend_screen.dart';
+import '../../features/profile/presentation/pages/invite_via_screen.dart';
+import '../../features/profile/presentation/pages/invite_link_screen.dart';
+import '../../features/profile/presentation/pages/notification_screen.dart';
+import '../../features/profile/presentation/pages/privacy_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -105,6 +111,12 @@ class AppRouterName {
   static const String appearance = '/profile/appearance';
   static const String chatThemePreview = '/profile/appearance/theme_preview';
   static const String language = '/profile/language';
+  static const String logout = '/profile/logout';
+  static const String inviteFriend = '/profile/invite_friend';
+  static const String inviteVia = '/profile/invite_friend/via';
+  static const String inviteLink = '/profile/invite_friend/link';
+  static const String notifications = '/profile/notifications';
+  static const String privacy = '/profile/privacy';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -642,6 +654,30 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.language,
       builder: (context, state) => const LanguageScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.logout,
+      builder: (context, state) => const LogoutScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteFriend,
+      builder: (context, state) => const InviteFriendScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteVia,
+      builder: (context, state) => const InviteViaScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteLink,
+      builder: (context, state) => const InviteLinkScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.notifications,
+      builder: (context, state) => const NotificationScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.privacy,
+      builder: (context, state) => const PrivacyScreen(),
     ),
   ],
 );

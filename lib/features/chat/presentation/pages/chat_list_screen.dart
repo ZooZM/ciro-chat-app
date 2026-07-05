@@ -64,33 +64,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
               titleSpacing: 0, // Shift the entire logo to the left
               title: ChatListAppBar(),
               actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.language,
-                    color: AppColors.primary,
-                    size: 24.resW,
-                  ),
-                  onPressed: () {
-                    if (context.locale.languageCode == 'en') {
-                      context.setLocale(const Locale('ar'));
-                    } else {
-                      context.setLocale(const Locale('en'));
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.logout,
-                    color: AppColors.textSecondary,
-                    size: 20.resW,
-                  ),
-                  onPressed: () async {
-                    await getIt<AuthCubit>().logOut();
-                    if (mounted) {
-                      context.go(AppRouterName.auth);
-                    }
-                  },
-                ),
                 Padding(
                   padding: EdgeInsets.only(right: 16.resW),
                   child: CircleAvatar(
