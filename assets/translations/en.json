@@ -292,5 +292,18 @@
   "privacy_my_contacts": "My Contacts",
   "privacy_everyone": "Everyone",
   "logout_main_title": "Log Out",
-  "logout_confirm_msg": "Are you sure you want to\nlog out ?"
+  "logout_confirm_msg": "Are you sure you want to\nlog out ?",
+  "profile_change_phone_title": "Change Phone Number",
+  "profile_change_phone_subtitle": "We will send a verification code to\nyour new mobile number",
+  "profile_change_phone_label": "New Mobile Number",
+  "profile_change_phone_btn": "Send Code",
+  "profile_verify_phone_title": "Verify Code",
+  "profile_verify_phone_subtitle_1": "Please enter the code we just send to\n",
+  "profile_verify_phone_subtitle_2": "Phone number ",
+  "profile_verify_phone_no_code": "Didn’t receive code? ",
+  "profile_verify_phone_resend": "Resend code",
+  "profile_verify_phone_btn": "Verify",
+  "profile_verify_phone_success": "Phone number changed successfully!",
+  "profile_verify_phone_error": "Please enter the full 6-digit code",
+  "profile_verify_phone_resent": "Code resent!"
 }

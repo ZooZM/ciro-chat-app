@@ -237,58 +237,56 @@ class AvatarActiveCallScreen extends StatelessWidget {
               bottom: 24.resH,
               left: 16.resW,
               right: 16.resW,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(40.resR),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      vertical: 12.resH,
-                      horizontal: 16.resW,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildIconBtn(
-                          Icons.arrow_upward_rounded,
-                          onTap: () {},
-                        ), // Upload arrow
-                        _buildIconBtn(
-                          Icons.sentiment_satisfied_alt,
-                          onTap: () {},
-                        ), // Smiley face
-                        _buildIconBtn(
-                          isMuted ? Icons.mic_off : Icons.mic,
-                          onTap: onToggleMute,
-                          isActive: isMuted,
-                        ), // Microphone
-                        _buildIconBtn(
-                          Icons.sync,
-                          onTap: onToggleCamera,
-                        ), // Reverse camera
-                        // White round button with red camera icon
-                        GestureDetector(
-                          onTap: onEndCall,
-                          child: Container(
-                            width: 52.resR,
-                            height: 52.resR,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.videocam_off,
-                              color: const Color(0xFFE33451),
-                              size: 26.resR,
-                            ),
-                          ),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  vertical: 12.resH,
+                  horizontal: 16.resW,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(40.resR),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildIconBtn(
+                      Icons.arrow_upward_rounded,
+                      onTap: () {},
+                      hasBackground: true,
+                    ), // Upload arrow
+                    _buildIconBtn(
+                      Icons.sentiment_satisfied_alt,
+                      onTap: () {},
+                      hasBackground: false,
+                    ), // Smiley face
+                    _buildIconBtn(
+                      isMuted ? Icons.mic_off : Icons.mic,
+                      onTap: onToggleMute,
+                      hasBackground: isMuted,
+                    ), // Microphone
+                    _buildIconBtn(
+                      Icons.flip_camera_ios,
+                      onTap: onToggleCamera,
+                      hasBackground: false,
+                    ), // Reverse camera
+                    // White round button with red camera icon
+                    GestureDetector(
+                      onTap: onEndCall,
+                      child: Container(
+                        width: 52.resR,
+                        height: 52.resR,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
                         ),
-                      ],
+                        child: Icon(
+                          Icons.videocam_off,
+                          color: const Color(0xFFE33451),
+                          size: 26.resR,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -301,7 +299,7 @@ class AvatarActiveCallScreen extends StatelessWidget {
   Widget _buildIconBtn(
     IconData icon, {
     VoidCallback? onTap,
-    bool isActive = false,
+    bool hasBackground = false,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -309,12 +307,16 @@ class AvatarActiveCallScreen extends StatelessWidget {
         width: 52.resR,
         height: 52.resR,
         decoration: BoxDecoration(
-          color: isActive
-              ? Colors.white.withOpacity(0.4)
-              : Colors.white.withOpacity(0.2),
+          color: hasBackground
+              ? Colors.white.withOpacity(0.2)
+              : Colors.transparent,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white, size: 24.resR),
+        child: Icon(
+          icon, 
+          color: hasBackground ? Colors.white : Colors.white.withOpacity(0.6), 
+          size: 26.resR,
+        ),
       ),
     );
   }

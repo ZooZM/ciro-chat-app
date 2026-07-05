@@ -17,6 +17,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.locale; // Explicitly subscribe to locale changes
     final currentLocale = context.locale.languageCode;
 
     return Scaffold(

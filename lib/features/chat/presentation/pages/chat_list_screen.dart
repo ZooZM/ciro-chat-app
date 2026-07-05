@@ -50,6 +50,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.locale; // Subscribe to locale changes for bottom nav translations
+
     return Scaffold(
       // Black on Reels: the bottom nav Container's rounded top corners clip
       // to reveal whatever sits behind them — with a white Scaffold, that
@@ -383,6 +385,7 @@ class ChatListAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.locale; // Subscribe to locale changes
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,

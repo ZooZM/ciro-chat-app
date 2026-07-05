@@ -15,6 +15,9 @@ class ProfileMainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Explicitly subscribe to locale changes so the screen rebuilds immediately
+    context.locale;
+
     final user = MockProfileData.currentUser;
     final wallet = MockProfileData.currentWallet;
 
@@ -205,7 +208,9 @@ class ProfileMainScreen extends StatelessWidget {
             _buildSettingsItem(
               icon: Icons.settings_phone_outlined,
               title: 'profile_change_phone'.tr(),
-              onTap: () {},
+              onTap: () {
+                context.push(AppRouterName.changePhone);
+              },
             ),
             _buildSettingsItem(
               icon: Icons.help_outline,

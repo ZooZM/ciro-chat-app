@@ -52,6 +52,8 @@ import '../../features/profile/presentation/pages/invite_via_screen.dart';
 import '../../features/profile/presentation/pages/invite_link_screen.dart';
 import '../../features/profile/presentation/pages/notification_screen.dart';
 import '../../features/profile/presentation/pages/privacy_screen.dart';
+import '../../features/profile/presentation/pages/change_phone_number_screen.dart';
+import '../../features/profile/presentation/pages/verify_new_phone_number_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -117,6 +119,8 @@ class AppRouterName {
   static const String inviteLink = '/profile/invite_friend/link';
   static const String notifications = '/profile/notifications';
   static const String privacy = '/profile/privacy';
+  static const String changePhone = '/profile/change_phone';
+  static const String verifyNewPhone = 'verify_new_phone';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -678,6 +682,19 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.privacy,
       builder: (context, state) => const PrivacyScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.changePhone,
+      builder: (context, state) => const ChangePhoneNumberScreen(),
+      routes: [
+        GoRoute(
+          path: AppRouterName.verifyNewPhone,
+          builder: (context, state) {
+            final phone = state.extra as String? ?? '';
+            return VerifyNewPhoneNumberScreen(phoneNumber: phone);
+          },
+        ),
+      ],
     ),
   ],
 );
