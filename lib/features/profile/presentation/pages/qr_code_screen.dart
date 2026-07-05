@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/mock_profile_data.dart';
 
@@ -63,11 +64,11 @@ class QrCodeScreen extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.04),
-                                blurRadius: 12,
+                                blurRadius: 16,
                                 offset: const Offset(0, 4),
                               ),
                             ],
@@ -117,29 +118,25 @@ class QrCodeScreen extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 40),
-                              // QR Code Placeholder
-                              Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  const Icon(
-                                    Icons.qr_code_2,
-                                    size: 260,
-                                    color: Colors.black,
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.forum_outlined,
-                                      size: 32,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ],
+                              const SizedBox(height: 32),
+                              // Real QR Code
+                              QrImageView(
+                                data: 'ciro://contact/${user.ciroId}',
+                                version: QrVersions.auto,
+                                size: 240,
+                                padding: EdgeInsets.zero,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: Colors.black,
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.square,
+                                  color: Colors.black,
+                                ),
+                                embeddedImage: const AssetImage('assets/AppLogo.png'),
+                                embeddedImageStyle: const QrEmbeddedImageStyle(
+                                  size: Size(48, 48),
+                                ),
                               ),
                             ],
                           ),
@@ -149,7 +146,7 @@ class QrCodeScreen extends StatelessWidget {
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 4),
+                              border: Border.all(color: Colors.white, width: 3),
                             ),
                             child: CircleAvatar(
                               radius: 32,
