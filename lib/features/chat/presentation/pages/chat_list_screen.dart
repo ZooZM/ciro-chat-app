@@ -16,6 +16,7 @@ import '../../../status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:ciro_chat_app/features/call_history/presentation/pages/calls_history_screen.dart';
 import 'package:ciro_chat_app/features/reels/presentation/pages/reels_feed_screen.dart';
+import 'package:ciro_chat_app/features/profile/presentation/pages/profile_main_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 /// Bottom-nav tab index for Reels — inserted after Calls per the
@@ -55,7 +56,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       // was showing as a white sliver at the corners even though the
       // Container's own decoration was already black.
       backgroundColor: _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
-      appBar: (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == kReelsTabIndex)
+      appBar: (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == kReelsTabIndex || _currentIndex == 5)
           ? null
           : AppBar(
               backgroundColor: Colors.white,
@@ -272,6 +273,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
     if (_currentIndex == kReelsTabIndex) {
       return const ReelsFeedScreen();
+    }
+    if (_currentIndex == 5) {
+      return const ProfileMainScreen();
     }
     // Default to Chat List
     return Column(

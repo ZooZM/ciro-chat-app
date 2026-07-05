@@ -40,6 +40,12 @@ import '../../features/reels/presentation/pages/creator_profile_screen.dart';
 import '../../features/reels/presentation/pages/reels_feed_screen.dart';
 import '../../features/reels/presentation/pages/search_screen.dart';
 import '../../features/reels/presentation/pages/upload_reel_screen.dart';
+import '../../features/profile/presentation/pages/profile_main_screen.dart';
+import '../../features/profile/presentation/pages/qr_code_screen.dart';
+import '../../features/profile/presentation/pages/profile_info_screen.dart';
+import '../../features/profile/presentation/pages/appearance_screen.dart';
+import '../../features/profile/presentation/pages/chat_theme_preview_screen.dart';
+import '../../features/profile/presentation/pages/language_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -93,6 +99,12 @@ class AppRouterName {
   // v3 (FR-060): declared before `/reels/:id` for the same reason as the
   // other static 2-segment reels paths above.
   static const String reelUpload = '/reels/upload';
+  
+  static const String qrCode = '/profile/qr_code';
+  static const String profileInfo = '/profile/info';
+  static const String appearance = '/profile/appearance';
+  static const String chatThemePreview = '/profile/appearance/theme_preview';
+  static const String language = '/profile/language';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -606,6 +618,30 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.newContact,
       builder: (context, state) => const NewContactScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profile,
+      builder: (context, state) => const ProfileMainScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.qrCode,
+      builder: (context, state) => const QrCodeScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profileInfo,
+      builder: (context, state) => const ProfileInfoScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.appearance,
+      builder: (context, state) => const AppearanceScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.chatThemePreview,
+      builder: (context, state) => const ChatThemePreviewScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.language,
+      builder: (context, state) => const LanguageScreen(),
     ),
   ],
 );
