@@ -54,6 +54,15 @@ import '../../features/profile/presentation/pages/notification_screen.dart';
 import '../../features/profile/presentation/pages/privacy_screen.dart';
 import '../../features/profile/presentation/pages/change_phone_number_screen.dart';
 import '../../features/profile/presentation/pages/verify_new_phone_number_screen.dart';
+import '../../features/profile/presentation/pages/billing_info_screen.dart';
+import '../../features/profile/presentation/pages/bank_account_screen.dart';
+import '../../features/profile/presentation/pages/help_feedback_screen.dart';
+import '../../features/profile/presentation/pages/contact_us_screen.dart';
+import '../../features/profile/presentation/pages/report_problem_screen.dart';
+import '../../features/profile/presentation/pages/faq_screen.dart';
+import '../../features/profile/presentation/pages/privacy_policy_screen.dart';
+import '../../features/profile/presentation/pages/terms_service_screen.dart';
+import '../../features/profile/presentation/pages/send_feedback_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -121,6 +130,15 @@ class AppRouterName {
   static const String privacy = '/profile/privacy';
   static const String changePhone = '/profile/change_phone';
   static const String verifyNewPhone = 'verify_new_phone';
+  static const String billingInfo = '/profile/billing_info';
+  static const String bankAccount = '/profile/bank_account';
+  static const String helpFeedback = '/profile/help_feedback';
+  static const String contactUs = '/profile/help_feedback/contact_us';
+  static const String faq = '/profile/help_feedback/faq';
+  static const String reportProblem = '/profile/help_feedback/report_problem';
+  static const String sendFeedback = '/profile/help_feedback/send_feedback';
+  static const String privacyPolicy = '/profile/help_feedback/privacy_policy';
+  static const String termsService = '/profile/help_feedback/terms_service';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -695,6 +713,42 @@ final GoRouter appRouter = GoRouter(
           },
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRouterName.billingInfo,
+      builder: (context, state) => const BillingInfoScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.bankAccount,
+      builder: (context, state) => const BankAccountScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.helpFeedback,
+      builder: (context, state) => const HelpFeedbackScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.contactUs,
+      builder: (context, state) => const ContactUsScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.faq,
+      builder: (context, state) => const FaqScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.reportProblem,
+      builder: (context, state) => const ReportProblemScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.sendFeedback,
+      builder: (context, state) => const SendFeedbackScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.privacyPolicy,
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.termsService,
+      builder: (context, state) => const TermsServiceScreen(),
     ),
   ],
 );

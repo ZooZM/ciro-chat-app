@@ -163,13 +163,13 @@ class ProfileMainScreen extends StatelessWidget {
               icon: Icons.receipt_long_outlined,
               title: 'profile_billing_info'.tr(),
               subtitle: 'profile_billing_info_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.billingInfo),
             ),
             _buildSettingsItem(
               icon: Icons.account_balance_outlined,
               title: 'profile_bank_account'.tr(),
               subtitle: 'profile_bank_account_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.bankAccount),
             ),
             _buildSettingsItem(
               icon: Icons.badge_outlined,
@@ -216,7 +216,7 @@ class ProfileMainScreen extends StatelessWidget {
               icon: Icons.help_outline,
               title: 'profile_help_feedback'.tr(),
               subtitle: 'profile_help_feedback_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.helpFeedback),
             ),
             _buildSettingsItem(
               icon: Icons.logout,
