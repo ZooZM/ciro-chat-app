@@ -154,6 +154,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   Future<void> _connectToRoom() async {
     try {
+      // Request permissions before connecting
+      await [Permission.camera, Permission.microphone].request();
+
       // Configure the OS voice-communication audio session BEFORE connecting
       // (FR-Audio-01, SC-003).
       await getIt<CallAudioSessionService>().configureForCall();
@@ -180,6 +183,12 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           if (mounted) setState(() {});
         })
         ..on<TrackUnsubscribedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackMutedEvent>((_) {
+          if (mounted) setState(() {});
+        })
+        ..on<TrackUnmutedEvent>((_) {
           if (mounted) setState(() {});
         });
 
