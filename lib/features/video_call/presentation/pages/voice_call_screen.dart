@@ -41,6 +41,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Room? _room;
   bool _isConnecting = true;
   late bool _isMicMuted;
+  bool _isCameraDisabled = true;
   bool _hasRemoteParticipantJoined = false;
   bool _isUpgrading = false;
   late final AudioRouteService _audioRoute = getIt<AudioRouteService>();
@@ -49,6 +50,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   late final Stopwatch _callTimer;
   Timer? _uiTimer;
+
+  // PIP offset
+  Offset _pipOffset = const Offset(16, 110);
 
   @override
   void initState() {
@@ -270,23 +274,30 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
               // PIP Avatar (Left)
               Positioned(
-                left: 16.resW,
-                top: 110.resH,
-                child: Container(
-                  width: 100.resR,
-                  height: 170.resR,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF35C8D),
-                    borderRadius: BorderRadius.circular(24.resR),
-                  ),
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  child: CircleAvatar(
-                    radius: 35.resR,
-                    backgroundColor: Colors.black12,
-                    child: Text(
-                      'Me',
-                      style: AppTypography.headline2.copyWith(color: Colors.white),
+                left: _pipOffset.dx,
+                top: _pipOffset.dy,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      _pipOffset += details.delta;
+                    });
+                  },
+                  child: Container(
+                    width: 100.resR,
+                    height: 170.resR,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF35C8D),
+                      borderRadius: BorderRadius.circular(24.resR),
+                    ),
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.antiAlias,
+                    child: CircleAvatar(
+                      radius: 35.resR,
+                      backgroundColor: Colors.black12,
+                      child: Text(
+                        'Me',
+                        style: AppTypography.headline2.copyWith(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
@@ -349,16 +360,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                         color: Colors.white.withOpacity(0.15),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          _buildIconBtn(
-                            icon: Icons.arrow_upward_rounded,
-                            onTap: () {},
-                          ),
-                          _buildIconBtn(
-                            icon: Icons.sentiment_satisfied_alt,
-                            onTap: () => AudioRoutePickerSheet.show(context),
-                          ),
                           _buildIconBtn(
                             icon: _isMicMuted ? Icons.mic_off : Icons.mic,
                             isActive: _isMicMuted,
@@ -375,8 +378,23 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                             },
                           ),
                           _buildIconBtn(
-                            icon: Icons.sync,
-                            onTap: () {},
+                            icon: _routeState.activeRoute == AudioOutputRoute.speaker ? Icons.volume_up : Icons.volume_down,
+                            isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
+                            onTap: () => AudioRoutePickerSheet.show(context),
+                          ),
+                          _buildIconBtn(
+                            icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
+                            isActive: _isCameraDisabled,
+                            onTap: () async {
+                              try {
+                                final targetDisabled = !_isCameraDisabled;
+                                await [Permission.camera].request();
+                                await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                                setState(() => _isCameraDisabled = targetDisabled);
+                              } catch (e) {
+                                debugPrint('Failed to toggle camera: $e');
+                              }
+                            },
                           ),
                           // End call button
                           GestureDetector(
@@ -392,7 +410,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                                 color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.videocam_off, color: const Color(0xFFE33451), size: 26.resR),
+                              child: Icon(Icons.call_end, color: const Color(0xFFE33451), size: 26.resR),
                             ),
                           ),
                         ],

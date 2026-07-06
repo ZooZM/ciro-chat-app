@@ -160,4 +160,3 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     );
   }
 }
-

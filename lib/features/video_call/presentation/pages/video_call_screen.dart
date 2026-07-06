@@ -12,6 +12,7 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:livekit_client/livekit_client.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
@@ -56,6 +57,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   // Timer
   late final Stopwatch _callTimer;
   Timer? _uiTimer;
+
+  // PIP offset
+  Offset _pipOffset = const Offset(16, 110);
 
   @override
   void initState() {
@@ -347,10 +351,32 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
               }
             }
 
-            return SafeArea(
-              child: Stack(
-                children: [
-                  // Top Bar
+            return Stack(
+              children: [
+                // Fullscreen Background Video
+                Positioned.fill(
+                  child: showRemoteTile
+                      ? (remoteShareTrack != null
+                          ? VideoTrackRenderer(
+                              remoteShareTrack,
+                              fit: VideoViewFit.cover,
+                            )
+                          : Container(
+                              color: Colors.black,
+                              child: const Center(
+                                child: CircularProgressIndicator(color: Colors.white54),
+                              ),
+                            ))
+                      : _ParticipantVideoView(
+                          participant: remoteParticipant,
+                          name: widget.contactName,
+                          isFullScreen: true,
+                        ),
+                ),
+                SafeArea(
+                  child: Stack(
+                    children: [
+                      // Top Bar
                   Positioned(
                     top: 16.resH,
                     left: 16.resW,
@@ -474,74 +500,37 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
                   // PIP Avatar (Left)
                   Positioned(
-                    left: 16.resW,
-                    top: 110.resH,
-                    child: Container(
-                      width: 100.resR,
-                      height: 170.resR,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF35C8D),
-                        borderRadius: BorderRadius.circular(24.resR),
-                      ),
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.antiAlias,
-                      child: isSharing
-                        ? (localShareTrack != null
-                            ? VideoTrackRenderer(localShareTrack)
-                            : Container(
-                                color: Colors.black87,
-                                child: const Center(
-                                  child: Icon(Icons.screen_share, color: Colors.white),
-                                ),
-                              ))
-                        : _ParticipantVideoView(
-                          participant: localParticipant,
-                          isLocal: true,
-                          name: 'Me',
+                    left: _pipOffset.dx,
+                    top: _pipOffset.dy,
+                    child: GestureDetector(
+                      onPanUpdate: (details) {
+                        setState(() {
+                          _pipOffset += details.delta;
+                        });
+                      },
+                      child: Container(
+                        width: 100.resR,
+                        height: 170.resR,
+                        decoration: BoxDecoration(
+                          color: Colors.transparent, // Removed the F35C8D color
+                          borderRadius: BorderRadius.circular(24.resR),
                         ),
-                    ),
-                  ),
-
-                  // Large Center Avatar
-                  Center(
-                    child: Container(
-                      width: 280.resR,
-                      height: 280.resR,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withOpacity(0.12),
-                      ),
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.antiAlias,
-                      child: showRemoteTile
-                          ? (remoteShareTrack != null
-                              ? VideoTrackRenderer(remoteShareTrack)
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.antiAlias,
+                        child: isSharing
+                          ? (localShareTrack != null
+                              ? VideoTrackRenderer(localShareTrack)
                               : Container(
-                                  color: Colors.black,
+                                  color: Colors.black87,
                                   child: const Center(
-                                    child: CircularProgressIndicator(color: Colors.white54),
+                                    child: Icon(Icons.screen_share, color: Colors.white),
                                   ),
                                 ))
                           : _ParticipantVideoView(
-                              participant: remoteParticipant,
-                              name: widget.contactName,
-                            ),
-                    ),
-                  ),
-
-                  // Bottom White Circle
-                  Positioned(
-                    bottom: 150.resH,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        width: 80.resR,
-                        height: 80.resR,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4.5.resR),
-                        ),
+                            participant: localParticipant,
+                            isLocal: true,
+                            name: 'Me',
+                          ),
                       ),
                     ),
                   ),
@@ -560,30 +549,16 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.15),
                           ),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _buildIconBtn(
-                                  icon: isSharing ? Icons.stop_screen_share : Icons.arrow_upward_rounded,
-                                  isActive: isSharing,
-                                  onTap: () => _onScreenShareTap(context),
-                                ),
-                                _buildIconBtn(
-                                  icon: Icons.sentiment_satisfied_alt,
-                                  onTap: () {
-                                    // Smiley face action (could be reactions or audio route picker)
-                                    AudioRoutePickerSheet.show(context);
-                                  },
-                                ),
-                                _buildIconBtn(
-                                  icon: _isMicMuted ? Icons.mic_off : Icons.mic,
-                                  isActive: _isMicMuted,
-                                  onTap: () async {
-                                    try {
-                                      final targetMuted = !_isMicMuted;
-                                      await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildIconBtn(
+                                icon: _isMicMuted ? Icons.mic_off : Icons.mic,
+                                isActive: _isMicMuted,
+                                onTap: () async {
+                                  try {
+                                    final targetMuted = !_isMicMuted;
+                                    await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
                                       if (!mounted) return;
                                       context.read<CallCubit>().reportLocalMute(targetMuted);
                                       setState(() => _isMicMuted = targetMuted);
@@ -593,18 +568,20 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                   },
                                 ),
                                 _buildIconBtn(
-                                  icon: Icons.sync,
+                                  icon: _routeState.activeRoute == AudioOutputRoute.speaker ? Icons.volume_up : Icons.volume_down,
+                                  isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
+                                  onTap: () {
+                                    AudioRoutePickerSheet.show(context);
+                                  },
+                                ),
+                                _buildIconBtn(
+                                  icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
+                                  isActive: _isCameraDisabled,
                                   onTap: () async {
                                     try {
-                                      final track = _room!.localParticipant?.videoTrackPublications.firstOrNull?.track;
-                                      if (track is LocalVideoTrack) {
-                                        _isFrontCamera = !_isFrontCamera;
-                                        final options = CameraCaptureOptions(
-                                          cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back,
-                                        );
-                                        await track.restartTrack(options);
-                                        setState(() {});
-                                      }
+                                      final targetDisabled = !_isCameraDisabled;
+                                      await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                                      setState(() => _isCameraDisabled = targetDisabled);
                                     } catch (e) {
                                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
                                     }
@@ -624,7 +601,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                       color: Colors.white,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: Icon(Icons.videocam_off, color: const Color(0xFFE33451), size: 26.resR),
+                                    child: Icon(Icons.call_end, color: const Color(0xFFE33451), size: 26.resR),
                                   ),
                                 ),
                               ],
@@ -633,9 +610,10 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         ),
                       ),
                     ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),
@@ -663,18 +641,21 @@ class _ParticipantVideoView extends StatelessWidget {
   final Participant? participant;
   final bool isLocal;
   final String name;
+  final bool isFullScreen;
 
   const _ParticipantVideoView({
+    super.key,
     this.participant, 
     this.isLocal = false,
     required this.name,
+    this.isFullScreen = false,
   });
 
   @override
   Widget build(BuildContext context) {
     if (participant == null) {
       return Container(
-        color: Colors.grey[900],
+        color: isFullScreen ? Colors.transparent : Colors.grey[900],
         child: Center(
           child: Text(
             isLocal ? 'Starting camera...' : 'Waiting for remote...',
@@ -690,20 +671,23 @@ class _ParticipantVideoView extends StatelessWidget {
         .firstOrNull;
 
     if (videoTrack != null && !videoTrack.muted) {
-      return VideoTrackRenderer(videoTrack);
+      return VideoTrackRenderer(
+        videoTrack,
+        fit: isFullScreen ? VideoViewFit.cover : VideoViewFit.contain,
+      );
     }
 
     return Container(
-      color: Colors.grey[900],
+      color: isFullScreen ? Colors.transparent : Colors.grey[900],
       child: Center(
         child: CircleAvatar(
-          radius: isLocal ? 40 : 80,
+          radius: isLocal ? 40 : (isFullScreen ? 100 : 80),
           backgroundColor: Colors.purple.withOpacity(0.6),
           child: Text(
             name.isNotEmpty ? name[0].toUpperCase() : '?',
             style: TextStyle(
               color: Colors.white, 
-              fontSize: isLocal ? 32 : 64,
+              fontSize: isLocal ? 32 : (isFullScreen ? 80 : 64),
               fontWeight: FontWeight.w600,
             ),
           ),
