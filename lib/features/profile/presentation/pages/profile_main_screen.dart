@@ -4,8 +4,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/routing/app_router.dart';
-import '../../../../core/di/injection.dart';
-import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../data/mock_profile_data.dart';
 import '../widgets/wallet_card.dart';
 import '../widgets/profile_completion_bar.dart';
@@ -175,19 +173,19 @@ class ProfileMainScreen extends StatelessWidget {
               icon: Icons.badge_outlined,
               title: 'profile_identity_verification'.tr(),
               subtitle: 'profile_identity_verification_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.identityVerification),
             ),
             _buildSettingsItem(
               icon: Icons.credit_card_outlined,
               title: 'profile_payments_method'.tr(),
               subtitle: 'profile_payments_method_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.paymentsMethod),
             ),
             _buildSettingsItem(
               icon: Icons.payments_outlined,
               title: 'profile_payments_history'.tr(),
               subtitle: 'profile_payments_history_subtitle'.tr(),
-              onTap: () {},
+              onTap: () => context.push(AppRouterName.paymentsHistory),
             ),
             _buildSettingsItem(
               icon: Icons.lock_outline,
@@ -253,7 +251,7 @@ class ProfileMainScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
+          border: Border.all(color: Colors.grey.withAlpha(51), width: 1),
         ),
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

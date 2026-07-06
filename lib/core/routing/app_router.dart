@@ -2,9 +2,6 @@ import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_sou
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
-import 'package:ciro_chat_app/features/status/presentation/pages/status_creation_screen.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
@@ -15,7 +12,6 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/group_chat_screen
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
-import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/invite_to_share_location_page.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
@@ -56,6 +52,15 @@ import '../../features/profile/presentation/pages/change_phone_number_screen.dar
 import '../../features/profile/presentation/pages/verify_new_phone_number_screen.dart';
 import '../../features/profile/presentation/pages/billing_info_screen.dart';
 import '../../features/profile/presentation/pages/bank_account_screen.dart';
+import '../../features/profile/presentation/pages/payments_history_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_stepper_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_success_screen.dart';
+import '../../features/profile/presentation/pages/payments_method_screen.dart';
+import '../../features/profile/presentation/pages/add_new_card_screen.dart';
+import '../../features/profile/presentation/pages/add_apple_pay_screen.dart';
+import '../../features/profile/presentation/pages/add_google_pay_screen.dart';
+import '../../features/profile/presentation/pages/google_pay_success_screen.dart';
 import '../../features/profile/presentation/pages/help_feedback_screen.dart';
 import '../../features/profile/presentation/pages/contact_us_screen.dart';
 import '../../features/profile/presentation/pages/report_problem_screen.dart';
@@ -132,6 +137,15 @@ class AppRouterName {
   static const String verifyNewPhone = 'verify_new_phone';
   static const String billingInfo = '/profile/billing_info';
   static const String bankAccount = '/profile/bank_account';
+  static const String identityVerification = '/profile/identity_verification';
+  static const String identityVerificationStepper = '/profile/identity_verification/stepper';
+  static const String identityVerificationSuccess = '/profile/identity_verification/success';
+  static const String paymentsMethod = '/profile/payments_method';
+  static const String addNewCard = '/profile/payments_method/add_card';
+  static const String addApplePay = '/profile/payments_method/add_apple_pay';
+  static const String addGooglePay = '/profile/payments_method/add_google_pay';
+  static const String googlePaySuccess = '/profile/payments_method/google_pay_success';
+  static const String paymentsHistory = '/profile/payments_history';
   static const String helpFeedback = '/profile/help_feedback';
   static const String contactUs = '/profile/help_feedback/contact_us';
   static const String faq = '/profile/help_feedback/faq';
@@ -721,6 +735,44 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.bankAccount,
       builder: (context, state) => const BankAccountScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.identityVerification,
+      builder: (context, state) => const IdentityVerificationScreen(),
+      routes: [
+        GoRoute(
+          path: 'stepper',
+          builder: (context, state) => const IdentityVerificationStepperScreen(),
+        ),
+        GoRoute(
+          path: 'success',
+          builder: (context, state) => const IdentityVerificationSuccessScreen(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: AppRouterName.paymentsMethod,
+      builder: (context, state) => const PaymentsMethodScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addNewCard,
+      builder: (context, state) => const AddNewCardScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addApplePay,
+      builder: (context, state) => const AddApplePayScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addGooglePay,
+      builder: (context, state) => const AddGooglePayScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.googlePaySuccess,
+      builder: (context, state) => const GooglePaySuccessScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.paymentsHistory,
+      builder: (context, state) => const PaymentsHistoryScreen(),
     ),
     GoRoute(
       path: AppRouterName.helpFeedback,
