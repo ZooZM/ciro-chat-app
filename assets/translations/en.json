@@ -291,6 +291,7 @@
   "privacy_change_desc": "You can change who can see your personal info.",
   "privacy_my_contacts": "My Contacts",
   "privacy_everyone": "Everyone",
+  "privacy_no_one": "No One",
   "logout_main_title": "Log Out",
   "logout_confirm_msg": "Are you sure you want to\nlog out ?",
   "profile_change_phone_title": "Change Phone Number",

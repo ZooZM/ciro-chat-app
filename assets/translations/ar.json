@@ -291,6 +291,7 @@
   "privacy_change_desc": "يمكنك تغيير من يمكنه رؤية معلوماتك الشخصية.",
   "privacy_my_contacts": "جهات اتصالي",
   "privacy_everyone": "الجميع",
+  "privacy_no_one": "لا أحد",
   "logout_main_title": "تسجيل الخروج",
   "logout_confirm_msg": "هل أنت متأكد أنك تريد\nتسجيل الخروج؟",
   "profile_change_phone_title": "تغيير رقم الهاتف",
