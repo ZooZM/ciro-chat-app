@@ -454,5 +454,13 @@
   "status": "الحالة",
   "verified": "تم التحقق",
   "face_match": "تطابق الوجه",
-  "matched": "متطابق"
+  "matched": "متطابق",
+  "group_call_title": "مكالمة جماعية",
+  "group_call_speaking": "يتحدث",
+  "group_call_muted": "مكتوم",
+  "group_call_video_on": "الفيديو مفعل",
+  "group_call_video_off": "الفيديو معطل",
+  "group_call_plus_others": "+{count} آخرين",
+  "group_call_waiting_message": "في انتظار انضمام الآخرين...",
+  "call_participants_label": "مشاركين"
 }

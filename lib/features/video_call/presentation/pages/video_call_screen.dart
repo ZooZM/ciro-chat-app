@@ -61,9 +61,14 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   // PIP offset
   Offset _pipOffset = const Offset(16, 110);
 
+  bool _isEmojiOpen = false;
+  int _selectedFilterIndex = 0;
+  late PageController _filterPageController;
+
   @override
   void initState() {
     super.initState();
+    _filterPageController = PageController(viewportFraction: 0.22);
     _callTimer = Stopwatch()..start();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
@@ -256,6 +261,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
 
   @override
   void dispose() {
+    _filterPageController.dispose();
     _uiTimer?.cancel();
     _callTimer.stop();
     _sideEventSub?.cancel();
@@ -282,7 +288,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   Widget build(BuildContext context) {
     if (_isConnecting || _room == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFEA4071),
+        backgroundColor: const Color(0xFF000000), // Darker background
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -307,7 +313,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         if (context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFEA4071), // Solid dark pink background
+        backgroundColor: const Color(0xFF000000),
         body: BlocBuilder<CallCubit, CallState>(
           builder: (context, callState) {
             final isSharing = callState is CallActive && callState.isLocallySharingScreen;
@@ -377,239 +383,313 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   child: Stack(
                     children: [
                       // Top Bar
-                  Positioned(
-                    top: 16.resH,
-                    left: 16.resW,
-                    right: 16.resW,
-                    child: Container(
-                      height: 72.resH,
-                      padding: EdgeInsets.symmetric(horizontal: 12.resW),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(40.resR),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Left: Checkmark
-                          GestureDetector(
-                            onTap: () async {
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              }
-                            },
-                            child: Container(
-                              width: 44.resR,
-                              height: 44.resR,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFE5395A), // Solid dark red
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 26.resR,
-                              ),
-                            ),
+                      Positioned(
+                        top: 16.resH,
+                        left: 16.resW,
+                        right: 16.resW,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 12.resH),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(24),
                           ),
-                          
-                          // Right: Info and Avatar
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
+                          child: Row(
                             children: [
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.chevron_left,
-                                        color: Colors.white,
-                                        size: 20.resR,
-                                      ),
-                                      SizedBox(width: 4.resW),
-                                      Text(
-                                        widget.contactName,
-                                        style: AppTypography.subtitle1.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 18.resSp,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    _elapsedLabel,
-                                    style: AppTypography.caption.copyWith(
-                                      color: Colors.white70,
-                                      fontSize: 13.resSp,
-                                    ),
-                                  ),
-                                ],
+                              GestureDetector(
+                                onTap: () {
+                                   if (context.canPop()) context.pop();
+                                },
+                                child: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 28),
                               ),
-                              SizedBox(width: 12.resW),
+                              SizedBox(width: 8.resW),
+                              
+                              // Avatar
                               CircleAvatar(
-                                radius: 20.resR,
-                                backgroundColor: Colors.transparent,
+                                radius: 20.resW,
+                                backgroundColor: Colors.white.withOpacity(0.2),
                                 child: Text(
-                                  widget.contactName.isNotEmpty ? widget.contactName[0].toUpperCase() : '?',
-                                  style: AppTypography.subtitle2.copyWith(
+                                  widget.contactName.isNotEmpty ? widget.contactName[0].toUpperCase() : '?', 
+                                  style: const TextStyle(color: Colors.white)
+                                ),
+                              ),
+                              
+                              SizedBox(width: 12.resW),
+                              
+                              // Name & Timer
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      widget.contactName,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16.resSp,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      _elapsedLabel, 
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13.resSp,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              // Speaker Button
+                              GestureDetector(
+                                onTap: () => AudioRoutePickerSheet.show(context),
+                                child: Container(
+                                  width: 44.resW,
+                                  height: 44.resW,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _routeState.activeRoute == AudioOutputRoute.speaker ? Icons.volume_up : Icons.volume_down,
                                     color: Colors.white,
-                                    fontSize: 14.resSp,
+                                    size: 22.resW,
                                   ),
                                 ),
                               ),
-                              SizedBox(width: 4.resW),
-                              Icon(
-                                Icons.keyboard_arrow_down,
-                                color: Colors.white,
-                                size: 24.resR,
+                              SizedBox(width: 8.resW),
+                              
+                              // End Call Button
+                              GestureDetector(
+                                onTap: () async {
+                                  await context.read<CallCubit>().endCall();
+                                  await _room?.disconnect();
+                                  if (context.mounted) context.go(AppRouterName.home);
+                                },
+                                child: Container(
+                                  width: 44.resW,
+                                  height: 44.resW,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFE53935),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.call_end,
+                                    color: Colors.white,
+                                    size: 22.resW,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Screen share per-receiver audio mute (top-right under the pill)
-                  if (showRemoteTile && remoteSharerHasAudio)
-                    Positioned(
-                      top: 70,
-                      right: 16,
-                      child: GestureDetector(
-                        onTap: () => context
-                            .read<CallCubit>()
-                            .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Colors.black54,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isMutedLocally ? Icons.volume_off : Icons.volume_up,
-                            color: Colors.white,
-                            size: 18,
-                          ),
                         ),
                       ),
-                    ),
 
-                  // PIP Avatar (Left)
-                  Positioned(
-                    left: _pipOffset.dx,
-                    top: _pipOffset.dy,
-                    child: GestureDetector(
-                      onPanUpdate: (details) {
-                        setState(() {
-                          _pipOffset += details.delta;
-                        });
-                      },
-                      child: Container(
-                        width: 100.resR,
-                        height: 170.resR,
-                        decoration: BoxDecoration(
-                          color: Colors.transparent, // Removed the F35C8D color
-                          borderRadius: BorderRadius.circular(24.resR),
-                        ),
-                        alignment: Alignment.center,
-                        clipBehavior: Clip.antiAlias,
-                        child: isSharing
-                          ? (localShareTrack != null
-                              ? VideoTrackRenderer(localShareTrack)
-                              : Container(
-                                  color: Colors.black87,
-                                  child: const Center(
-                                    child: Icon(Icons.screen_share, color: Colors.white),
-                                  ),
-                                ))
-                          : _ParticipantVideoView(
-                            participant: localParticipant,
-                            isLocal: true,
-                            name: 'Me',
-                          ),
-                      ),
-                    ),
-                  ),
-
-                  // Bottom Control Bar
-                  Positioned(
-                    bottom: 24.resH,
-                    left: 16.resW,
-                    right: 16.resW,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(40.resR),
-                      child: BackdropFilter(
-                        filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 12.resH, horizontal: 16.resW),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _buildIconBtn(
-                                icon: _isMicMuted ? Icons.mic_off : Icons.mic,
-                                isActive: _isMicMuted,
-                                onTap: () async {
-                                  try {
-                                    final targetMuted = !_isMicMuted;
-                                    await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
-                                      if (!mounted) return;
-                                      context.read<CallCubit>().reportLocalMute(targetMuted);
-                                      setState(() => _isMicMuted = targetMuted);
-                                    } catch (e) {
-                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                                    }
-                                  },
-                                ),
-                                _buildIconBtn(
-                                  icon: _routeState.activeRoute == AudioOutputRoute.speaker ? Icons.volume_up : Icons.volume_down,
-                                  isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
-                                  onTap: () {
-                                    AudioRoutePickerSheet.show(context);
-                                  },
-                                ),
-                                _buildIconBtn(
-                                  icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
-                                  isActive: _isCameraDisabled,
-                                  onTap: () async {
-                                    try {
-                                      final targetDisabled = !_isCameraDisabled;
-                                      await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
-                                      setState(() => _isCameraDisabled = targetDisabled);
-                                    } catch (e) {
-                                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                                    }
-                                  },
-                                ),
-                                // End call button
-                                GestureDetector(
-                                  onTap: () async {
-                                    await context.read<CallCubit>().endCall();
-                                    await _room?.disconnect();
-                                    if (context.mounted) context.go(AppRouterName.home);
-                                  },
-                                  child: Container(
-                                    width: 52.resR,
-                                    height: 52.resR,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(Icons.call_end, color: const Color(0xFFE33451), size: 26.resR),
-                                  ),
-                                ),
-                              ],
+                      Positioned(
+                        left: _pipOffset.dx,
+                        top: _pipOffset.dy,
+                        child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      final size = MediaQuery.of(context).size;
+                      double newX = _pipOffset.dx + details.delta.dx;
+                      double newY = _pipOffset.dy + details.delta.dy;
+                      
+                      newX = newX.clamp(0.0, size.width - 100.resR);
+                      newY = newY.clamp(0.0, size.height - 170.resR);
+                      
+                      _pipOffset = Offset(newX, newY);
+                    });
+                  },
+                  child: Container(
+                            width: 100.resR,
+                            height: 170.resR,
+                            decoration: BoxDecoration(
+                              color: Colors.transparent, 
+                              borderRadius: BorderRadius.circular(24.resR),
                             ),
+                            alignment: Alignment.center,
+                            clipBehavior: Clip.antiAlias,
+                            child: isSharing
+                              ? (localShareTrack != null
+                                  ? VideoTrackRenderer(localShareTrack)
+                                  : Container(
+                                      color: Colors.black87,
+                                      child: const Center(
+                                        child: Icon(Icons.screen_share, color: Colors.white),
+                                      ),
+                                    ))
+                              : _ParticipantVideoView(
+                                participant: localParticipant,
+                                isLocal: true,
+                                name: 'Me',
+                              ),
                           ),
                         ),
                       ),
-                    ),
+
+                      // Bottom Controls & Filters
+                      Positioned(
+                        bottom: 24.resH,
+                        left: 16.resW,
+                        right: 16.resW,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Horizontal Filter Selection List
+                            if (_isEmojiOpen)
+                              Container(
+                                height: 90.resR,
+                                margin: EdgeInsets.only(bottom: 16.resH),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    PageView.builder(
+                                      controller: _filterPageController,
+                                      onPageChanged: (index) {
+                                        setState(() {
+                                          _selectedFilterIndex = index;
+                                        });
+                                      },
+                                      itemCount: 10,
+                                      itemBuilder: (context, index) {
+                                        final isSelected = _selectedFilterIndex == index;
+                                        // The image fits inside the ring
+                                        final size = isSelected ? 65.resR : 55.resR;
+
+                                        if (index == 0) {
+                                          // Empty state (no filter)
+                                          return const SizedBox();
+                                        }
+
+                                        return Center(
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            width: size,
+                                            height: size,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              image: DecorationImage(
+                                                image: NetworkImage('https://picsum.photos/seed/${index + 40}/100/100'),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    
+                                    // Fixed White Ring in the center
+                                    IgnorePointer(
+                                      child: Container(
+                                        width: 75.resR,
+                                        height: 75.resR,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white, 
+                                            width: 4,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                            // Pre-join status text
+                            Text(
+                              'Friends can see you before joining',
+                              style: TextStyle(color: Colors.white, fontSize: 13.resSp),
+                            ),
+                            SizedBox(height: 16.resH),
+
+                            // Bottom Glassmorphism Bar
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(40.resR),
+                              child: BackdropFilter(
+                                filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(vertical: 12.resH, horizontal: 16.resW),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.15),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildIconBtn(
+                                        icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam_outlined,
+                                        isActive: _isCameraDisabled,
+                                        onTap: () async {
+                                          try {
+                                            final targetDisabled = !_isCameraDisabled;
+                                            await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                                            setState(() => _isCameraDisabled = targetDisabled);
+                                          } catch (e) {
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                                          }
+                                        },
+                                      ),
+                                      _buildIconBtn(
+                                        icon: Icons.cameraswitch_outlined,
+                                        isActive: false,
+                                        onTap: () async {
+                                          try {
+                                            final track = _room!.localParticipant?.videoTrackPublications
+                                                .where((p) => p.source == TrackSource.camera)
+                                                .firstOrNull?.track as LocalVideoTrack?;
+                                            if (track != null) {
+                                              await Helper.switchCamera(track.mediaStreamTrack);
+                                              setState(() => _isFrontCamera = !_isFrontCamera);
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('Failed to switch camera: $e')),
+                                              );
+                                            }
+                                          }
+                                        },
+                                      ),
+                                      _buildIconBtn(
+                                        icon: _isMicMuted ? Icons.mic_off : Icons.mic_none,
+                                        isActive: _isMicMuted,
+                                        onTap: () async {
+                                          try {
+                                            final targetMuted = !_isMicMuted;
+                                            await _room!.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                                            if (!mounted) return;
+                                            context.read<CallCubit>().reportLocalMute(targetMuted);
+                                            setState(() => _isMicMuted = targetMuted);
+                                          } catch (e) {
+                                            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                                          }
+                                        },
+                                      ),
+                                      _buildIconBtn(
+                                        icon: Icons.emoji_emotions_outlined,
+                                        isActive: _isEmojiOpen,
+                                        activeBgColor: Colors.white,
+                                        activeIconColor: Colors.black,
+                                        onTap: () {
+                                          setState(() => _isEmojiOpen = !_isEmojiOpen);
+                                        },
+                                      ),
+                                      _buildIconBtn(
+                                        icon: Icons.menu,
+                                        isActive: false,
+                                        onTap: () {},
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -621,17 +701,29 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     );
   }
 
-  Widget _buildIconBtn({required IconData icon, required VoidCallback onTap, bool isActive = false}) {
+  Widget _buildIconBtn({
+    required IconData icon, 
+    required VoidCallback onTap, 
+    bool isActive = false,
+    Color? activeBgColor,
+    Color? activeIconColor,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 52.resR,
         height: 52.resR,
         decoration: BoxDecoration(
-          color: isActive ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.2),
+          color: isActive 
+            ? (activeBgColor ?? Colors.white.withOpacity(0.4)) 
+            : Colors.white.withOpacity(0.15),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white, size: 24.resR),
+        child: Icon(
+          icon, 
+          color: isActive ? (activeIconColor ?? Colors.white) : Colors.white, 
+          size: 26.resR,
+        ),
       ),
     );
   }

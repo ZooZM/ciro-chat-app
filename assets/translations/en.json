@@ -454,5 +454,13 @@
   "status": "Status",
   "verified": "Verified",
   "face_match": "Face Match",
-  "matched": "Matched"
+  "matched": "Matched",
+  "group_call_title": "Group Call",
+  "group_call_speaking": "Speaking",
+  "group_call_muted": "Muted",
+  "group_call_video_on": "Video On",
+  "group_call_video_off": "Video Off",
+  "group_call_plus_others": "+{count} others",
+  "group_call_waiting_message": "Waiting for others to join...",
+  "call_participants_label": "Participants"
 }

@@ -43,7 +43,10 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
         children: [
           // Search Input
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.resW, vertical: 8.resH),
+            padding: EdgeInsets.symmetric(
+              horizontal: 16.resW,
+              vertical: 8.resH,
+            ),
             decoration: BoxDecoration(
               color: AppColors.surface,
               boxShadow: [
@@ -57,7 +60,11 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.arrow_back, color: AppColors.textPrimary, size: 24.resW),
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: AppColors.textPrimary,
+                    size: 24.resW,
+                  ),
                   onPressed: widget.onClose,
                 ),
                 Expanded(
@@ -67,16 +74,24 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
                     autofocus: true,
                     decoration: InputDecoration(
                       hintText: 'Search in chat...',
-                      hintStyle: AppTypography.body1.copyWith(color: AppColors.textHint),
+                      hintStyle: AppTypography.body1.copyWith(
+                        color: AppColors.textHint,
+                      ),
                       border: InputBorder.none,
                       isDense: true,
                     ),
-                    style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
+                    style: AppTypography.body1.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
                 if (_searchController.text.isNotEmpty)
                   IconButton(
-                    icon: Icon(Icons.close, color: AppColors.textSecondary, size: 20.resW),
+                    icon: Icon(
+                      Icons.close,
+                      color: AppColors.textSecondary,
+                      size: 20.resW,
+                    ),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
@@ -85,7 +100,7 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
               ],
             ),
           ),
-          
+
           // Results
           Expanded(
             child: ValueListenableBuilder<List<Message>>(
@@ -99,7 +114,9 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
                   return Center(
                     child: Text(
                       'No messages found',
-                      style: AppTypography.body2.copyWith(color: AppColors.textSecondary),
+                      style: AppTypography.body2.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   );
                 }
@@ -109,21 +126,30 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
                   itemBuilder: (context, index) {
                     final msg = results[index];
                     return ListTile(
-                      contentPadding: EdgeInsets.symmetric(horizontal: 24.resW, vertical: 4.resH),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 24.resW,
+                        vertical: 4.resH,
+                      ),
                       leading: Icon(
-                        msg.type == MessageType.text ? Icons.chat_bubble_outline : Icons.attach_file,
+                        msg.type == MessageType.text
+                            ? Icons.chat_bubble_outline
+                            : Icons.attach_file,
                         color: AppColors.textSecondary,
                         size: 20.resW,
                       ),
                       title: Text(
                         msg.text.isNotEmpty ? msg.text : 'Media message',
-                        style: AppTypography.body1.copyWith(color: AppColors.textPrimary),
+                        style: AppTypography.body1.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
                         _formatDate(msg.timestamp),
-                        style: AppTypography.caption.copyWith(color: AppColors.textHint),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textHint,
+                        ),
                       ),
                       onTap: () {
                         widget.onResultTap(msg);
@@ -141,7 +167,9 @@ class _ChatSearchBarState extends State<ChatSearchBar> {
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
-    if (date.year == now.year && date.month == now.month && date.day == now.day) {
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
       return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     }
     return '${date.day}/${date.month}/${date.year}';

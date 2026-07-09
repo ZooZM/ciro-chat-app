@@ -22,6 +22,7 @@ import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
 import '../../features/video_call/presentation/pages/group_call_screen.dart';
+
 import '../../features/video_call/presentation/pages/incoming_group_call_screen.dart';
 import '../../features/video_call/presentation/pages/avatar_incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
@@ -103,6 +104,7 @@ class AppRouterName {
   static const String calls = '/calls';
   static const String profile = '/profile';
   static const String groupCall = '/group_call/:roomId';
+
   static const String incomingGroupCall = '/incoming_group_call';
   static const String avatarIncomingCall = '/avatar_incoming_call';
   static const String avatarActiveCall = '/avatar_active_call';
@@ -437,6 +439,7 @@ final GoRouter appRouter = GoRouter(
         return OutgoingCallScreen(
           contactName: data['contactName'] as String? ?? 'Calling...',
           avatarUrl: data['avatarUrl'] as String? ?? '',
+          isVideoCall: data['isVideoCall'] as bool? ?? false,
         );
       },
     ),
@@ -487,6 +490,7 @@ final GoRouter appRouter = GoRouter(
         return GroupCallScreen(roomId: roomId);
       },
     ),
+
     GoRoute(
       path: AppRouterName.incomingGroupCall,
       pageBuilder: (context, state) {

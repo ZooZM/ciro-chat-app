@@ -272,36 +272,6 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                 ),
               ),
 
-              // PIP Avatar (Left)
-              Positioned(
-                left: _pipOffset.dx,
-                top: _pipOffset.dy,
-                child: GestureDetector(
-                  onPanUpdate: (details) {
-                    setState(() {
-                      _pipOffset += details.delta;
-                    });
-                  },
-                  child: Container(
-                    width: 100.resR,
-                    height: 170.resR,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF35C8D),
-                      borderRadius: BorderRadius.circular(24.resR),
-                    ),
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.antiAlias,
-                    child: CircleAvatar(
-                      radius: 35.resR,
-                      backgroundColor: Colors.black12,
-                      child: Text(
-                        'Me',
-                        style: AppTypography.headline2.copyWith(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
 
               // Large Center Avatar
               Center(
@@ -414,6 +384,45 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // PIP Avatar (Left) - Placed last so it stays on top of everything
+              Positioned(
+                left: _pipOffset.dx,
+                top: _pipOffset.dy,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      final size = MediaQuery.of(context).size;
+                      double newX = _pipOffset.dx + details.delta.dx;
+                      double newY = _pipOffset.dy + details.delta.dy;
+                      
+                      // clamp to screen bounds
+                      newX = newX.clamp(0.0, size.width - 100.resR);
+                      newY = newY.clamp(0.0, size.height - 170.resR);
+                      
+                      _pipOffset = Offset(newX, newY);
+                    });
+                  },
+                  child: Container(
+                    width: 100.resR,
+                    height: 170.resR,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF35C8D),
+                      borderRadius: BorderRadius.circular(24.resR),
+                    ),
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.antiAlias,
+                    child: CircleAvatar(
+                      radius: 35.resR,
+                      backgroundColor: Colors.black12,
+                      child: Text(
+                        'Me',
+                        style: AppTypography.headline2.copyWith(color: Colors.white),
                       ),
                     ),
                   ),
