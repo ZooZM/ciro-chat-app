@@ -69,8 +69,11 @@ public class DeviceOrientationManager {
 
 
   /** @return the last received UI orientation. */
-  @Nullable
+  @NonNull
   public PlatformChannel.DeviceOrientation getLastUIOrientation() {
+    if (this.lastOrientation == null) {
+      return getUIOrientation();
+    }
     return this.lastOrientation;
   }
 

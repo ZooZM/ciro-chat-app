@@ -491,42 +491,48 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         left: _pipOffset.dx,
                         top: _pipOffset.dy,
                         child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onPanUpdate: (details) {
                     setState(() {
                       final size = MediaQuery.of(context).size;
                       double newX = _pipOffset.dx + details.delta.dx;
                       double newY = _pipOffset.dy + details.delta.dy;
                       
-                      newX = newX.clamp(0.0, size.width - 100.resR);
-                      newY = newY.clamp(0.0, size.height - 170.resR);
+                      final maxX = (size.width - 100.resR) > 0.0 ? (size.width - 100.resR) : 0.0;
+                      final maxY = (size.height - 170.resR) > 0.0 ? (size.height - 170.resR) : 0.0;
+                      
+                      newX = newX.clamp(0.0, maxX);
+                      newY = newY.clamp(0.0, maxY);
                       
                       _pipOffset = Offset(newX, newY);
                     });
                   },
-                  child: Container(
-                            width: 100.resR,
-                            height: 170.resR,
-                            decoration: BoxDecoration(
-                              color: Colors.transparent, 
-                              borderRadius: BorderRadius.circular(24.resR),
-                            ),
-                            alignment: Alignment.center,
-                            clipBehavior: Clip.antiAlias,
-                            child: isSharing
-                              ? (localShareTrack != null
-                                  ? VideoTrackRenderer(localShareTrack)
-                                  : Container(
-                                      color: Colors.black87,
-                                      child: const Center(
-                                        child: Icon(Icons.screen_share, color: Colors.white),
-                                      ),
-                                    ))
-                              : _ParticipantVideoView(
-                                participant: localParticipant,
-                                isLocal: true,
-                                name: 'Me',
+                  child: AbsorbPointer(
+                    child: Container(
+                              width: 100.resR,
+                              height: 170.resR,
+                              decoration: BoxDecoration(
+                                color: Colors.transparent, 
+                                borderRadius: BorderRadius.circular(24.resR),
                               ),
-                          ),
+                              alignment: Alignment.center,
+                              clipBehavior: Clip.antiAlias,
+                              child: isSharing
+                                ? (localShareTrack != null
+                                    ? VideoTrackRenderer(localShareTrack)
+                                    : Container(
+                                        color: Colors.black87,
+                                        child: const Center(
+                                          child: Icon(Icons.screen_share, color: Colors.white),
+                                        ),
+                                      ))
+                                : _ParticipantVideoView(
+                                  participant: localParticipant,
+                                  isLocal: true,
+                                  name: 'Me',
+                                ),
+                            ),
+                  ),
                         ),
                       ),
 
