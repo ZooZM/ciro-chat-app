@@ -22,4 +22,11 @@ void main() {
     expect(find.byIcon(Icons.block), findsOneWidget);
     expect(find.byIcon(Icons.hourglass_top), findsNothing);
   });
+
+  testWidgets('renders the under-review icon for a hidden reel (v4, FR-072)', (tester) async {
+    await tester.pumpWidget(_wrap(const ReelStatusBadge(status: ReelStatus.hidden)));
+    expect(find.byIcon(Icons.visibility_off), findsOneWidget);
+    expect(find.byIcon(Icons.block), findsNothing);
+    expect(find.byIcon(Icons.hourglass_top), findsNothing);
+  });
 }

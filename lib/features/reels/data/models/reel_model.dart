@@ -2,6 +2,7 @@ import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_creator.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_mention.dart';
+import 'package:ciro_chat_app/features/reels/domain/entities/reel_reposter.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_status.dart';
 
 class ReelCreatorModel extends ReelCreator {
@@ -31,6 +32,18 @@ ReelMention _mentionFromJson(Map<String, dynamic> json) {
   );
 }
 
+/// v4 (FR-076): only present on For You repost-injected items.
+ReelReposter? _repostedByFromJson(dynamic raw) {
+  if (raw is! Map) return null;
+  final json = raw.cast<String, dynamic>();
+  return ReelReposter(
+    id: json['id'] as String? ?? '',
+    username: json['username'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    avatarUrl: UrlUtils.resolveMediaUrl(json['avatarUrl'] as String?),
+  );
+}
+
 class ReelModel extends Reel {
   const ReelModel({
     required super.id,
@@ -48,6 +61,10 @@ class ReelModel extends Reel {
     super.viewsCount,
     super.viewerSaved,
     super.status,
+    super.viewerReposted,
+    super.repostedBy,
+    super.repostersCount,
+    super.topReposters,
   });
 
   factory ReelModel.fromJson(Map<String, dynamic> json) {
@@ -75,6 +92,13 @@ class ReelModel extends Reel {
       viewsCount: json['viewsCount'] as int? ?? 0,
       viewerSaved: json['viewerSaved'] as bool? ?? false,
       status: ReelStatus.fromJson(json['status'] as String?),
+      viewerReposted: json['viewerReposted'] as bool? ?? false,
+      repostedBy: _repostedByFromJson(json['repostedBy']),
+      repostersCount: json['repostersCount'] as int? ?? 0,
+      topReposters: (json['topReposters'] as List<dynamic>? ?? const [])
+          .map((e) => _repostedByFromJson(e))
+          .whereType<ReelReposter>()
+          .toList(),
     );
   }
 }

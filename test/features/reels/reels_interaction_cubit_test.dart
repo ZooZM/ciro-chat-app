@@ -203,6 +203,51 @@ void main() {
     );
   });
 
+  group('toggleRepost (FR-073, v4)', () {
+    blocTest<ReelsInteractionCubit, ReelsInteractionState>(
+      'optimistically flips reposted and calls repostReel when turning on',
+      setUp: () {
+        when(() => repository.repostReel('a')).thenAnswer((_) async => const Right(unit));
+      },
+      build: () => ReelsInteractionCubit(repository),
+      seed: () => const ReelsInteractionState(reposts: {'a': false}),
+      act: (cubit) => cubit.toggleRepost('a'),
+      expect: () => [
+        isA<ReelsInteractionState>().having((s) => s.reposts['a'], 'optimistic on', true),
+      ],
+      verify: (_) => verify(() => repository.repostReel('a')).called(1),
+    );
+
+    blocTest<ReelsInteractionCubit, ReelsInteractionState>(
+      'optimistically flips un-reposted and calls unrepostReel when turning off',
+      setUp: () {
+        when(() => repository.unrepostReel('a')).thenAnswer((_) async => const Right(unit));
+      },
+      build: () => ReelsInteractionCubit(repository),
+      seed: () => const ReelsInteractionState(reposts: {'a': true}),
+      act: (cubit) => cubit.toggleRepost('a'),
+      expect: () => [
+        isA<ReelsInteractionState>().having((s) => s.reposts['a'], 'optimistic off', false),
+      ],
+      verify: (_) => verify(() => repository.unrepostReel('a')).called(1),
+    );
+
+    blocTest<ReelsInteractionCubit, ReelsInteractionState>(
+      'reverts the optimistic change and flags lastActionFailed on repository failure (FR-037)',
+      setUp: () {
+        when(() => repository.repostReel('a')).thenAnswer((_) async => Left(ServerFailure('offline')));
+      },
+      build: () => ReelsInteractionCubit(repository),
+      seed: () => const ReelsInteractionState(reposts: {'a': false}),
+      act: (cubit) => cubit.toggleRepost('a'),
+      expect: () => [
+        isA<ReelsInteractionState>().having((s) => s.reposts['a'], 'optimistic', true),
+        isA<ReelsInteractionState>().having((s) => s.reposts['a'], 'reverted', false),
+        isA<ReelsInteractionState>().having((s) => s.lastActionFailed, 'lastActionFailed', true),
+      ],
+    );
+  });
+
   group('recordView (FR-048, deduped per reel per session)', () {
     test('fires exactly once per reel id even when called repeatedly', () {
       when(() => repository.recordView('a')).thenAnswer((_) async => const Right(1));

@@ -7,6 +7,7 @@ import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/core/theme/app_typography.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_comment.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/comments_cubit.dart';
+import 'comments_skeleton.dart';
 
 /// Opens the lightweight comments bottom sheet for [reelId] (FR-019). The
 /// caller's video keeps playing behind it — this is a modal overlay, not a
@@ -87,11 +88,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     builder: (context, state) {
                       if (state.status == CommentsStatus.loading ||
                           state.status == CommentsStatus.initial) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primary,
-                          ),
-                        );
+                        return const CommentsSkeleton();
                       }
                       if (state.status == CommentsStatus.error) {
                         return Center(

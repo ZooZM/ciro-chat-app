@@ -8,28 +8,30 @@ import 'package:flutter/material.dart';
 import 'package:video_editor/video_editor.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
+import 'package:ciro_chat_app/features/reels/presentation/pages/upload_reel_screen.dart';
 import 'package:ciro_chat_app/features/reels/presentation/services/reel_video_export.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/reel_trimmer_skeleton.dart';
 
-/// v3 (FR-060a): result of a successful trim/export — the ≤60s clip plus a
-/// cover frame, both already on local disk and ready to upload as-is.
-class TrimResult {
-  const TrimResult({required this.videoPath, this.thumbnailPath});
-
-  final String videoPath;
-  final String? thumbnailPath;
-}
-
-const _maxDuration = Duration(seconds: 60);
-
-/// WhatsApp-Status-style ≤60s segment selector for a source video longer
-/// than the cap (FR-060a) — the video is never hard-rejected for length;
-/// the user picks which window to upload. Uses `video_editor`'s
-/// [VideoEditorController]/[TrimSlider] for the UI and `ffmpeg_kit_flutter_new`
-/// directly for the cut (video_editor stopped bundling ffmpeg as of 3.0.0).
+/// WhatsApp-Status-style segment selector — every captured/picked source now
+/// passes through this screen regardless of length (v5, FR-081, supersedes
+/// the earlier >60s-only rule). [maxDuration] is the capture-time cap
+/// (15s/30s/60s) for an in-app recording, or 60s for a gallery pick (binding
+/// rule 15). The confirm CTA reads "Next"; on tap it exports the trimmed clip
+/// and pushes the post-details step directly (B3 — never popping back to the
+/// live camera first), then returns the posted [Reel] up to the capture screen.
+/// Uses `video_editor`'s [VideoEditorController]/[TrimSlider] for the UI and
+/// `ffmpeg_kit_flutter_new` directly for the cut (video_editor stopped bundling
+/// ffmpeg as of 3.0.0).
 class ReelTrimmerScreen extends StatefulWidget {
-  const ReelTrimmerScreen({super.key, required this.sourceFile});
+  const ReelTrimmerScreen({
+    super.key,
+    required this.sourceFile,
+    this.maxDuration = const Duration(seconds: 60),
+  });
 
   final File sourceFile;
+  final Duration maxDuration;
 
   @override
   State<ReelTrimmerScreen> createState() => _ReelTrimmerScreenState();
@@ -47,7 +49,7 @@ class _ReelTrimmerScreenState extends State<ReelTrimmerScreen> {
     _controller = VideoEditorController.file(
       widget.sourceFile,
       minDuration: const Duration(seconds: 1),
-      maxDuration: _maxDuration,
+      maxDuration: widget.maxDuration,
     );
     _controller.initialize().then((_) {
       if (mounted) setState(() => _initialized = true);
@@ -60,7 +62,7 @@ class _ReelTrimmerScreenState extends State<ReelTrimmerScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('reels.trim_export_failed'.tr())),
         );
-        Navigator.of(context).pop<TrimResult?>(null);
+        Navigator.of(context).pop<Reel?>(null);
       }
     });
   }
@@ -123,9 +125,26 @@ class _ReelTrimmerScreenState extends State<ReelTrimmerScreen> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop(
-        TrimResult(videoPath: videoExec.outputPath, thumbnailPath: thumbnailPath),
+      // B3: push the post-details step on top of this trimmer (not popping
+      // back to the live camera first). The posted Reel (or null if the user
+      // backs out of the post screen) flows back here.
+      final reel = await Navigator.of(context).push<Reel?>(
+        MaterialPageRoute(
+          builder: (_) => UploadReelScreen(
+            videoPath: videoExec.outputPath,
+            thumbnailPath: thumbnailPath,
+          ),
+        ),
       );
+      if (!mounted) return;
+      if (reel != null) {
+        // Bubble the posted reel up to the capture screen (which pops on to
+        // the profile). The unwind is synchronous — no camera frame renders.
+        Navigator.of(context).pop<Reel?>(reel);
+      } else {
+        // Backed out of the post screen — stay on the trimmer, re-enabled.
+        setState(() => _exporting = false);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _exporting = false);
@@ -135,58 +154,91 @@ class _ReelTrimmerScreenState extends State<ReelTrimmerScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text('reels.trim_title'.tr()),
+  /// v5 (binding rule 15): backing out of the trimmer discards the captured
+  /// clip — confirm first so a stray tap doesn't silently lose the recording.
+  Future<bool> _confirmDiscard() async {
+    if (_exporting) return false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('reels.capture_discard_title'.tr()),
+        content: Text('reels.capture_discard_body'.tr()),
         actions: [
-          if (_initialized && !_exporting)
-            TextButton(
-              onPressed: _confirm,
-              child: Text(
-                'reels.upload_submit'.tr(),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('reels.capture_discard_action'.tr()),
+          ),
         ],
       ),
-      body: !_initialized
-          ? const Center(child: CircularProgressIndicator())
-          : _exporting
-              ? const Center(child: CircularProgressIndicator())
-              : SafeArea(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: AspectRatio(
-                            aspectRatio: _controller.video.value.aspectRatio,
-                            child: VideoPlayer(_controller.video),
+    );
+    return confirmed ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldDiscard = await _confirmDiscard();
+        if (!context.mounted || !shouldDiscard) return;
+        Navigator.of(context).pop<Reel?>(null);
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: Text('reels.trim_title'.tr()),
+          actions: [
+            if (_initialized && !_exporting)
+              TextButton(
+                onPressed: _confirm,
+                child: Text(
+                  'reels.trim_next'.tr(),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
+        ),
+        body: !_initialized
+            ? const ReelTrimmerSkeleton()
+            : _exporting
+                ? const Center(child: CircularProgressIndicator())
+                : SafeArea(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: AspectRatio(
+                              aspectRatio: _controller.video.value.aspectRatio,
+                              child: VideoPlayer(_controller.video),
+                            ),
                           ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          'reels.trim_duration_hint'.tr(),
-                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'reels.trim_duration_hint'.tr(),
+                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        child: TrimSlider(
-                          controller: _controller,
-                          height: 60,
-                          horizontalMargin: 16,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          child: TrimSlider(
+                            controller: _controller,
+                            height: 60,
+                            horizontalMargin: 16,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+      ),
     );
   }
 }

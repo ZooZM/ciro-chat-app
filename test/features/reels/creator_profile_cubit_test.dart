@@ -6,6 +6,7 @@ import 'package:ciro_chat_app/core/error/failures.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/creator_profile.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_creator.dart';
+import 'package:ciro_chat_app/features/reels/domain/entities/reels_page.dart';
 import 'package:ciro_chat_app/features/reels/domain/repositories/reels_repository.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/creator_profile_cubit.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_interaction_cubit.dart';
@@ -108,4 +109,37 @@ void main() {
       isA<CreatorProfileState>().having((s) => s.status, 'status', CreatorProfileStatus.error),
     ],
   );
+
+  // v6: public Reposts tab.
+  blocTest<CreatorProfileCubit, CreatorProfileState>(
+    'loadRepostedTab() targets the VIEWED profile id (public) and fills the reposted tab',
+    setUp: () {
+      when(() => repository.fetchProfile('creator-1'))
+          .thenAnswer((_) async => const Right(_profile));
+      when(() => repository.fetchReposted(userId: 'creator-1'))
+          .thenAnswer((_) async => Right(ReelsPage(items: [_repostedReel], nextCursor: null)));
+    },
+    build: () => CreatorProfileCubit(repository, interactionCubit),
+    act: (cubit) async {
+      await cubit.load('creator-1');
+      await cubit.loadRepostedTab();
+    },
+    verify: (cubit) {
+      verify(() => repository.fetchReposted(userId: 'creator-1')).called(1);
+      expect(cubit.state.repostedTab?.status, SelfTabStatus.ready);
+      expect(cubit.state.repostedTab?.videos.single.id, 'r-1');
+    },
+  );
 }
+
+final Reel _repostedReel = Reel(
+  id: 'r-1',
+  videoUrl: 'v',
+  thumbnailUrl: 't',
+  createdAt: DateTime(2026, 1, 1),
+  creator: const ReelCreator(id: 'other', name: 'O', avatarUrl: '', viewerFollowing: false),
+  likesCount: 0,
+  commentsCount: 0,
+  sharesCount: 0,
+  viewerLiked: false,
+);

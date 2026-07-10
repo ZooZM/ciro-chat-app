@@ -37,9 +37,9 @@ import '../../features/call_history/presentation/pages/dialpad_screen.dart';
 import '../../features/call_history/presentation/pages/new_contact_screen.dart';
 import '../../features/call_history/domain/entities/call_history_record.dart';
 import '../../features/reels/presentation/pages/creator_profile_screen.dart';
+import '../../features/reels/presentation/pages/reel_capture_screen.dart';
 import '../../features/reels/presentation/pages/reels_feed_screen.dart';
 import '../../features/reels/presentation/pages/search_screen.dart';
-import '../../features/reels/presentation/pages/upload_reel_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -89,10 +89,14 @@ class AppRouterName {
   static const String reelHashtagFeed = '/reels/hashtag/:tag';
   static const String reelLikedFeed = '/reels/liked';
   static const String reelSavedFeed = '/reels/saved';
+  // v6: public Reposts scoped feed — `?userId=` selects whose reposts.
+  static const String reelRepostedFeed = '/reels/reposted';
   static const String reelSearch = '/reels/search';
-  // v3 (FR-060): declared before `/reels/:id` for the same reason as the
-  // other static 2-segment reels paths above.
-  static const String reelUpload = '/reels/upload';
+  // v5 (FR-079): the "+" entry's camera-first destination — declared before
+  // `/reels/:id` for the same reason as the other static 2-segment reels
+  // paths above. The post-details step is not a route (the trimmer pushes it
+  // directly), so there is no `/reels/upload`.
+  static const String reelCapture = '/reels/capture';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -508,15 +512,27 @@ final GoRouter appRouter = GoRouter(
         initialReelId: state.uri.queryParameters['start'],
       ),
     ),
+    // v6: public Reposts scoped feed — `userId` selects whose reposts.
+    GoRoute(
+      path: AppRouterName.reelRepostedFeed,
+      builder: (context, state) => ReelsFeedScreen(
+        listSource: 'reposted',
+        listSourceUserId: state.uri.queryParameters['userId'],
+        initialReelId: state.uri.queryParameters['start'],
+      ),
+    ),
     GoRoute(
       path: AppRouterName.reelSearch,
       builder: (context, state) => const ReelsSearchScreen(),
     ),
-    // v3 (FR-060): declared before `/reels/:id` — same static-route-first
-    // reasoning as the routes above.
+    // v5 (FR-079): the "+" upload entry now opens the camera-first capture
+    // screen; declared before `/reels/:id` like the other static reels paths.
+    // The post-details step (`UploadReelScreen`) is no longer a route — the
+    // trimmer pushes it directly (B3) so the camera never flashes between
+    // "Next" and the post screen.
     GoRoute(
-      path: AppRouterName.reelUpload,
-      builder: (context, state) => const UploadReelScreen(),
+      path: AppRouterName.reelCapture,
+      builder: (context, state) => const ReelCaptureScreen(),
     ),
     // Deep-link entry point (FR-038/FR-040): `https://ciro.chat/reels/:id`.
     GoRoute(

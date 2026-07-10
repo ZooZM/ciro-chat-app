@@ -4,6 +4,7 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 /// Shared ffmpeg export settings for reel uploads. Both the trim path
 /// ([ReelTrimmerScreen], source >60s) and the no-trim path ([UploadReelScreen],
@@ -60,6 +61,42 @@ class ReelVideoExport {
     } catch (e) {
       debugPrint('[ReelVideoExport] normalize threw: $e');
       return null;
+    }
+  }
+
+  static Future<Directory> _reelsTmpDir() async {
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory('${docs.path}/reels_tmp');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  /// v5 (R22): `video_editor` 3.0.0 runs `Uri.encodeFull(path)` on iOS when
+  /// it builds its internal `VideoPlayerController`, so any space or special
+  /// char in a recorded/picked filename (e.g. "Screen Recording ….mov")
+  /// becomes `%20` and the player fails to load a now-nonexistent path
+  /// (OSStatus -17913). Every capture/pick is copied to a space-free name
+  /// under `<appDocs>/reels_tmp/` before the trimmer ever opens (FR-081) —
+  /// [purgeReelsTmp] clears the directory on every flow exit.
+  static Future<File> copyToSafePath(File source) async {
+    final dir = await _reelsTmpDir();
+    final lastDot = source.path.lastIndexOf('.');
+    final ext = lastDot != -1 ? source.path.substring(lastDot + 1) : 'mp4';
+    final dest = '${dir.path}/${const Uuid().v4()}.$ext';
+    return source.copy(dest);
+  }
+
+  /// Clears `reels_tmp` — called when the creation flow exits via a
+  /// successful post, a back-out discard, or abandonment, so temp copies
+  /// never accumulate (FR-081, binding rule 14).
+  static Future<void> purgeReelsTmp() async {
+    try {
+      final dir = await _reelsTmpDir();
+      if (await dir.exists()) {
+        await dir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('[ReelVideoExport] purgeReelsTmp failed: $e');
     }
   }
 }

@@ -7,6 +7,7 @@ import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/search_user.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/search_cubit.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/search_results_skeleton.dart';
 
 /// FR-057–059: search reels by hashtag substring and users by name/username
 /// substring — both groups shown side by side, block-filtered server-side.
@@ -58,7 +59,7 @@ class _SearchScaffoldState extends State<_SearchScaffold> {
             case SearchStatus.idle:
               return const SizedBox.shrink();
             case SearchStatus.loading:
-              return const Center(child: CircularProgressIndicator());
+              return const SearchResultsSkeleton();
             case SearchStatus.error:
               return Center(child: Text('reels.action_failed'.tr()));
             case SearchStatus.ready:

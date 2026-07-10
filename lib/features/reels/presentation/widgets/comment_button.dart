@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_interaction_cubit.dart';
@@ -24,17 +24,24 @@ class CommentButton extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: onTap,
-              child: const Icon(
-                CupertinoIcons.chat_bubble,
-                color: Colors.white,
-                size: 30,
-                shadows: [Shadow(color: Colors.white, blurRadius: 8)],
+              child: SvgPicture.asset(
+                'assets/icons/reels/comment.svg',
+                width: 34,
+                height: 34,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               NumberFormat.compact().format(count),
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         );

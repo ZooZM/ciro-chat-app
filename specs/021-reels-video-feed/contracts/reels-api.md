@@ -1,6 +1,12 @@
 # API Contracts: Reels / Short Videos Feed
 
-**Feature**: `021-reels-video-feed` | **Date**: 2026-07-02 (v2 — endpoints 13–19 added; ReelDto extended; block filtering applies to every read) / 2026-07-03 (v3 — endpoints 21–24: upload, delete, moderation pipeline, `reelRejected` push; `ReelDto.status`; visibility filter on every read)
+**Feature**: `021-reels-video-feed` | **Date**: 2026-07-02 (v2 — endpoints 13–19 added; ReelDto extended; block filtering applies to every read) / 2026-07-03 (v3 — endpoints 21–24: upload, delete, moderation pipeline, `reelRejected` push; `ReelDto.status`; visibility filter on every read) / 2026-07-05 (v4 — endpoints 25–30: report, repost toggle, Following feed, For You repost injection, admin moderation + hidden-list; `ReelDto.repostedBy`/`viewerReposted`; `status` gains `hidden`; clarified: report daily rate limit, `adminRestored` auto-hide immunity)
+
+**v4 cross-cutting rules**:
+- **`ReelDto.status` gains `"hidden"`** (report auto-hide, FR-070); like all non-published statuses it only ever reaches the reel's owner (owner-facing label: "Under review").
+- **`ReelDto` gains `viewerReposted`** (bool, all endpoints) and **`repostedBy`** (`{ id, username, name, avatarUrl } | null` — non-null only on For You repost-injected items, FR-076).
+- **Engagement writes requiring `published` now include report and repost** (FR-069/FR-073) → `404` otherwise.
+- **Reposter-edge block filtering (FR-078)**: For You injection excludes items whose reposter is in the caller's mutual block set, independent of the creator edge.
 
 **v3 cross-cutting rules**:
 - **Visibility filter (FR-061)**: every read endpoint serves only `status: 'published'` reels — EXCEPT when the caller is the reel's creator, who also sees their own `pending_moderation`/`rejected` reels (single fetch + own profile grid). Non-owner fetch of a non-published reel → `404` (identical to unknown — deep links follow FR-043).
@@ -342,6 +348,129 @@ Transitions (guarded `findOneAndUpdate` where `status: 'pending_moderation'` —
 | Reel removed for policy violation | `reelRejected` | `reelId` | own profile (`/reels/profile/<selfId>`) — rejected reel visible there with its "Removed due to policy violations" badge |
 
 System-originated: `notification_events.actorId = null` (the self-event skip applies only to actor-driven types). Recorded even if push delivery fails (FR-054 semantics). A clean publish sends **no** notification (clarified).
+
+---
+
+# v4 endpoints (25–29) — reporting & reposting/feed tabs
+
+## 25. POST `/api/reels/:id/report` — report a reel (FR-068/FR-069)
+
+**Body**:
+
+```json
+{ "reason": "spam | nudity | violence | hate_speech | other", "customReason": "required non-empty ≤500 iff reason=other" }
+```
+
+**201 Response**: `{ "reported": true, "alreadyReported": false }` — a duplicate report by the same caller returns `200 { "reported": true, "alreadyReported": true }` (idempotent no-op; unique `{videoId, reporterId}` index).
+
+**Errors**: `400` invalid reason / missing-or-empty `customReason` with `other` / caller is the reel's creator; `404` unknown or non-published reel (reports never accumulate against non-published reels); `429` caller exceeded the daily report limit (`REEL_REPORT_DAILY_LIMIT` env, default **20**/day, counted over `reel_reports` by `{reporterId, createdAt}` — nothing recorded; client shows a non-intrusive notice).
+
+**Side effect (FR-070)**: a real insert `$inc`s `reels.reportsCount`; when the post-increment value ≥ `REEL_REPORT_AUTOHIDE_THRESHOLD` (env, default **25**) the service performs the guarded transition `published → hidden` (`findOneAndUpdate` precondition `status: 'published', adminRestored: { $ne: true }` — exactly-once under concurrent reports; an admin-restored reel is **permanently immune** to auto-hide, reports accumulate for audit only). The response never reveals the count or the transition.
+
+## 26. POST `/api/reels/:id/repost` — repost (FR-073)
+
+**Body**: none.
+
+**201 Response**: `{ "reposted": true }` (idempotent — repeat returns `200` with the same body; unique `{videoId, reposterId}` index).
+
+**Errors**: `400` caller is the reel's creator (no self-repost); `404` unknown or non-published reel.
+
+No notification to the creator; no public counter (v1).
+
+## 27. DELETE `/api/reels/:id/repost` — un-repost (FR-073)
+
+**200 Response**: `{ "reposted": false }` (idempotent — deleting a non-existent repost is a quiet no-op). Injected copies disappear from followers' subsequent For You fetches (FR-078).
+
+## 28. GET `/api/reels/following` — Following feed (FR-075)
+
+Static route — declared **before** `/:id` alongside `/liked`/`/saved`. **Query**: `cursor`, `limit` (same as endpoint 1).
+
+**200 Response**: same page shape as endpoint 1 — only **original** reels created by users the caller follows (never reposts, `repostedBy` always `null` here), newest first, finite (`nextCursor: null` terminated, no catalog looping), standard visibility + block filtering. Following no one / no content → `{ "items": [], "nextCursor": null }` (client renders the empty state).
+
+**For You injection (FR-076 — extends endpoint 1, no new route)**: `GET /api/reels` (the default feed) now merges the global leg (v1 behavior incl. catalog loop) with a repost leg — reels reposted by the caller's followees **or the caller themselves**, ordered by repost recency. Deduplicated: a reel appears at most once per feed session; the repost-attributed instance wins; multiple followed reposters collapse to the most recent (`repostedBy` names that one). The opaque `cursor` packs both legs' positions (R20). Reposter-edge block filtering applies (v4 cross-cutting rule).
+
+## 29. PATCH `/api/reels/:id/moderation` — admin restore/reject (FR-071)
+
+**Auth**: NOT a user endpoint — guarded by `x-admin-key: <ADMIN_API_KEY>` header (`AdminKeyGuard`; the backend has no role system). No admin UI in v1; operated via API tooling.
+
+**Body**: `{ "action": "restore" | "reject" }`
+
+**200 Response**: `{ "id": "...", "status": "published" | "rejected" }`
+
+**Transitions** (guarded `findOneAndUpdate`, precondition `status: 'hidden'`): `restore` → `published` **and sets `adminRestored: true`** — the reel reappears everywhere with prior engagement intact and is permanently immune to future auto-hides (FR-070 "one auto-hide per reel ever"; `reportsCount` is retained for audit); `reject` → `rejected` (adopts the existing FR-064 presentation; no `reelRejected` push in v1 — the reel was not auto-flagged by AI, and re-notification semantics are deferred).
+
+**Errors**: `401` missing/wrong admin key; `404` unknown reel; `409` reel is not `hidden`.
+
+## 30. GET `/api/reels/moderation/hidden` — admin review backlog (FR-071, clarified)
+
+**Auth**: `x-admin-key` header (`AdminKeyGuard`), same as endpoint 29.
+
+**Query**: `cursor`, `limit` (default 20, max 50).
+
+**200 Response**:
+
+```json
+{
+  "items": [
+    {
+      "id": "reel-9",
+      "creator": { "id": "u-1", "username": "lina" },
+      "videoUrl": "/uploads/reels/abc.mp4",
+      "thumbnailUrl": "/uploads/reels/thumbs/abc.jpg",
+      "description": "…",
+      "hiddenAt": "2026-07-05T10:00:00.000Z",
+      "reportsCount": 25,
+      "reports": [
+        { "reporterId": "u-7", "reason": "spam", "customReason": null, "createdAt": "…" }
+      ]
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+Hidden reels newest-first (by the hide transition time), each with its full report list (reasons + custom reasons + unique-reporter count) so operators triage without database access. No user-session variant exists — this data never reaches clients.
+
+## 31. GET `/api/reels/me/following` — followed users list (v5, FR-084)
+
+Auth: user session required. Declared before `/:id` (static-path rule).
+
+Request: `?cursor=<opaque>&limit=50` (default 50, max 100).
+
+```json
+{
+  "items": [
+    { "id": "665f…", "username": "sara_films", "name": "Sara Adel", "avatarUrl": "/uploads/avatars/sara.jpg" }
+  ],
+  "nextCursor": "eyJj…"   // null when exhausted
+}
+```
+
+Ordered most-recently-followed first (`follows.createdAt` desc — existing `{followerId, createdAt}` index). Mutually blocked users are filtered out defensively. Powers the client-side-filtered `@` mention-suggestion overlay (FR-083); an empty list is a normal response, not an error. `avatarUrl` may be relative — client resolves via the standard URL rule (constitution VIII-A).
+
+## v5 module layout delta
+
+```
+Backend (src/modules/reels/):
+├── reels.controller.ts       # + GET /me/following (before /:id)
+├── reels.service.ts          # + getFollowingUsers (block-filtered hydration)
+└── reels-db.repository.ts    # + follows-by-follower cursor query
+No schema/env changes.
+```
+
+## v4 module layout delta
+
+```
+src/modules/reels/
+├── schemas/reel-report.schema.ts   # NEW — unique {videoId, reporterId}
+├── schemas/reel-repost.schema.ts   # NEW — unique {videoId, reposterId}; {reposterId, createdAt}
+├── schemas/reel.schema.ts          # + status 'hidden', reportsCount, adminRestored
+├── dto/report-reel.dto.ts          # NEW — reason enum + conditional customReason
+├── admin-key.guard.ts              # NEW — x-admin-key header vs ADMIN_API_KEY env
+├── reels.controller.ts             # + POST /:id/report, POST|DELETE /:id/repost, GET /following, PATCH /:id/moderation, GET /moderation/hidden
+├── reels.service.ts                # + report/threshold-hide, repost toggle, following feed, For You merge + repostedBy
+└── reels-db.repository.ts          # + report/repost writes, two-leg For You query, following query
+```
 
 ## v3 module layout delta
 

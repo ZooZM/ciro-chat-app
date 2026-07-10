@@ -39,6 +39,7 @@ class ReelsInteractionState extends Equatable {
     this.shareCounts = const {},
     this.follows = const {},
     this.saves = const {},
+    this.reposts = const {},
     this.lastActionFailed = false,
   });
 
@@ -54,6 +55,11 @@ class ReelsInteractionState extends Equatable {
   /// FR-049: private toggle, no public counter — keyed by reel id.
   final Map<String, bool> saves;
 
+  /// v4 (FR-073): whether the CURRENT viewer has reposted this reel — keyed
+  /// by reel id. No public counter (mirrors saves); drives the action-column
+  /// Repost button's active state, independent of any `repostedBy` badge.
+  final Map<String, bool> reposts;
+
   /// One-shot flag surfaced as a transient notice on a reverted optimistic
   /// action (FR-037); the UI clears it after showing the notice.
   final bool lastActionFailed;
@@ -64,6 +70,7 @@ class ReelsInteractionState extends Equatable {
     Map<String, int>? shareCounts,
     Map<String, FollowEntry>? follows,
     Map<String, bool>? saves,
+    Map<String, bool>? reposts,
     bool? lastActionFailed,
   }) {
     return ReelsInteractionState(
@@ -72,13 +79,21 @@ class ReelsInteractionState extends Equatable {
       shareCounts: shareCounts ?? this.shareCounts,
       follows: follows ?? this.follows,
       saves: saves ?? this.saves,
+      reposts: reposts ?? this.reposts,
       lastActionFailed: lastActionFailed ?? false,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [likes, commentCounts, shareCounts, follows, saves, lastActionFailed];
+  List<Object?> get props => [
+        likes,
+        commentCounts,
+        shareCounts,
+        follows,
+        saves,
+        reposts,
+        lastActionFailed,
+      ];
 }
 
 /// Owns Love/Comment-count/Share-count/Follow state, id-keyed so every
@@ -117,6 +132,7 @@ class ReelsInteractionCubit extends Cubit<ReelsInteractionState> {
     final shareCounts = Map<String, int>.from(state.shareCounts);
     final follows = Map<String, FollowEntry>.from(state.follows);
     final saves = Map<String, bool>.from(state.saves);
+    final reposts = Map<String, bool>.from(state.reposts);
     for (final reel in reels) {
       likes.putIfAbsent(reel.id, () => LikeEntry(liked: reel.viewerLiked, count: reel.likesCount));
       commentCounts.putIfAbsent(reel.id, () => reel.commentsCount);
@@ -126,6 +142,7 @@ class ReelsInteractionCubit extends Cubit<ReelsInteractionState> {
         () => FollowEntry(following: reel.creator.viewerFollowing, followersCount: 0),
       );
       saves.putIfAbsent(reel.id, () => reel.viewerSaved);
+      reposts.putIfAbsent(reel.id, () => reel.viewerReposted);
     }
     emit(
       state.copyWith(
@@ -134,6 +151,7 @@ class ReelsInteractionCubit extends Cubit<ReelsInteractionState> {
         shareCounts: shareCounts,
         follows: follows,
         saves: saves,
+        reposts: reposts,
       ),
     );
   }
@@ -239,6 +257,30 @@ class ReelsInteractionCubit extends Cubit<ReelsInteractionState> {
   void _setSave(String reelId, bool saved) {
     final saves = Map<String, bool>.from(state.saves)..[reelId] = saved;
     emit(state.copyWith(saves: saves));
+  }
+
+  /// v4 (FR-073): explicit repost/un-repost (not a toggle server-side, but
+  /// the button itself toggles based on the current optimistic state —
+  /// same optimistic-revert pattern as [toggleSave]).
+  Future<void> toggleRepost(String reelId) async {
+    final current = state.reposts[reelId] ?? false;
+    _setRepost(reelId, !current);
+
+    final result = current
+        ? await _repository.unrepostReel(reelId)
+        : await _repository.repostReel(reelId);
+    result.fold(
+      (failure) {
+        _setRepost(reelId, current);
+        emit(state.copyWith(lastActionFailed: true));
+      },
+      (_) {},
+    );
+  }
+
+  void _setRepost(String reelId, bool reposted) {
+    final reposts = Map<String, bool>.from(state.reposts)..[reelId] = reposted;
+    emit(state.copyWith(reposts: reposts));
   }
 
   /// FR-048: fires once per reel per session, on playback start. Silent

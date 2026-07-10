@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/core/routing/app_router.dart' show reelsRouteObserver;
+import 'package:ciro_chat_app/core/theme/app_colors.dart';
+import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_feed_bloc.dart';
 import 'package:ciro_chat_app/features/reels/presentation/services/reels_player_pool.dart';
 import 'package:ciro_chat_app/features/reels/presentation/widgets/reel_page.dart';
@@ -20,6 +22,7 @@ class ReelsFeedScreen extends StatefulWidget {
     this.creatorId,
     this.hashtag,
     this.listSource,
+    this.listSourceUserId,
   });
 
   final String? initialReelId;
@@ -28,8 +31,12 @@ class ReelsFeedScreen extends StatefulWidget {
   /// FR-047a: hashtag-scoped feed.
   final String? hashtag;
 
-  /// FR-050/051: `'liked'` or `'saved'` — the caller's own scoped lists.
+  /// FR-050/051: `'liked'`/`'saved'` (caller's own), or v6 `'reposted'`
+  /// (public per-user, paired with [listSourceUserId]).
   final String? listSource;
+
+  /// v6: whose reposts when [listSource] is `'reposted'` (null → caller).
+  final String? listSourceUserId;
 
   @override
   State<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
@@ -41,11 +48,27 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
   late final PageController _pageController;
   bool _isSubscribedToRouteObserver = false;
 
+  /// v4 (FR-074): the plain main-feed screen only — the Following/For You
+  /// toggle is meaningless for a scoped view (creator/hashtag/liked/saved/
+  /// deep link), which always shows a back button in that same top slot.
+  bool get _showsScopeToggle =>
+      widget.creatorId == null &&
+      widget.hashtag == null &&
+      widget.listSource == null &&
+      widget.initialReelId == null;
+
+  /// Tracked across state emits (not derivable from a single prev/current
+  /// pair) so the PageController jump fires once the NEW scope's page has
+  /// actually settled to `ready` — the transition passes through a
+  /// `loading` emit first, during which the PageView isn't even mounted.
+  ReelFeedScope? _lastKnownScope;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController(initialPage: _syncScope());
+    _lastKnownScope = _bloc.state.feedScope;
   }
 
   @override
@@ -75,6 +98,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
         _bloc.state.creatorId == widget.creatorId &&
         _bloc.state.hashtag == widget.hashtag &&
         _bloc.state.listSource == widget.listSource &&
+        _bloc.state.listSourceUserId == widget.listSourceUserId &&
         (widget.initialReelId == null ||
             _bloc.state.initialReelId == widget.initialReelId);
     final needsFreshLoad =
@@ -87,6 +111,7 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
           creatorId: widget.creatorId,
           hashtag: widget.hashtag,
           listSource: widget.listSource,
+          listSourceUserId: widget.listSourceUserId,
         ),
       );
       return 0;
@@ -133,15 +158,39 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: BlocListener<ReelsFeedBloc, ReelsFeedState>(
-        bloc: _bloc,
-        listenWhen: (previous, current) =>
-            !previous.deepLinkFailed && current.deepLinkFailed,
-        // FR-043: an unknown/deleted linked reel shows a friendly notice and
-        // falls back to the regular feed (already loading behind it).
-        listener: (context, state) => ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('reels.deep_link_error'.tr()))),
+      body: MultiBlocListener(
+        listeners: [
+          BlocListener<ReelsFeedBloc, ReelsFeedState>(
+            bloc: _bloc,
+            listenWhen: (previous, current) =>
+                !previous.deepLinkFailed && current.deepLinkFailed,
+            // FR-043: an unknown/deleted linked reel shows a friendly notice
+            // and falls back to the regular feed (already loading behind it).
+            listener: (context, state) => ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('reels.deep_link_error'.tr()))),
+          ),
+          // v4 (FR-074): jump the PageView to the resumed position once the
+          // NEWLY selected tab's page has settled to `ready` — can't be
+          // expressed as a single prev/current diff (the transition passes
+          // through an intermediate `loading` emit), so it's tracked via
+          // `_lastKnownScope` instead.
+          BlocListener<ReelsFeedBloc, ReelsFeedState>(
+            bloc: _bloc,
+            listenWhen: (previous, current) => current.status == ReelsFeedStatus.ready,
+            listener: (context, state) {
+              final scopeChanged =
+                  _lastKnownScope != null && _lastKnownScope != state.feedScope;
+              _lastKnownScope = state.feedScope;
+              if (!scopeChanged) return;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_pageController.hasClients) {
+                  _pageController.jumpToPage(state.currentIndex);
+                }
+              });
+            },
+          ),
+        ],
         child: Stack(
           children: [
             BlocBuilder<ReelsFeedBloc, ReelsFeedState>(
@@ -154,12 +203,9 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
                 switch (state.status) {
                   case ReelsFeedStatus.initial:
                   case ReelsFeedStatus.loading:
-                    return const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    );
                   case ReelsFeedStatus.loadingDeepLink:
                     // FR-041: a skeleton, never a blank screen, while the
-                    // linked reel is being fetched.
+                    // feed's first page (or a deep-linked reel) is fetched.
                     return const ReelSkeleton();
                   case ReelsFeedStatus.error:
                     return _ReelsErrorState(
@@ -168,7 +214,12 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
                     );
                   case ReelsFeedStatus.ready:
                     if (state.reels.isEmpty) {
+                      // v4 (FR-075): a distinct empty state for an empty
+                      // Following tab (never follows anyone / no published
+                      // reels from followees yet) — For You keeps the
+                      // original catalog-empty messaging.
                       return _ReelsEmptyState(
+                        isFollowing: state.feedScope == ReelFeedScope.following,
                         onRetry: () => _bloc.add(const ReelsRefreshRequested()),
                       );
                     }
@@ -252,26 +303,44 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
             //    the TikTok/Instagram-style Reels home header. The bottom
             //    nav bar is the way out here, so no back button.
             if (Navigator.of(context).canPop())
-              Positioned(
+              // v4: `PositionedDirectional` — mirrors to the top-right in
+              // RTL locales (Arabic), matching the rest of the app's
+              // ambient `Directionality`. `BackButtonIcon` (not a plain
+              // `Icon(Icons.arrow_back)`) is what actually flips the arrow
+              // glyph itself to point the conventional "back" way in RTL.
+              PositionedDirectional(
                 top: 8,
-                left: 8,
+                start: 8,
                 child: SafeArea(
                   child: Material(
                     color: Colors.black45,
                     shape: const CircleBorder(),
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      icon: const BackButtonIcon(),
+                      color: Colors.white,
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ),
                 ),
               )
             else
-              const Positioned(
+              Positioned(
                 top: 8,
                 left: 12,
                 right: 12,
-                child: SafeArea(child: ReelsMyProfileHeader()),
+                child: SafeArea(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // v4 (FR-074): centered in the header's own empty
+                      // middle space — `ReelsMyProfileHeader`'s Row has
+                      // nothing there, so this never steals its avatar/
+                      // search taps (rendered on top, below).
+                      if (_showsScopeToggle) _FeedScopeToggle(bloc: _bloc),
+                      const ReelsMyProfileHeader(),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),
@@ -280,10 +349,88 @@ class _ReelsFeedScreenState extends State<ReelsFeedScreen>
   }
 }
 
+/// v4 (FR-074): Following | For You top toggle — isolated `BlocSelector` so
+/// it only rebuilds on a `feedScope` change, never on pagination/reel
+/// updates (FR-014).
+class _FeedScopeToggle extends StatelessWidget {
+  const _FeedScopeToggle({required this.bloc});
+
+  final ReelsFeedBloc bloc;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<ReelsFeedBloc, ReelsFeedState, ReelFeedScope>(
+      bloc: bloc,
+      selector: (state) => state.feedScope,
+      builder: (context, scope) {
+        return Container(
+          padding: const EdgeInsets.all(AppConstants.spacingXs),
+          decoration: BoxDecoration(
+            color: Colors.black38,
+            borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ScopeTab(
+                label: 'reels.tab_following'.tr(),
+                selected: scope == ReelFeedScope.following,
+                onTap: () => bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.following)),
+              ),
+              _ScopeTab(
+                label: 'reels.tab_for_you'.tr(),
+                selected: scope == ReelFeedScope.forYou,
+                onTap: () => bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.forYou)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScopeTab extends StatelessWidget {
+  const _ScopeTab({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppConstants.durationFast,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.spacingMd - 2,
+          vertical: AppConstants.spacingSm - 2,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd + 4),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppColors.textPrimary : Colors.white70,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReelsEmptyState extends StatelessWidget {
-  const _ReelsEmptyState({required this.onRetry});
+  const _ReelsEmptyState({required this.onRetry, this.isFollowing = false});
 
   final VoidCallback onRetry;
+
+  /// v4 (FR-075): distinct messaging for an empty Following tab.
+  final bool isFollowing;
 
   @override
   Widget build(BuildContext context) {
@@ -291,19 +438,19 @@ class _ReelsEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.video_camera_back_outlined,
+          Icon(
+            isFollowing ? Icons.people_outline : Icons.video_camera_back_outlined,
             color: Colors.white54,
             size: 48,
           ),
           const SizedBox(height: 12),
           Text(
-            'reels.empty_title'.tr(),
+            (isFollowing ? 'reels.following_empty_title' : 'reels.empty_title').tr(),
             style: const TextStyle(color: Colors.white),
           ),
           const SizedBox(height: 4),
           Text(
-            'reels.empty_subtitle'.tr(),
+            (isFollowing ? 'reels.following_empty_subtitle' : 'reels.empty_subtitle').tr(),
             style: const TextStyle(color: Colors.white54, fontSize: 13),
           ),
           const SizedBox(height: 16),

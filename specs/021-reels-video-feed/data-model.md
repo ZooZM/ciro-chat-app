@@ -1,7 +1,7 @@
-# Data Model: Reels / Short Videos Feed (v3 — upload + content moderation)
+# Data Model: Reels / Short Videos Feed (v4 — user reporting + reposting/feed tabs)
 
-**Feature**: `021-reels-video-feed` | **Date**: 2026-07-02 (v2 approved & implemented) / 2026-07-03 (v3 delta)
-**Status**: ⚠️ **The v3 delta (reel `status` state machine, embedded moderation result, `reelRejected` event type, new indexes) re-triggers the FR-056 approval gate — stakeholder approval required before implementing the v3 backend tasks.** The v2 schema below is already implemented and live.
+**Feature**: `021-reels-video-feed` | **Date**: 2026-07-02 (v2 approved & implemented) / 2026-07-03 (v3 approved & implemented) / 2026-07-05 (v4 delta)
+**Status**: ✅ **The v4 delta (new `reel_reports` and `reel_reposts` collections, the `hidden` status value + amended state machine, `reportsCount` counter, feed-composition rules, new indexes) was approved by the stakeholder on 2026-07-05 (FR-056 gate).** The v3 schema below is already implemented and live; v4 backend implementation proceeds.
 
 Storage: **MongoDB via Mongoose** (clarified — real DB this phase, supersedes the v1 in-memory mock store). All schemas live in `chat-app-backend/src/modules/reels/schemas/` except `User`, which extends the existing `src/modules/users/schemas/user.schema.ts`. Out of scope by stakeholder direction: live streaming, wallets, coin/diamond systems — no such fields anywhere below.
 
@@ -15,6 +15,8 @@ erDiagram
     USER ||--o{ REEL_VIEW : "views"
     USER ||--o{ REEL_SHARE : "shares"
     USER ||--o{ REEL_COMMENT : "writes"
+    USER ||--o{ REEL_REPORT : "reports (v4)"
+    USER ||--o{ REEL_REPOST : "reposts (v4)"
     USER ||--o{ FOLLOW : "follows (as follower)"
     USER ||--o{ FOLLOW : "is followed (as followee)"
     USER ||--o{ USER : "blocks (embedded blockedUsers[])"
@@ -25,6 +27,8 @@ erDiagram
     REEL ||--o{ REEL_VIEW : "has"
     REEL ||--o{ REEL_SHARE : "has"
     REEL ||--o{ REEL_COMMENT : "has"
+    REEL ||--o{ REEL_REPORT : "has (v4)"
+    REEL ||--o{ REEL_REPOST : "has (v4)"
     REEL ||--o{ NOTIFICATION_EVENT : "subject of"
     REEL }o--o{ USER : "mentions"
 
@@ -47,9 +51,11 @@ erDiagram
         string description "supports #hashtags @mentions"
         string[] hashtags "normalized lowercase, multikey-indexed"
         Mention[] mentions "resolved {userId, username}"
-        string status "v3: pending_moderation | published | rejected"
+        string status "v3: pending_moderation | published | rejected; v4: + hidden"
         date publishedAt "v3: set on clean verdict"
         ModerationResult moderation "v3: embedded subdoc, set on verdict"
+        number reportsCount "v4: stored counter of unique reporters"
+        boolean adminRestored "v4: set on admin restore; permanent auto-hide immunity"
         number viewsCount "stored counter"
         number likesCount "stored counter"
         number commentsCount "stored counter"
@@ -83,6 +89,18 @@ erDiagram
         string text "1-500 chars"
         date createdAt
     }
+    REEL_REPORT {
+        ObjectId videoId FK "v4: unique with reporterId"
+        ObjectId reporterId FK
+        string reason "spam | nudity | violence | hate_speech | other"
+        string customReason "required non-empty <=500 iff reason=other"
+        date createdAt
+    }
+    REEL_REPOST {
+        ObjectId videoId FK "v4: unique with reposterId"
+        ObjectId reposterId FK
+        date createdAt "For You injection sort key"
+    }
     FOLLOW {
         ObjectId followerId FK "unique with followeeId; != followeeId"
         ObjectId followeeId FK
@@ -98,7 +116,7 @@ erDiagram
     }
 ```
 
-## Reel moderation status state machine (v3 — FR-061..FR-066)
+## Reel moderation status state machine (v4 — FR-061..FR-066, FR-070..FR-072)
 
 ```mermaid
 stateDiagram-v2
@@ -107,14 +125,19 @@ stateDiagram-v2
     pending_moderation --> pending_moderation : provider error / timeout → BullMQ retry (fail-closed, FR-066)
     pending_moderation --> published : clean verdict → publishedAt set, notifyMentions fires (FR-063)
     pending_moderation --> rejected : flagged (video OR description) → moderation stored, reelRejected push (FR-064)
+    published --> hidden : v4 — unique reports ≥ REEL_REPORT_AUTOHIDE_THRESHOLD (FR-070)
+    hidden --> published : v4 — admin restore (FR-071)
+    hidden --> rejected : v4 — admin confirms violation (FR-071)
     pending_moderation --> [*] : owner DELETE (FR-067)
     published --> [*] : owner DELETE (FR-067)
+    hidden --> [*] : owner DELETE (FR-067)
     rejected --> [*] : owner DELETE (FR-067)
 ```
 
-- `pending_moderation` is the only entry state for uploads and the **default**; the BullMQ worker is the **only writer** of `status` transitions (guarded `findOneAndUpdate` with a `status: 'pending_moderation'` precondition — retries can never double-fire side effects).
-- `published` and `rejected` are terminal except for owner deletion. No unpublish/re-review in v1 (no human review/appeals — spec Assumption).
-- **Visibility invariant**: only `published` reels are servable to non-owners on ANY surface; owners additionally see their own `pending_moderation`/`rejected` reels (with `status` in the DTO). Engagement writes require `published` (404 otherwise).
+- `pending_moderation` is the only entry state for uploads and the **default**.
+- **Status writers (v4 — exactly three, all guarded `findOneAndUpdate` with a status precondition so retries/races never double-fire side effects)**: (1) the BullMQ moderation worker (`pending_moderation → published | rejected`); (2) the report service (`published → hidden`, precondition `status: 'published' AND adminRestored: { $ne: true }`, fired by the report whose insert brings the unique-reporter count to the threshold — a restored reel is permanently immune, FR-070); (3) the admin moderation endpoint (`hidden → published | rejected`, precondition `status: 'hidden'`; the restore branch also sets `adminRestored: true`). Amends the v3 "worker is the only writer" invariant.
+- `rejected` is terminal except for owner deletion. No appeals/re-review for AI-rejected uploads in v1 (spec Assumption). `hidden` resolves only via the admin endpoint or owner deletion.
+- **Visibility invariant (unchanged formula)**: only `published` reels are servable to non-owners on ANY surface — `hidden` is automatically excluded since it is not `published`; owners additionally see their own `pending_moderation`/`hidden`/`rejected` reels (with `status` in the DTO; owner-facing labels: Processing / Under review / Removed). Engagement writes — now including reports and reposts — require `published` (404 otherwise). Engagement recorded before hiding is preserved; an admin restore reinstates the reel with prior counts intact.
 
 ## Collections & indexes
 
@@ -143,9 +166,11 @@ stateDiagram-v2
 | `description` | string ≤ 2200 | FR-047 |
 | `hashtags` | string[] | parsed at write time, lowercase, no `#`, deduped |
 | `mentions` | `[{ userId: ObjectId, username: string }]` | only resolved users (FR-047) |
-| `status` | string enum | **v3** — `pending_moderation` (default) \| `published` \| `rejected` (FR-061); seed + pre-v3 backfill = `published` |
+| `status` | string enum | **v3** — `pending_moderation` (default) \| `published` \| `rejected` (FR-061); seed + pre-v3 backfill = `published`. **v4** — + `hidden` (report auto-hide, FR-070) |
 | `publishedAt` | Date? | **v3** — set by the worker on the clean-verdict transition |
 | `moderation` | ModerationResult? | **v3** — embedded subdoc, written once by the worker (see below) |
+| `reportsCount` | number | **v4** — stored counter of unique reporters, default 0 (FR-055 pattern); `$inc` only on a real `reel_reports` insert; the insert that reaches `REEL_REPORT_AUTOHIDE_THRESHOLD` triggers the guarded hide transition (FR-070). Never exposed in public DTOs |
+| `adminRestored` | boolean | **v4** — default `false`; set `true` by the admin restore transition (FR-071) and never unset: the reel is permanently immune to the auto-hide threshold (reports still recorded/counted for audit — FR-070 "one auto-hide per reel ever"). Never exposed in public DTOs |
 | `viewsCount` / `likesCount` / `commentsCount` / `sharesCount` | number | stored counters, default 0 (FR-055) |
 | `createdAt` | Date | `timestamps: true`; feed sort key |
 
@@ -174,6 +199,28 @@ stateDiagram-v2
 ### `reel_shares` (event log — unchanged semantics from v1)
 
 `{ userId, videoId, createdAt }`, **no uniqueness** (each in-app send / Copy Link appends — FR-021a). Index `{ videoId: 1 }`.
+
+### `reel_reports` (v4 — FR-069)
+
+| Field | Type | Notes |
+|---|---|---|
+| `videoId` | ObjectId → reels | naming follows the sibling relation collections (`videoId`, not `reelId`) |
+| `reporterId` | ObjectId → users | never the reel's creator (service-enforced, FR-069) |
+| `reason` | string enum | `spam \| nudity \| violence \| hate_speech \| other` |
+| `customReason` | string? | trimmed ≤500; **required non-empty iff `reason == 'other'`**, absent otherwise (DTO-validated) |
+| `createdAt` | Date | |
+
+**Indexes**: `{ videoId: 1, reporterId: 1 }` **unique** (one report per user per reel — duplicate insert is the idempotent no-op path); `{ videoId: 1 }` (per-reel audit/maintenance + delete cascade); `{ reporterId: 1, createdAt: -1 }` (daily rate-limit count — `REEL_REPORT_DAILY_LIMIT`, default 20/day, FR-069 — and reporter audit). Reports accepted only against `published` reels (unknown-reel path otherwise). Retained for admin audit; deleted with the reel in the FR-067 cascade.
+
+### `reel_reposts` (v4 — FR-073)
+
+| Field | Type | Notes |
+|---|---|---|
+| `videoId` | ObjectId → reels | |
+| `reposterId` | ObjectId → users | never the reel's creator (no self-repost, FR-073) |
+| `createdAt` | Date | For You injection sort key (repost recency, FR-076) |
+
+**Indexes**: `{ videoId: 1, reposterId: 1 }` **unique** (repost/un-repost toggle integrity — same relation-write-outcome pattern as likes/saves); `{ reposterId: 1, createdAt: -1 }` (**injection leg**: "reposts by users I follow" — `follows[followerId=me] → reel_reposts[reposterId ∈ followees]`, both legs indexed per FR-055); `{ videoId: 1 }` (delete cascade). No public counter (FR-073). Deleted with the reel in the FR-067 cascade.
 
 ### `reel_comments`
 
@@ -207,7 +254,16 @@ Direction always derives from the relation-write outcome (`upsertedCount` / `del
 | Upload (`POST /api/reels`) | insert reel (`status: pending_moderation`) | none until published |
 | Publish transition (worker) | `status → published`, `publishedAt` | none (counters start at 0) |
 | Reject transition (worker) | `status → rejected`, `moderation` stored | none (engagement was never possible) |
-| Owner delete (FR-067) | creator `totalLikes −= reel.likesCount` **first**, then delete relations (`reel_likes/saves/views/shares/comments` by `videoId`), reel-scoped `notification_events`, the reel doc, and media files | creator `totalLikes` adjusted; all reel counters die with the doc |
+| Owner delete (FR-067) | creator `totalLikes −= reel.likesCount` **first**, then delete relations (`reel_likes/saves/views/shares/comments` — **v4: + `reel_reports/reel_reposts`** — by `videoId`), reel-scoped `notification_events`, the reel doc, and media files | creator `totalLikes` adjusted; all reel counters die with the doc |
+
+**v4 additions**:
+
+| Action | Relation write | Counter / status effect |
+|---|---|---|
+| Report (first per user — FR-069) | insert-if-absent `reel_reports` (unique idx), **only if the reporter is under `REEL_REPORT_DAILY_LIMIT`** (default 20/day — over-limit submissions record nothing) | `reels.reportsCount +1` only on actual insert; when the post-`$inc` value ≥ `REEL_REPORT_AUTOHIDE_THRESHOLD` **and `adminRestored != true`** → guarded `published → hidden` transition (FR-070), exactly-once |
+| Report (duplicate) | no-op (unique idx) | none — idempotent success response |
+| Repost ON / OFF (FR-073) | insert / delete `reel_reposts` (unique idx) | none (no public counter; direction from relation-write outcome, same as saves) |
+| Admin restore / reject (FR-071) | status transition only (guarded, precondition `hidden`); restore also sets `adminRestored: true` (permanent auto-hide immunity) | none — engagement counters survive the hidden period untouched |
 
 ## Visibility & block filtering (applies to every read — FR-052/053 + FR-061 v3)
 
@@ -216,7 +272,25 @@ blockSet(viewer)  = viewer.blockedUsers ∪ { u : viewer ∈ u.blockedUsers }   
 visibility(viewer) = status == 'published' OR creatorId == viewer             // v3: owner sees own any-status
 ```
 
-Both filters compose on every surface: main feed, `?creatorId=`/`?hashtag=` feeds, `GET /reels/:id` (→404), profile (→404), profile grid (owner grid includes own pending/rejected with `status`), liked/saved lists, comments (author-filtered), reels search, user search. Engagement writes (like/comment/share/save/view) additionally require `status == 'published'` → 404 otherwise (FR-064). Enforced in `ReelsService` only — never client-side.
+Both filters compose on every surface: main/For You feed, Following feed (v4), `?creatorId=`/`?hashtag=` feeds, `GET /reels/:id` (→404), profile (→404), profile grid (owner grid includes own pending/hidden/rejected with `status`), liked/saved lists, comments (author-filtered), reels search, user search. Engagement writes (like/comment/share/save/view — **v4: + report/repost**) additionally require `status == 'published'` → 404 otherwise (FR-064/FR-069/FR-073). Enforced in `ReelsService` only — never client-side.
+
+**v4 — repost edge (FR-078)**: For You injection additionally filters the **reposter** against the viewer's `blockSet` — an injected item is suppressed when viewer↔reposter are blocked in either direction, independent of the creator-edge rules (the reel may still surface organically without a badge).
+
+## Feed composition (v4 — FR-075/FR-076)
+
+```
+followees(viewer)  = follows[followerId == viewer].followeeId                       // indexed leg 1
+Following feed     = reels[creatorId ∈ followees(viewer)]                           // {creatorId, status, createdAt} index (exists since v3)
+                     ∘ visibility ∘ blockSet, sorted createdAt desc, finite, cursor-paginated. NO reposts.
+repost leg(viewer) = reel_reposts[reposterId ∈ followees(viewer) ∪ {viewer}]        // {reposterId, createdAt} index; includes own reposts
+For You feed       = merge(global leg (v1 FR-007 behavior, catalog loop),
+                           repost leg sorted by repost createdAt desc)
+                     ∘ visibility ∘ blockSet (creator edge) ∘ blockSet (reposter edge)
+```
+
+- **Dedup (FR-076)**: at most one instance of a reel per feed session — the repost-attributed instance wins over the organic one; multiple followed reposters of the same reel collapse to the **most recent** one for `repostedBy`. The service dedups within/across the two legs per page; `ReelsFeedBloc` additionally drops already-loaded reel ids client-side (it must already tolerate repeats from v1 catalog looping — verified during implementation, research R20).
+- **Cursors**: the two legs advance independent cursors packed into one opaque page token (R20 decides the exact encoding); the Following feed reuses the standard single-leg cursor pattern.
+- **`repostedBy` hydration**: injected items carry `{ id, username, name, avatarUrl }` of the attributed reposter; the client renders "You reposted" when `repostedBy.id == viewer`.
 
 ## Flutter domain entities (delta from v1)
 
@@ -228,9 +302,11 @@ creator: ReelCreator,                       // + username
 description: String,
 hashtags: List<String>,
 mentions: List<ReelMention>,                // NEW entity: userId, username
-status: ReelStatus,                         // v3 NEW enum: pendingModeration | published | rejected
+status: ReelStatus,                         // v3 enum: pendingModeration | published | rejected; v4: + hidden
 viewsCount, likesCount, commentsCount, sharesCount,
 viewerLiked, viewerSaved (bool),            // viewerSaved NEW
+viewerReposted (bool),                      // v4 NEW — drives the action-column Repost button's active state (clarified: primary action, Save's former slot)
+repostedBy: ReelReposter?,                  // v4 NEW entity: id, username, name, avatarUrl — null for organic items
 deepLinkUrl (derived getter)
 ```
 
@@ -251,6 +327,10 @@ users: List<SearchUser>, usersCursor: String?      // SearchUser: id, username, 
 - **`SearchState`** (NEW, `SearchCubit`): `status (idle|loading|ready|error), query, videos, users, videosCursor, usersCursor` — debounced 350 ms, stale responses dropped by query token.
 - **`CreatorProfileState`**: `+ likedPage / savedPage` sub-states, lazily loaded when the self-tabs first open (owner-only; tabs absent for non-self). **v3**: own-grid items carry `status` → `reel_status_badge.dart` overlays (Processing / Removed); delete action refreshes the grid.
 - **`UploadState`** (v3 NEW, `UploadCubit`): `idle → picked(file, duration) → trimming? → composing(description) → uploading(progress 0..1) → success(reel) | failure(retryable)`; `CancelToken` cancelled on close; no partial state survives a failure (FR-060).
+- **`ReelsFeedBloc`** (v4): parameterized by `feedScope` (`forYou` default | `following` — joining the existing creator/hashtag/search scopes); one instance per tab, only the active tab's PageView plays (FR-009), per-tab resume position (FR-004a). Pagination dedups already-loaded reel ids (FR-076/R20).
+- **`ReelsInteractionState`** (v4): `+ reposts: Map<String /*reelId*/, bool>` (optimistic Repost/Un-repost, reverting — FR-073, same pattern as saves).
+- **Report flow** (v4): screen-local sheet state (selected reason, custom text) + a fire-and-forget `reportReel` call surfaced through the interaction cubit — confirmation snackbar on success, notice on failure; no dedicated cubit needed (mirrors the share-record call).
+- **Owner badges** (v4): `reel_status_badge.dart` gains an "Under review" case for `ReelStatus.hidden` (FR-072).
 
 ## Reel-share chat message — unchanged from v1
 
@@ -259,3 +339,20 @@ users: List<SearchUser>, usersCursor: String?      // SearchUser: id, username, 
 ## Sliding window invariant — unchanged from v1
 
 `window(N) = {N-1, N, N+1}`, `|players| ≤ 3`, N+2 HTTP prefetch.
+
+## v5 delta (2026-07-06 — camera-first creation, FR-079–FR-084)
+
+**ERD: no change.** No new collections, fields, indexes, or state transitions — v5 is a client-flow overhaul plus one new **read path** over the existing `follows` collection (`{followerId: 1, createdAt: -1}` leg, already indexed): `GET /api/reels/me/following` returns the caller's followees as `{id, username, name, avatarUrl}` pages for the mention-suggestion overlay (FR-084, contracts §31). Block filtering is applied defensively on read (a block does not delete the follow relation). The FR-056 approval gate is therefore satisfied by stakeholder acknowledgment of this note — there is no schema diff to approve.
+
+**Flutter domain delta**:
+
+```dart
+class FollowedUser extends Equatable {   // NEW — mention suggestions (FR-083/FR-084)
+  final String id;
+  final String username;
+  final String name;
+  final String? avatarUrl;
+}
+```
+
+**Presentation state delta**: `CaptureCubit` — `idle → recording(elapsed, cap) → captured(filePath)` plus `permissionDenied` (single continuous clip; auto-stop at the 15s/30s/60s cap; segment <1 s → back to `idle` with notice). `MentionSuggestionsCubit` — `hidden | loading | active(query, matches)` over the once-fetched following list. Both Cubit + Equatable + constructor DI (constitution II). The existing `UploadCubit` keeps the submit/progress/error machine unchanged; the trimmer's `maxDuration` becomes a route parameter (15s/30s/60s from capture, 60s for gallery).

@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:ciro_chat_app/core/theme/app_colors.dart';
+import 'package:ciro_chat_app/core/theme/app_constants.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel_status.dart';
 import 'buffering_indicator.dart';
@@ -10,6 +12,7 @@ import 'play_pause_overlay.dart';
 import 'reel_creator_header.dart';
 import 'reel_description.dart';
 import 'reel_interaction_overlay.dart';
+import 'repost_badge.dart';
 
 /// Full-bleed video surface for a single reel, composed with the
 /// interaction overlay, creator header, and play/pause layer. The video
@@ -90,14 +93,23 @@ class ReelPage extends StatelessWidget {
               bottom: 0,
               child: IgnorePointer(child: _BottomScrim()),
             ),
-            Positioned(
-              left: 12,
-              right: 88,
+            PositionedDirectional(
+              start: 12,
+              end: 88,
               bottom: 24,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // v4 (FR-076/FR-077): repost badge directly above the
+                  // creator name — renders nothing when unset.
+                  RepostBadge(
+                    reelId: reel.id,
+                    repostedBy: reel.repostedBy,
+                    repostersCount: reel.repostersCount,
+                    topReposters: reel.topReposters,
+                    viewerReposted: reel.viewerReposted,
+                  ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -125,8 +137,12 @@ class ReelPage extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              right: 12,
+            // v4: `PositionedDirectional` (not `Positioned`) — the action
+            // column must mirror to the left in RTL locales (Arabic),
+            // matching the ambient `Directionality` the rest of the app
+            // already follows (e.g. the bottom nav bar).
+            PositionedDirectional(
+              end: 12,
               bottom: 24,
               child: ReelInteractionOverlay(reel: reel),
             ),
@@ -177,32 +193,41 @@ class _StatusBanner extends StatelessWidget {
 
   final ReelStatus status;
 
+  // v4 (FR-072): `hidden` gets its own distinct "Under review" presentation
+  // — never conflated with `pendingModeration`'s "Processing". Colors match
+  // reel_status_badge.dart's own-grid badge (same three states, one palette).
+  (Color, IconData, String) _visualsFor(ReelStatus status) {
+    switch (status) {
+      case ReelStatus.published:
+      case ReelStatus.pendingModeration:
+        return (AppColors.textPrimary, Icons.hourglass_top, 'reels.status_processing');
+      case ReelStatus.hidden:
+        return (AppColors.warning, Icons.visibility_off, 'reels.status_under_review');
+      case ReelStatus.rejected:
+        return (AppColors.error, Icons.block, 'reels.status_removed');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isProcessing = status == ReelStatus.pendingModeration;
+    final (color, icon, labelKey) = _visualsFor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacingSm,
+        vertical: AppConstants.spacingXs,
+      ),
       decoration: BoxDecoration(
-        color: (isProcessing ? Colors.black : Colors.red.shade900).withValues(
-          alpha: 0.85,
-        ),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(AppConstants.radiusSm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isProcessing ? Icons.hourglass_top : Icons.block,
-            size: 16,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 8),
+          Icon(icon, size: 16, color: Colors.white),
+          const SizedBox(width: AppConstants.spacingXs),
           Flexible(
             child: Text(
-              (isProcessing
-                      ? 'reels.status_processing'
-                      : 'reels.status_removed')
-                  .tr(),
+              labelKey.tr(),
               style: const TextStyle(color: Colors.white, fontSize: 13),
               overflow: TextOverflow.ellipsis,
             ),

@@ -10,7 +10,13 @@ sealed class ReelsFeedEvent extends Equatable {
 /// Initial load — optionally seeded by a deep link (US6, wired in a later
 /// phase; `initialReelId` is accepted now so the constructor shape is stable).
 class ReelsFeedStarted extends ReelsFeedEvent {
-  const ReelsFeedStarted({this.initialReelId, this.creatorId, this.hashtag, this.listSource});
+  const ReelsFeedStarted({
+    this.initialReelId,
+    this.creatorId,
+    this.hashtag,
+    this.listSource,
+    this.listSourceUserId,
+  });
 
   final String? initialReelId;
   final String? creatorId;
@@ -18,11 +24,16 @@ class ReelsFeedStarted extends ReelsFeedEvent {
   /// FR-047a: hashtag-scoped feed (finite, like [creatorId]).
   final String? hashtag;
 
-  /// FR-050/051: `'liked'` or `'saved'` — the caller's own scoped lists.
+  /// FR-050/051: `'liked'`/`'saved'` (caller's own lists) or v6 `'reposted'`
+  /// (a public per-user list, paired with [listSourceUserId]).
   final String? listSource;
 
+  /// v6: whose reposts to show when [listSource] is `'reposted'` (null → caller).
+  final String? listSourceUserId;
+
   @override
-  List<Object?> get props => [initialReelId, creatorId, hashtag, listSource];
+  List<Object?> get props =>
+      [initialReelId, creatorId, hashtag, listSource, listSourceUserId];
 }
 
 /// Fired by the PageView on every settled swipe (FR-005).
@@ -49,6 +60,17 @@ class ReelsFeedResumed extends ReelsFeedEvent {
 /// the feed besides an app restart (FR-004a).
 class ReelsRefreshRequested extends ReelsFeedEvent {
   const ReelsRefreshRequested();
+}
+
+/// v4 (FR-074): Following ↔ For You tab switch — ignored when this bloc is
+/// serving a scoped view (creator/hashtag/liked/saved/deep-link).
+class ReelsFeedScopeChanged extends ReelsFeedEvent {
+  const ReelsFeedScopeChanged(this.scope);
+
+  final ReelFeedScope scope;
+
+  @override
+  List<Object?> get props => [scope];
 }
 
 /// Fired when the visible index nears the end of the loaded list (FR-007).

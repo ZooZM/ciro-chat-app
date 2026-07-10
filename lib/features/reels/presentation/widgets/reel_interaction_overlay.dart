@@ -4,14 +4,17 @@ import 'comment_button.dart';
 import 'comments_sheet.dart';
 import 'love_button.dart';
 import 'reel_more_button.dart';
-import 'save_button.dart';
+import 'repost_button.dart';
 import 'share_button.dart';
 import 'share_sheet.dart';
 
-/// Right-side action column (Love, Comment, Share) overlaid on the video.
-/// A `const`-friendly composition of leaf widgets — this widget itself never
-/// rebuilds on interaction taps; only the individual `BlocSelector`-backed
-/// leaves below do (FR-014).
+/// Right-side action column (Love, Comment, Share, Repost) overlaid on the
+/// video. A `const`-friendly composition of leaf widgets — this widget
+/// itself never rebuilds on interaction taps; only the individual
+/// `BlocSelector`-backed leaves below do (FR-014).
+///
+/// v4 (FR-068/FR-073): Save moved into the 3-dots more-options sheet
+/// ([ReelMoreButton]) — this slot now hosts the primary Repost toggle.
 class ReelInteractionOverlay extends StatelessWidget {
   const ReelInteractionOverlay({super.key, required this.reel});
 
@@ -34,7 +37,7 @@ class ReelInteractionOverlay extends StatelessWidget {
           onTap: () => showReelShareSheet(context, reel),
         ),
         const SizedBox(height: 20),
-        SaveButton(reelId: reel.id),
+        RepostButton(reelId: reel.id, creatorId: reel.creator.id),
         const SizedBox(height: 20),
         ReelMoreButton(reel: reel),
       ],

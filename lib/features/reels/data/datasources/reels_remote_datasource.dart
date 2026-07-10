@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 import '../models/comment_model.dart';
 import '../models/creator_profile_model.dart';
+import '../models/followed_user_model.dart';
 import '../models/reel_model.dart';
 import '../models/reels_page_model.dart';
 import '../models/search_user_model.dart';
@@ -42,6 +43,9 @@ abstract class ReelsRemoteDataSource {
   Future<bool> toggleSave(String id);
   Future<ReelsPageModel> fetchLiked({String? cursor, int limit});
   Future<ReelsPageModel> fetchSaved({String? cursor, int limit});
+
+  /// v6: a user's public Reposts list. [userId] null → the caller's own.
+  Future<ReelsPageModel> fetchReposted({String? userId, String? cursor, int limit});
   Future<ReelsPageModel> searchReels(String query, {String? cursor, int limit});
   Future<({List<SearchUserModel> items, String? nextCursor})> searchUsers(
     String query, {
@@ -49,6 +53,34 @@ abstract class ReelsRemoteDataSource {
     int limit,
   });
   Future<bool> toggleBlock(String userId);
+
+  /// v4 (FR-069): returns `alreadyReported` — `true` for a duplicate
+  /// (idempotent no-op server-side). A 429 (daily limit) surfaces to the
+  /// caller as a `DioException` — mapped to `RateLimitedFailure` by the
+  /// repository, not handled here.
+  Future<bool> reportReel(String id, String reason, {String? customReason});
+
+  /// v4 (FR-073): explicit repost/un-repost — not a toggle (separate verbs).
+  Future<void> repostReel(String id);
+  Future<void> unrepostReel(String id);
+
+  /// v4 (FR-075): Following tab.
+  Future<ReelsPageModel> fetchFollowing({String? cursor, int limit});
+
+  /// v5 (FR-084): the caller's followees, most-recently-followed first —
+  /// feeds the post-details `@`-mention suggestion overlay.
+  Future<({List<FollowedUserModel> items, String? nextCursor})> getFollowingUsers({
+    String? cursor,
+    int limit,
+  });
+
+  /// v6: everyone who reposted [reelId], most-recent-first — the reposters
+  /// bottom sheet.
+  Future<({List<FollowedUserModel> items, String? nextCursor})> getReposters(
+    String reelId, {
+    String? cursor,
+    int limit,
+  });
 
   /// v3 (FR-060): multipart upload; [cancelToken] is a real `dio.CancelToken`
   /// — the domain-layer `UploadCancelToken` is adapted to one by the
@@ -187,6 +219,19 @@ class ReelsRemoteDataSourceImpl implements ReelsRemoteDataSource {
   }
 
   @override
+  Future<ReelsPageModel> fetchReposted({String? userId, String? cursor, int limit = 10}) async {
+    final response = await dioClient.dio.get(
+      '/api/reels/reposted',
+      queryParameters: {
+        'limit': limit,
+        if (userId != null) 'userId': userId,
+        if (cursor != null) 'cursor': cursor,
+      },
+    );
+    return ReelsPageModel.fromJson(_unwrap(response.data));
+  }
+
+  @override
   Future<ReelsPageModel> searchReels(String query, {String? cursor, int limit = 10}) async {
     final response = await dioClient.dio.get(
       '/api/reels/search',
@@ -220,6 +265,74 @@ class ReelsRemoteDataSourceImpl implements ReelsRemoteDataSource {
     final response = await dioClient.dio.post('/api/users/$userId/block');
     final json = _unwrap(response.data);
     return json['blocked'] as bool? ?? false;
+  }
+
+  @override
+  Future<bool> reportReel(String id, String reason, {String? customReason}) async {
+    final response = await dioClient.dio.post(
+      '/api/reels/$id/report',
+      data: {'reason': reason, if (customReason != null) 'customReason': customReason},
+    );
+    final json = _unwrap(response.data);
+    return json['alreadyReported'] as bool? ?? false;
+  }
+
+  @override
+  Future<void> repostReel(String id) async {
+    await dioClient.dio.post('/api/reels/$id/repost');
+  }
+
+  @override
+  Future<void> unrepostReel(String id) async {
+    await dioClient.dio.delete('/api/reels/$id/repost');
+  }
+
+  @override
+  Future<ReelsPageModel> fetchFollowing({String? cursor, int limit = 10}) async {
+    final response = await dioClient.dio.get(
+      '/api/reels/following',
+      queryParameters: {'limit': limit, if (cursor != null) 'cursor': cursor},
+    );
+    return ReelsPageModel.fromJson(_unwrap(response.data));
+  }
+
+  @override
+  Future<({List<FollowedUserModel> items, String? nextCursor})> getFollowingUsers({
+    String? cursor,
+    int limit = 50,
+  }) async {
+    final response = await dioClient.dio.get(
+      '/api/reels/me/following',
+      queryParameters: {'limit': limit, if (cursor != null) 'cursor': cursor},
+    );
+    final json = _unwrap(response.data);
+    final rawItems = json['items'] as List<dynamic>? ?? const [];
+    return (
+      items: rawItems
+          .map((e) => FollowedUserModel.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      nextCursor: json['nextCursor'] as String?,
+    );
+  }
+
+  @override
+  Future<({List<FollowedUserModel> items, String? nextCursor})> getReposters(
+    String reelId, {
+    String? cursor,
+    int limit = 20,
+  }) async {
+    final response = await dioClient.dio.get(
+      '/api/reels/$reelId/reposters',
+      queryParameters: {'limit': limit, if (cursor != null) 'cursor': cursor},
+    );
+    final json = _unwrap(response.data);
+    final rawItems = json['items'] as List<dynamic>? ?? const [];
+    return (
+      items: rawItems
+          .map((e) => FollowedUserModel.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      nextCursor: json['nextCursor'] as String?,
+    );
   }
 
   @override

@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/core/theme/app_colors.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/creator_profile.dart';
 import 'package:ciro_chat_app/features/reels/domain/entities/reel.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/creator_profile_cubit.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_feed_bloc.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_interaction_cubit.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/creator_profile_skeleton.dart';
 import 'package:ciro_chat_app/features/reels/presentation/widgets/follow_button.dart';
 import 'package:ciro_chat_app/features/reels/presentation/widgets/reel_status_badge.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/shimmer.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/video_grid_skeleton.dart';
 
 /// Creator info, stats, and a 3-column video grid (FR-023–027). Tapping a
 /// grid thumbnail opens the creator-scoped feed starting at that video.
@@ -33,12 +37,14 @@ class CreatorProfileScreen extends StatelessWidget {
               elevation: 0,
               actions: [
                 // v4: the upload entry point lives on the owner's own
-                // profile screen only (not the Reels feed header).
+                // profile screen only (not the Reels feed header). v5: it
+                // now opens the camera-first capture screen (FR-079) rather
+                // than the old source-choice screen directly.
                 if (profile != null && profile.isSelf)
                   IconButton(
                     onPressed: () async {
                       final cubit = context.read<CreatorProfileCubit>();
-                      final uploaded = await context.push<Reel?>('/reels/upload');
+                      final uploaded = await context.push<Reel?>('/reels/capture');
                       // A new reel is only visible to its owner (FR-061) and
                       // the main feed's shared bloc caches its list for the
                       // session (FR-004a) — both need an explicit nudge or
@@ -57,7 +63,7 @@ class CreatorProfileScreen extends StatelessWidget {
             body: switch (state.status) {
               CreatorProfileStatus.initial ||
               CreatorProfileStatus.loading =>
-                const Center(child: CircularProgressIndicator()),
+                const CreatorProfileSkeleton(),
               CreatorProfileStatus.error => Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -143,16 +149,19 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
   @override
   void initState() {
     super.initState();
-    if (widget.profile.isSelf) {
-      final controller = TabController(length: 3, vsync: this);
-      controller.addListener(() {
-        if (controller.indexIsChanging) return;
-        final cubit = context.read<CreatorProfileCubit>();
-        if (controller.index == 1) cubit.loadLikedTab();
-        if (controller.index == 2) cubit.loadSavedTab();
-      });
-      _tabController = controller;
-    }
+    // v6: tab order Videos | Reposts | Saved | Liked. Reposts is public, so
+    // every profile gets a tab bar (Videos + Reposts); Saved/Liked stay
+    // owner-only, appended for self.
+    final isSelf = widget.profile.isSelf;
+    final controller = TabController(length: isSelf ? 4 : 2, vsync: this);
+    controller.addListener(() {
+      if (controller.indexIsChanging) return;
+      final cubit = context.read<CreatorProfileCubit>();
+      if (controller.index == 1) cubit.loadRepostedTab();
+      if (isSelf && controller.index == 2) cubit.loadSavedTab();
+      if (isSelf && controller.index == 3) cubit.loadLikedTab();
+    });
+    _tabController = controller;
   }
 
   @override
@@ -228,11 +237,47 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
       ),
     );
 
-    final tabController = _tabController;
-    if (tabController == null) {
-      // Non-self profile: just the video grid, no tabs (owner-only privacy).
-      return CustomScrollView(slivers: [header, _videoGridSliver(profile.id, profile.videos)]);
-    }
+    final tabController = _tabController!;
+    final isSelf = profile.isSelf;
+
+    // v6: icon tabs, order Videos | Reposts | Saved | Liked (image-matched).
+    // Saved/Liked (owner-only) are appended for self.
+    final tabs = <Widget>[
+      const Tab(icon: Icon(Icons.grid_on)),
+      const Tab(icon: Icon(Icons.repeat)),
+      if (isSelf) const Tab(icon: Icon(Icons.bookmark_border)),
+      if (isSelf) const Tab(icon: Icon(Icons.favorite_border)),
+    ];
+    final views = <Widget>[
+      _VideosTab(profile: profile),
+      BlocSelector<CreatorProfileCubit, CreatorProfileState, SelfTabState?>(
+        selector: (state) => state.repostedTab,
+        builder: (context, tab) => _ReelListTab(
+          tab: tab,
+          listSource: 'reposted',
+          listSourceUserId: profile.id,
+          emptyKey: 'reels.reposted_videos_empty',
+        ),
+      ),
+      if (isSelf)
+        BlocSelector<CreatorProfileCubit, CreatorProfileState, SelfTabState?>(
+          selector: (state) => state.savedTab,
+          builder: (context, tab) => _ReelListTab(
+            tab: tab,
+            listSource: 'saved',
+            emptyKey: 'reels.saved_videos_empty',
+          ),
+        ),
+      if (isSelf)
+        BlocSelector<CreatorProfileCubit, CreatorProfileState, SelfTabState?>(
+          selector: (state) => state.likedTab,
+          builder: (context, tab) => _ReelListTab(
+            tab: tab,
+            listSource: 'liked',
+            emptyKey: 'reels.liked_videos_empty',
+          ),
+        ),
+    ];
 
     return NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -243,71 +288,16 @@ class _ProfileBodyState extends State<_ProfileBody> with SingleTickerProviderSta
             TabBar(
               controller: tabController,
               labelColor: Theme.of(context).colorScheme.onSurface,
-              tabs: [
-                Tab(text: 'reels.profile_tab_videos'.tr()),
-                Tab(text: 'reels.profile_tab_liked'.tr()),
-                Tab(text: 'reels.profile_tab_saved'.tr()),
-              ],
+              unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              tabs: tabs,
             ),
           ),
         ),
       ],
-      body: TabBarView(
-        controller: tabController,
-        children: [
-          _VideosTab(profile: profile),
-          BlocSelector<CreatorProfileCubit, CreatorProfileState, SelfTabState?>(
-            selector: (state) => state.likedTab,
-            builder: (context, tab) => _ReelListTab(
-              tab: tab,
-              listSource: 'liked',
-              emptyKey: 'reels.liked_videos_empty',
-            ),
-          ),
-          BlocSelector<CreatorProfileCubit, CreatorProfileState, SelfTabState?>(
-            selector: (state) => state.savedTab,
-            builder: (context, tab) => _ReelListTab(
-              tab: tab,
-              listSource: 'saved',
-              emptyKey: 'reels.saved_videos_empty',
-            ),
-          ),
-        ],
-      ),
+      body: TabBarView(controller: tabController, children: views),
     );
   }
 
-  Widget _videoGridSliver(String creatorId, List<dynamic> videos) {
-    if (videos.isEmpty) {
-      return SliverFillRemaining(
-        hasScrollBody: false,
-        child: Center(child: Text('reels.profile_empty_videos'.tr())),
-      );
-    }
-    return SliverPadding(
-      padding: const EdgeInsets.all(2),
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 2,
-          mainAxisSpacing: 2,
-          childAspectRatio: 9 / 16,
-        ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final video = videos[index];
-            return GestureDetector(
-              onTap: () => context.push('/reels/creator/$creatorId?start=${video.id}'),
-              child: video.thumbnailUrl.isEmpty
-                  ? Container(color: Colors.grey.shade300)
-                  : CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover),
-            );
-          },
-          childCount: videos.length,
-        ),
-      ),
-    );
-  }
 }
 
 class _VideosTab extends StatelessWidget {
@@ -362,14 +352,16 @@ class _VideosTab extends StatelessWidget {
         final video = profile.videos[index];
         return GestureDetector(
           onTap: () => context.push('/reels/creator/${profile.id}?start=${video.id}'),
-          onLongPress: () => _confirmDelete(context, video.id),
+          // Owner-only: delete + moderation badge never surface on another
+          // user's profile grid (FR-065/FR-067).
+          onLongPress: profile.isSelf ? () => _confirmDelete(context, video.id) : null,
           child: Stack(
             fit: StackFit.expand,
             children: [
               video.thumbnailUrl.isEmpty
                   ? Container(color: Colors.grey.shade300)
                   : CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover),
-              ReelStatusBadge(status: video.status),
+              if (profile.isSelf) ReelStatusBadge(status: video.status),
             ],
           ),
         );
@@ -378,19 +370,31 @@ class _VideosTab extends StatelessWidget {
   }
 }
 
-/// FR-050/051: Liked/Saved tabs — owner-only, scoped feed entry per item
-/// (US8 scenario 4).
+/// FR-050/051: Liked/Saved (owner-only) + v6 Reposts (public) tabs — scoped
+/// feed entry per item (US8 scenario 4).
 class _ReelListTab extends StatelessWidget {
-  const _ReelListTab({required this.tab, required this.listSource, required this.emptyKey});
+  const _ReelListTab({
+    required this.tab,
+    required this.listSource,
+    required this.emptyKey,
+    this.listSourceUserId,
+  });
 
   final SelfTabState? tab;
   final String listSource;
   final String emptyKey;
 
+  /// v6: whose reposts, appended to the scoped-feed route for `'reposted'`.
+  final String? listSourceUserId;
+
   @override
   Widget build(BuildContext context) {
     if (tab == null || tab!.status == SelfTabStatus.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Shimmer(
+        baseColor: AppColors.surfaceVariant,
+        highlightColor: AppColors.surface,
+        child: VideoGridSkeleton(color: AppColors.surfaceVariant),
+      );
     }
     if (tab!.status == SelfTabStatus.error) {
       return Center(child: Text('reels.action_failed'.tr()));
@@ -410,8 +414,9 @@ class _ReelListTab extends StatelessWidget {
       itemCount: videos.length,
       itemBuilder: (context, index) {
         final Reel video = videos[index];
+        final userQuery = listSourceUserId != null ? '&userId=$listSourceUserId' : '';
         return GestureDetector(
-          onTap: () => context.push('/reels/$listSource?start=${video.id}'),
+          onTap: () => context.push('/reels/$listSource?start=${video.id}$userQuery'),
           child: video.thumbnailUrl.isEmpty
               ? Container(color: Colors.grey.shade300)
               : CachedNetworkImage(imageUrl: video.thumbnailUrl, fit: BoxFit.cover),

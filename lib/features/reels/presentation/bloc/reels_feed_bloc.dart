@@ -45,6 +45,7 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
     on<ReelsFeedPaused>(_onPaused);
     on<ReelsFeedResumed>(_onResumed);
     on<ReelsRefreshRequested>(_onRefresh);
+    on<ReelsFeedScopeChanged>(_onScopeChanged, transformer: droppable());
     on<ReelsNextPageRequested>(_onNextPage, transformer: droppable());
     on<ReelsItemRetryRequested>(_onItemRetry);
     on<ReelsItemOpenFailed>(_onItemOpenFailed);
@@ -82,6 +83,15 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
         clearHashtag: event.hashtag == null,
         listSource: event.listSource,
         clearListSource: event.listSource == null,
+        listSourceUserId: event.listSourceUserId,
+        clearListSourceUserId: event.listSourceUserId == null,
+        // v4: a genuine fresh start (first-ever mount of this scope-shape,
+        // or an explicit refresh via _onRefresh) invalidates any cached tab
+        // snapshot — resume-within-session only applies across push/pop
+        // navigation, not across an explicit reset. The plain main-feed
+        // screen's own feedScope is preserved (defaults to forYou on a
+        // truly fresh bloc; _onRefresh re-passes the currently active one).
+        scopeSnapshots: const {},
       ),
     );
     _playerPool.disposeAll();
@@ -100,6 +110,8 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
       creatorId: event.creatorId,
       hashtag: event.hashtag,
       listSource: event.listSource,
+      listSourceUserId: event.listSourceUserId,
+      feedScope: state.feedScope,
     );
     result.fold(
       (failure) => emit(state.copyWith(status: ReelsFeedStatus.error, errorMessage: failure.message)),
@@ -177,22 +189,118 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
         creatorId: state.creatorId,
         hashtag: state.hashtag,
         listSource: state.listSource,
+        listSourceUserId: state.listSourceUserId,
       ),
       emit,
     );
   }
 
-  /// Routes to the feed/hashtag endpoint or the caller's own Liked/Saved
-  /// list, depending on which scope is active (mutually exclusive).
+  /// Routes to the feed/hashtag endpoint, the caller's own Liked/Saved list,
+  /// or (v4, FR-074/FR-075) the Following tab, depending on which scope is
+  /// active (mutually exclusive). [feedScope] only matters for the plain
+  /// main-feed screen — any of [creatorId]/[hashtag]/[listSource] wins over it.
   Future<Either<Failure, ReelsPage>> _fetchScopedPage({
     String? cursor,
     String? creatorId,
     String? hashtag,
     String? listSource,
+    String? listSourceUserId,
+    ReelFeedScope feedScope = ReelFeedScope.forYou,
   }) {
     if (listSource == 'liked') return _repository.fetchLiked(cursor: cursor);
     if (listSource == 'saved') return _repository.fetchSaved(cursor: cursor);
+    if (listSource == 'reposted') {
+      return _repository.fetchReposted(userId: listSourceUserId, cursor: cursor);
+    }
+    if (creatorId == null && hashtag == null && feedScope == ReelFeedScope.following) {
+      return _repository.fetchFollowing(cursor: cursor);
+    }
     return _repository.fetchFeed(cursor: cursor, creatorId: creatorId, hashtag: hashtag);
+  }
+
+  /// v4 (FR-074/FR-004a): switches the active tab. A snapshot exists for the
+  /// target scope → instant restore (no refetch, resumes at its exact prior
+  /// position). Otherwise fetches page 1 for it (first visit this session).
+  /// Ignored entirely for scoped views (creator/hashtag/liked/saved/deep
+  /// link) — those have nothing to do with the Following/For You toggle.
+  Future<void> _onScopeChanged(
+    ReelsFeedScopeChanged event,
+    Emitter<ReelsFeedState> emit,
+  ) async {
+    if (event.scope == state.feedScope) return;
+    if (state.creatorId != null || state.hashtag != null || state.listSource != null) {
+      return;
+    }
+
+    final snapshots = Map<ReelFeedScope, ReelsScopeSnapshot>.from(state.scopeSnapshots)
+      ..[state.feedScope] = ReelsScopeSnapshot(
+        reels: state.reels,
+        currentIndex: state.currentIndex,
+        nextCursor: state.nextCursor,
+      );
+
+    // The player pool is keyed by INDEX, not reel id (research.md R20) — a
+    // stale player would otherwise keep playing the OUTGOING scope's video
+    // at whatever index the incoming scope reuses. Always tear down first so
+    // the outgoing tab's audio stops immediately (FR-004/FR-074).
+    _playerPool.disposeAll();
+
+    final cached = snapshots[event.scope];
+    if (cached != null) {
+      emit(
+        state.copyWith(
+          feedScope: event.scope,
+          reels: cached.reels,
+          currentIndex: cached.currentIndex,
+          nextCursor: cached.nextCursor,
+          clearNextCursor: cached.nextCursor == null,
+          scopeSnapshots: snapshots,
+          status: ReelsFeedStatus.ready,
+        ),
+      );
+      if (cached.reels.isNotEmpty) {
+        _syncWindowAndPrefetch(cached.currentIndex, cached.reels);
+        final resumed = cached.reels[cached.currentIndex];
+        if (resumed.status == ReelStatus.published) {
+          _interactionCubit.recordView(resumed.id);
+        }
+      }
+      return;
+    }
+
+    // First visit to this scope this session — fetch page 1.
+    emit(
+      state.copyWith(
+        feedScope: event.scope,
+        status: ReelsFeedStatus.loading,
+        reels: const [],
+        currentIndex: 0,
+        scopeSnapshots: snapshots,
+        clearNextCursor: true,
+      ),
+    );
+    final result = await _fetchScopedPage(feedScope: event.scope);
+    result.fold(
+      (failure) => emit(state.copyWith(status: ReelsFeedStatus.error, errorMessage: failure.message)),
+      (page) {
+        emit(
+          state.copyWith(
+            status: ReelsFeedStatus.ready,
+            reels: page.items,
+            currentIndex: 0,
+            nextCursor: page.nextCursor,
+            clearNextCursor: page.nextCursor == null,
+          ),
+        );
+        if (page.items.isNotEmpty) {
+          _syncWindowAndPrefetch(0, page.items);
+          if (page.items[0].status == ReelStatus.published) {
+            _interactionCubit.recordView(page.items[0].id);
+          }
+        }
+        _interactionCubit.seedReels(page.items);
+      },
+    );
   }
 
   Future<void> _onNextPage(ReelsNextPageRequested event, Emitter<ReelsFeedState> emit) async {
@@ -203,6 +311,8 @@ class ReelsFeedBloc extends Bloc<ReelsFeedEvent, ReelsFeedState> {
       creatorId: state.creatorId,
       hashtag: state.hashtag,
       listSource: state.listSource,
+      listSourceUserId: state.listSourceUserId,
+      feedScope: state.feedScope,
     );
     result.fold(
       (failure) => emit(state.copyWith(isLoadingMore: false, paginationFailed: true)),

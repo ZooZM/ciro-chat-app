@@ -74,9 +74,12 @@ import '../../features/reels/data/repositories/reels_repository_impl.dart'
     as _i1070;
 import '../../features/reels/domain/repositories/reels_repository.dart'
     as _i695;
+import '../../features/reels/presentation/bloc/capture_cubit.dart' as _i63;
 import '../../features/reels/presentation/bloc/comments_cubit.dart' as _i1035;
 import '../../features/reels/presentation/bloc/creator_profile_cubit.dart'
     as _i1035;
+import '../../features/reels/presentation/bloc/mention_suggestions_cubit.dart'
+    as _i586;
 import '../../features/reels/presentation/bloc/reels_feed_bloc.dart' as _i1020;
 import '../../features/reels/presentation/bloc/reels_interaction_cubit.dart'
     as _i851;
@@ -138,6 +141,7 @@ extension GetItInjectableX on _i174.GetIt {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
     final appModule = _$AppModule();
     final storageModule = _$StorageModule();
+    gh.factory<_i63.CaptureCubit>(() => _i63.CaptureCubit());
     gh.factory<_i934.TranslationDataChannelDataSource>(
       () => _i934.TranslationDataChannelDataSource(),
     );
@@ -329,6 +333,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i851.ReelsInteractionCubit>(
       () => _i851.ReelsInteractionCubit(gh<_i695.ReelsRepository>()),
+    );
+    gh.factory<_i586.MentionSuggestionsCubit>(
+      () => _i586.MentionSuggestionsCubit(gh<_i695.ReelsRepository>()),
     );
     gh.factory<_i981.SearchCubit>(
       () => _i981.SearchCubit(gh<_i695.ReelsRepository>()),

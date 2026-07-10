@@ -343,6 +343,103 @@ void main() {
         expect(bloc.state.reels.map((r) => r.id).toList(), ['r0', 'r1', 'r2']);
       },
     );
+
+    // v6: public Reposts scoped feed.
+    blocTest<ReelsFeedBloc, ReelsFeedState>(
+      "listSource 'reposted' fetches via fetchReposted with the target userId",
+      setUp: () {
+        when(() => repository.fetchReposted(userId: 'u-9', cursor: null)).thenAnswer(
+          (_) async => Right(ReelsPage(items: [_reel('rp-1')], nextCursor: null)),
+        );
+      },
+      build: build,
+      act: (bloc) => bloc.add(
+        const ReelsFeedStarted(listSource: 'reposted', listSourceUserId: 'u-9'),
+      ),
+      verify: (bloc) {
+        verify(() => repository.fetchReposted(userId: 'u-9', cursor: null)).called(1);
+        expect(bloc.state.listSource, 'reposted');
+        expect(bloc.state.listSourceUserId, 'u-9');
+        expect(bloc.state.reels.single.id, 'rp-1');
+      },
+    );
+  });
+
+  group('US12 — Following/For You tabs (FR-074/FR-075, v4)', () {
+    blocTest<ReelsFeedBloc, ReelsFeedState>(
+      'ReelsFeedScopeChanged(following) fetches via fetchFollowing, not fetchFeed',
+      setUp: () {
+        when(() => repository.fetchFeed(cursor: null, creatorId: null)).thenAnswer(
+          (_) async => Right(ReelsPage(items: _longList(3), nextCursor: null)),
+        );
+        when(() => repository.fetchFollowing(cursor: null)).thenAnswer(
+          (_) async => Right(ReelsPage(items: [_reel('f0'), _reel('f1')], nextCursor: null)),
+        );
+      },
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ReelsFeedStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.following));
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        verify(() => repository.fetchFollowing(cursor: null)).called(1);
+        expect(bloc.state.feedScope, ReelFeedScope.following);
+        expect(bloc.state.reels.map((r) => r.id).toList(), ['f0', 'f1']);
+      },
+    );
+
+    blocTest<ReelsFeedBloc, ReelsFeedState>(
+      'switching back to a previously-visited scope restores its snapshot instantly — no second fetch',
+      setUp: () {
+        when(() => repository.fetchFeed(cursor: null, creatorId: null)).thenAnswer(
+          (_) async => Right(ReelsPage(items: _longList(3), nextCursor: null)),
+        );
+        when(() => repository.fetchFollowing(cursor: null)).thenAnswer(
+          (_) async => Right(ReelsPage(items: [_reel('f0')], nextCursor: null)),
+        );
+      },
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ReelsFeedStarted()); // For You, page 1
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(ReelsPageChanged(1)); // move within For You before switching away
+        bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.following)); // fetches Following
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.forYou)); // should restore, not refetch
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        // Exactly one fetchFeed call for the whole sequence — the return to
+        // For You must NOT trigger a second one.
+        verify(() => repository.fetchFeed(cursor: null, creatorId: null)).called(1);
+        verify(() => repository.fetchFollowing(cursor: null)).called(1);
+        expect(bloc.state.feedScope, ReelFeedScope.forYou);
+        expect(bloc.state.currentIndex, 1);
+        expect(bloc.state.reels.map((r) => r.id).toList(), ['r0', 'r1', 'r2']);
+      },
+    );
+
+    blocTest<ReelsFeedBloc, ReelsFeedState>(
+      'is a no-op for a scoped view (e.g. a creator-scoped feed)',
+      setUp: () {
+        when(() => repository.fetchFeed(cursor: null, creatorId: 'creator-x')).thenAnswer(
+          (_) async => Right(ReelsPage(items: _longList(2), nextCursor: null)),
+        );
+      },
+      build: build,
+      act: (bloc) async {
+        bloc.add(const ReelsFeedStarted(creatorId: 'creator-x'));
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const ReelsFeedScopeChanged(ReelFeedScope.following));
+        await Future<void>.delayed(Duration.zero);
+      },
+      verify: (bloc) {
+        verifyNever(() => repository.fetchFollowing(cursor: any(named: 'cursor')));
+        expect(bloc.state.feedScope, ReelFeedScope.forYou);
+      },
+    );
   });
 
   group('Polish — logout teardown (constitution V-A)', () {

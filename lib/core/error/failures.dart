@@ -105,3 +105,10 @@ class ScreenShareDeniedFailure extends Failure {
 class SocketFailure extends Failure {
   const SocketFailure([super.message = 'Socket disconnected']);
 }
+
+/// v4 (FR-069): a 429 from the backend's per-user daily report cap — kept
+/// distinct from [ServerFailure] so the UI can show a specific "try again
+/// tomorrow" notice instead of the generic failure message.
+class RateLimitedFailure extends Failure {
+  const RateLimitedFailure([super.message = 'Rate limited']);
+}

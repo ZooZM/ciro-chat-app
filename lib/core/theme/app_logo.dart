@@ -4,7 +4,7 @@ import 'app_colors.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP LOGO CONFIGURATION & WIDGET
-// Uses a static image asset for the logo mark (speech bubbles) 
+// Uses a static image asset for the logo mark (speech bubbles)
 // and dynamic text for the "CIRO / CONNECT" wording.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -17,18 +17,14 @@ class AppLogo {
 }
 
 class AppLogoWidget extends StatelessWidget {
-  /// Controls the width of the main image asset. 
+  /// Controls the width of the main image asset.
   /// The text will scale relative to this size.
   final double size;
 
   /// Set to false to hide the "CIRO / CONNECT" text (shows image only).
   final bool showText;
 
-  const AppLogoWidget({
-    super.key,
-    this.size = 120.0,
-    this.showText = true,
-  });
+  const AppLogoWidget({super.key, this.size = 120.0, this.showText = true});
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +66,10 @@ class AppLogoWidget extends StatelessWidget {
                   style: AppTypography.logoMark.copyWith(
                     fontSize: size * 0.27,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -1.5,
-                    color: const Color(0xFF111111), // Dark grey/black matching design
+                    letterSpacing: -1,
+                    color: const Color(
+                      0xFF111111,
+                    ), // Dark grey/black matching design
                   ),
                 ),
 
@@ -83,7 +81,7 @@ class AppLogoWidget extends StatelessWidget {
                   style: AppTypography.logoTagline.copyWith(
                     fontSize: size * 0.10,
                     letterSpacing: 3.5,
-                    color: AppColors.primary, 
+                    color: AppColors.primary,
                   ),
                 ),
               ],

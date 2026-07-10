@@ -3,44 +3,50 @@ import 'dart:io';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
-import 'package:video_thumbnail/video_thumbnail.dart' as vt;
 import 'package:ciro_chat_app/core/di/injection.dart';
+import 'package:ciro_chat_app/features/reels/presentation/bloc/mention_suggestions_cubit.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/upload_cubit.dart';
-import 'package:ciro_chat_app/features/reels/presentation/pages/reel_trimmer_screen.dart';
-import 'package:ciro_chat_app/features/reels/presentation/services/reel_video_export.dart';
+import 'package:ciro_chat_app/features/reels/presentation/widgets/mention_suggestions_overlay.dart';
 
-const _maxUploadDuration = Duration(seconds: 60);
-
-/// v3 (FR-060): the reel upload flow — record or pick a video, trim it if
-/// it's longer than 60s (FR-060a), add a description, submit. A failed
-/// upload never leaves a phantom reel (FR-060) — this screen surfaces an
-/// explicit retry instead.
+/// v5 (FR-082): the post-details step — a minimal screen containing only
+/// the description input (with the FR-083 `@`-mention overlay), a preview
+/// thumbnail of the trimmed segment, and a prominent Post button. Reached
+/// exclusively from the trimmer ([ReelCaptureScreen]'s "Next" step); source
+/// selection now lives entirely in the camera-first capture flow.
 class UploadReelScreen extends StatelessWidget {
-  const UploadReelScreen({super.key});
+  const UploadReelScreen({
+    super.key,
+    required this.videoPath,
+    this.thumbnailPath,
+  });
+
+  final String videoPath;
+  final String? thumbnailPath;
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => getIt<UploadCubit>(),
-      child: const _UploadReelView(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => getIt<UploadCubit>()),
+        BlocProvider(create: (_) => getIt<MentionSuggestionsCubit>()..ensureLoaded()),
+      ],
+      child: _PostDetailsView(videoPath: videoPath, thumbnailPath: thumbnailPath),
     );
   }
 }
 
-class _UploadReelView extends StatefulWidget {
-  const _UploadReelView();
+class _PostDetailsView extends StatefulWidget {
+  const _PostDetailsView({required this.videoPath, this.thumbnailPath});
+
+  final String videoPath;
+  final String? thumbnailPath;
 
   @override
-  State<_UploadReelView> createState() => _UploadReelViewState();
+  State<_PostDetailsView> createState() => _PostDetailsViewState();
 }
 
-class _UploadReelViewState extends State<_UploadReelView> {
+class _PostDetailsViewState extends State<_PostDetailsView> {
   final _descriptionController = TextEditingController();
-  File? _videoFile;
-  String? _thumbnailPath;
-  bool _preparingSource = false;
 
   @override
   void dispose() {
@@ -48,118 +54,10 @@ class _UploadReelViewState extends State<_UploadReelView> {
     super.dispose();
   }
 
-  Future<Duration?> _probeDuration(File file) async {
-    final controller = VideoPlayerController.file(file);
-    try {
-      await controller.initialize();
-      return controller.value.duration;
-    } catch (_) {
-      return null;
-    } finally {
-      await controller.dispose();
-    }
-  }
-
-  /// `video_editor` 3.0.0 runs `Uri.encodeFull(path)` on iOS when it builds its
-  /// internal `VideoPlayerController` (src/controller.dart), so any space or
-  /// special char in the picked filename (e.g. "Screen Recording ….mov") becomes
-  /// `%20` and the player fails to load a now-nonexistent path (OSStatus -17913).
-  /// Copy the source to a space-free name first so that encoding is a no-op.
-  Future<File> _copyToSafePath(File source) async {
-    final lastDot = source.path.lastIndexOf('.');
-    final ext = lastDot != -1 ? source.path.substring(lastDot + 1) : 'mp4';
-    final safeName = 'reel_src_${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final dest = '${source.parent.path}/$safeName';
-    return source.copy(dest);
-  }
-
-  /// Best-effort — a thumbnail is optional (FR-060); a failure here (e.g. a
-  /// codec `video_thumbnail` can't decode) must never block the user from
-  /// reaching the compose screen with their picked video.
-  Future<String?> _tryGenerateThumbnail(String videoPath) async {
-    try {
-      return await vt.VideoThumbnail.thumbnailFile(
-        video: videoPath,
-        imageFormat: vt.ImageFormat.JPEG,
-        quality: 80,
-      );
-    } catch (e) {
-      debugPrint('[UploadReelScreen] thumbnail generation failed: $e');
-      return null;
-    }
-  }
-
-  Future<void> _pick(ImageSource source) async {
-    setState(() => _preparingSource = true);
-    try {
-      final XFile? picked;
-      try {
-        picked = source == ImageSource.camera
-            ? await ImagePicker().pickVideo(source: source, maxDuration: _maxUploadDuration)
-            : await ImagePicker().pickVideo(source: source);
-      } catch (e) {
-        debugPrint('[UploadReelScreen] pickVideo failed: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-        }
-        return;
-      }
-      if (picked == null) return; // user cancelled the picker
-      final file = File(picked.path);
-
-      // Camera capture is already capped by maxDuration natively, but the
-      // OS applies no such limit to a gallery pick — probe either way so a
-      // pre-trimmed camera capture still gets its thumbnail below.
-      final duration = await _probeDuration(file);
-
-      if (duration != null && duration > _maxUploadDuration) {
-        // video_editor 3.0.0 runs Uri.encodeFull() on the path on iOS, which
-        // turns spaces in a picked filename (e.g. "Screen Recording ….mov")
-        // into %20 and makes its player fail to load (OSStatus -17913). Hand
-        // it a copy at a sanitized, space-free path so that encoding is a no-op.
-        final safeFile = await _copyToSafePath(file);
-        if (!mounted) return;
-        final result = await Navigator.of(context).push<TrimResult?>(
-          MaterialPageRoute(builder: (_) => ReelTrimmerScreen(sourceFile: safeFile)),
-        );
-        if (result == null) return;
-        setState(() {
-          _videoFile = File(result.videoPath);
-          _thumbnailPath = result.thumbnailPath;
-        });
-        return;
-      }
-
-      // FR-060: normalize *every* upload — not just >60s trims — through the
-      // same ffmpeg re-encode, so the moov atom is moved to the front
-      // (+faststart) and the resolution/bitrate is capped. Skipping this for
-      // ≤60s clips is what made a large raw upload stutter on its first
-      // playback. Falls back to the raw file if the re-encode fails; the
-      // backend post-upload remux still guarantees faststart in that case.
-      final normalizedPath = await ReelVideoExport.normalizeFullClip(file);
-      final videoPath = normalizedPath ?? file.path;
-      final thumbnailPath = await _tryGenerateThumbnail(videoPath);
-      if (!mounted) return;
-      setState(() {
-        _videoFile = File(videoPath);
-        _thumbnailPath = thumbnailPath;
-      });
-    } catch (e) {
-      debugPrint('[UploadReelScreen] pick flow failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _preparingSource = false);
-    }
-  }
-
   void _submit() {
-    final file = _videoFile;
-    if (file == null) return;
     context.read<UploadCubit>().upload(
-          videoPath: file.path,
-          thumbnailPath: _thumbnailPath,
+          videoPath: widget.videoPath,
+          thumbnailPath: widget.thumbnailPath,
           description: _descriptionController.text.trim(),
         );
   }
@@ -182,19 +80,12 @@ class _UploadReelViewState extends State<_UploadReelView> {
             return _UploadProgressView(progress: state.progress);
           }
           if (state.status == UploadStatus.failure) {
-            return _UploadFailureView(
-              message: state.errorMessage,
-              onRetry: _submit,
-            );
+            return _UploadFailureView(message: state.errorMessage, onRetry: _submit);
           }
-          return _ComposeView(
-            preparingSource: _preparingSource,
-            videoFile: _videoFile,
-            thumbnailPath: _thumbnailPath,
+          return _PostDetailsForm(
+            thumbnailPath: widget.thumbnailPath,
             descriptionController: _descriptionController,
-            onPickCamera: () => _pick(ImageSource.camera),
-            onPickGallery: () => _pick(ImageSource.gallery),
-            onSubmit: _videoFile == null ? null : _submit,
+            onSubmit: _submit,
           );
         },
       ),
@@ -202,79 +93,68 @@ class _UploadReelViewState extends State<_UploadReelView> {
   }
 }
 
-class _ComposeView extends StatelessWidget {
-  const _ComposeView({
-    required this.preparingSource,
-    required this.videoFile,
+class _PostDetailsForm extends StatelessWidget {
+  const _PostDetailsForm({
     required this.thumbnailPath,
     required this.descriptionController,
-    required this.onPickCamera,
-    required this.onPickGallery,
     required this.onSubmit,
   });
 
-  final bool preparingSource;
-  final File? videoFile;
   final String? thumbnailPath;
   final TextEditingController descriptionController;
-  final VoidCallback onPickCamera;
-  final VoidCallback onPickGallery;
-  final VoidCallback? onSubmit;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    if (preparingSource) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (videoFile == null) ...[
-            Text('reels.upload_pick_source'.tr()),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: onPickCamera,
-              icon: const Icon(Icons.videocam),
-              label: Text('reels.upload_record'.tr()),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: onPickGallery,
-              icon: const Icon(Icons.photo_library),
-              label: Text('reels.upload_gallery'.tr()),
-            ),
-          ] else ...[
-            if (thumbnailPath != null)
-              AspectRatio(
-                aspectRatio: 9 / 16,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(File(thumbnailPath!), fit: BoxFit.cover),
-                ),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: MentionSuggestionsOverlay(
+                      controller: descriptionController,
+                      child: TextField(
+                        controller: descriptionController,
+                        maxLength: 2200,
+                        maxLines: null,
+                        expands: true,
+                        textAlignVertical: TextAlignVertical.top,
+                        decoration: InputDecoration(
+                          hintText: 'reels.post_description_hint'.tr(),
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 100,
+                    child: AspectRatio(
+                      aspectRatio: 9 / 16,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: thumbnailPath == null
+                            ? Container(color: Colors.black12)
+                            : Image.file(File(thumbnailPath!), fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              maxLength: 2200,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: 'reels.upload_description_hint'.tr(),
-                border: const OutlineInputBorder(),
-              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: onSubmit,
-              child: Text('reels.upload_submit'.tr()),
-            ),
-            TextButton(
-              onPressed: onPickGallery,
-              child: Text('reels.upload_gallery'.tr()),
+              child: Text('reels.post_submit'.tr()),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

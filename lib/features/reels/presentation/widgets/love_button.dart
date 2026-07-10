@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:ciro_chat_app/core/di/injection.dart';
 import 'package:ciro_chat_app/features/reels/presentation/bloc/reels_interaction_cubit.dart';
@@ -15,7 +15,11 @@ class LoveButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = getIt<ReelsInteractionCubit>();
-    return BlocSelector<ReelsInteractionCubit, ReelsInteractionState, LikeEntry?>(
+    return BlocSelector<
+      ReelsInteractionCubit,
+      ReelsInteractionState,
+      LikeEntry?
+    >(
       bloc: cubit,
       selector: (state) => state.likes[reelId],
       builder: (context, entry) {
@@ -30,18 +34,25 @@ class LoveButton extends StatelessWidget {
                 scale: liked ? 1.15 : 1.0,
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOutBack,
-                child: Icon(
-                  liked ? CupertinoIcons.heart_solid : CupertinoIcons.heart,
-                  color: liked ? Colors.redAccent : Colors.white,
-                  size: 30,
-                  shadows: const [Shadow(color: Colors.white, blurRadius: 8)],
+                child: SvgPicture.asset(
+                  'assets/icons/reels/heart.svg',
+                  width: 34,
+                  height: 34,
+                  colorFilter: ColorFilter.mode(
+                    liked ? Colors.redAccent : Colors.white,
+                    BlendMode.srcIn,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               NumberFormat.compact().format(count),
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         );

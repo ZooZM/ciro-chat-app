@@ -28,6 +28,7 @@ class CreatorProfileState extends Equatable {
     this.profile,
     this.likedTab,
     this.savedTab,
+    this.repostedTab,
   });
 
   final CreatorProfileStatus status;
@@ -37,22 +38,28 @@ class CreatorProfileState extends Equatable {
   final SelfTabState? likedTab;
   final SelfTabState? savedTab;
 
+  /// v6: public Reposts tab — populated for ANY profile (self or not), since
+  /// reposting is a public distribution mechanic.
+  final SelfTabState? repostedTab;
+
   CreatorProfileState copyWith({
     CreatorProfileStatus? status,
     CreatorProfile? profile,
     SelfTabState? likedTab,
     SelfTabState? savedTab,
+    SelfTabState? repostedTab,
   }) {
     return CreatorProfileState(
       status: status ?? this.status,
       profile: profile ?? this.profile,
       likedTab: likedTab ?? this.likedTab,
       savedTab: savedTab ?? this.savedTab,
+      repostedTab: repostedTab ?? this.repostedTab,
     );
   }
 
   @override
-  List<Object?> get props => [status, profile, likedTab, savedTab];
+  List<Object?> get props => [status, profile, likedTab, savedTab, repostedTab];
 }
 
 /// `@injectable` (not session-scoped) — a fresh instance per profile screen
@@ -106,6 +113,24 @@ class CreatorProfileCubit extends Cubit<CreatorProfileState> {
       (failure) => emit(state.copyWith(savedTab: const SelfTabState(status: SelfTabStatus.error))),
       (page) => emit(
         state.copyWith(savedTab: SelfTabState(status: SelfTabStatus.ready, videos: page.items)),
+      ),
+    );
+  }
+
+  /// v6: lazily fetches the viewed profile's public Reposts tab. Unlike
+  /// liked/saved this targets the profile owner (`state.profile.id`), not the
+  /// caller — reposts are public.
+  Future<void> loadRepostedTab() async {
+    if (state.repostedTab != null) return;
+    final userId = state.profile?.id;
+    if (userId == null) return;
+    emit(state.copyWith(repostedTab: const SelfTabState(status: SelfTabStatus.loading)));
+    final result = await _repository.fetchReposted(userId: userId);
+    result.fold(
+      (failure) =>
+          emit(state.copyWith(repostedTab: const SelfTabState(status: SelfTabStatus.error))),
+      (page) => emit(
+        state.copyWith(repostedTab: SelfTabState(status: SelfTabStatus.ready, videos: page.items)),
       ),
     );
   }

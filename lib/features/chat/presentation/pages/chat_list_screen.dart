@@ -54,8 +54,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
       // to reveal whatever sits behind them — with a white Scaffold, that
       // was showing as a white sliver at the corners even though the
       // Container's own decoration was already black.
-      backgroundColor: _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
-      appBar: (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == kReelsTabIndex)
+      backgroundColor: _currentIndex == kReelsTabIndex
+          ? Colors.black
+          : Colors.white,
+      appBar:
+          (_currentIndex == 2 ||
+              _currentIndex == 3 ||
+              _currentIndex == kReelsTabIndex)
           ? null
           : AppBar(
               backgroundColor: Colors.white,
@@ -133,14 +138,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
           child: BottomNavigationBar(
             // Dark-themed while viewing Reels so the bar blends with the
             // full-screen video behind it (spec.md clarification 2026-07-02).
-            backgroundColor:
-                _currentIndex == kReelsTabIndex ? Colors.black : Colors.white,
+            backgroundColor: _currentIndex == kReelsTabIndex
+                ? Colors.black
+                : Colors.white,
             type: BottomNavigationBarType.fixed,
             currentIndex: _currentIndex,
             onTap: (index) => setState(() => _currentIndex = index),
             selectedItemColor: AppColors.primary,
-            unselectedItemColor:
-                _currentIndex == kReelsTabIndex ? Colors.white70 : Colors.grey[600],
+            unselectedItemColor: _currentIndex == kReelsTabIndex
+                ? Colors.white70
+                : Colors.grey[600],
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -428,11 +435,11 @@ class ChatListAppBar extends StatelessWidget {
                 'ciro',
                 style: AppTypography.logoMark.copyWith(
                   fontFamily: 'GeometrySoftPro',
-                  fontSize: 26,
+                  fontSize: 34,
                   height: 1.1,
-                  letterSpacing: -1.0,
+                  letterSpacing: 1,
                   color: const Color(0xFF111111),
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               Text(
