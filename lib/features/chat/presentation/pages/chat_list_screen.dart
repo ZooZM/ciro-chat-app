@@ -16,6 +16,7 @@ import '../../../status/presentation/pages/updates_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:ciro_chat_app/features/call_history/presentation/pages/calls_history_screen.dart';
 import 'package:ciro_chat_app/features/reels/presentation/pages/reels_feed_screen.dart';
+import 'package:ciro_chat_app/features/profile/presentation/pages/profile_main_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 /// Bottom-nav tab index for Reels — inserted after Calls per the
@@ -49,6 +50,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    context.locale; // Subscribe to locale changes for bottom nav translations
+
     return Scaffold(
       // Black on Reels: the bottom nav Container's rounded top corners clip
       // to reveal whatever sits behind them — with a white Scaffold, that
@@ -68,33 +71,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
               titleSpacing: 0, // Shift the entire logo to the left
               title: ChatListAppBar(),
               actions: [
-                IconButton(
-                  icon: Icon(
-                    Icons.language,
-                    color: AppColors.primary,
-                    size: 24.resW,
-                  ),
-                  onPressed: () {
-                    if (context.locale.languageCode == 'en') {
-                      context.setLocale(const Locale('ar'));
-                    } else {
-                      context.setLocale(const Locale('en'));
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.logout,
-                    color: AppColors.textSecondary,
-                    size: 20.resW,
-                  ),
-                  onPressed: () async {
-                    await getIt<AuthCubit>().logOut();
-                    if (mounted) {
-                      context.go(AppRouterName.auth);
-                    }
-                  },
-                ),
                 Padding(
                   padding: EdgeInsets.only(right: 16.resW),
                   child: CircleAvatar(
@@ -280,6 +256,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (_currentIndex == kReelsTabIndex) {
       return const ReelsFeedScreen();
     }
+    if (_currentIndex == 5) {
+      return const ProfileMainScreen();
+    }
     // Default to Chat List
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,6 +392,7 @@ class ChatListAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    context.locale; // Subscribe to locale changes
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,

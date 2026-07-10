@@ -88,6 +88,7 @@ class _CallOverlayState extends State<CallOverlay> {
             extra: {
               'contactName': state.targetName,
               'avatarUrl': state.targetAvatarUrl,
+              'isVideoCall': state.isVideo,
             },
           );
         } else if (state is CallActive) {

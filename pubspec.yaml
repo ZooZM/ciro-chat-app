@@ -77,8 +77,10 @@ dependencies:
   bloc_concurrency: ^0.3.0
   video_editor: ^3.0.0
   ffmpeg_kit_flutter_new: ^4.3.2
+  qr_flutter: ^4.1.0
   camera: ^0.11.1
 
+  flutter_webrtc: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -101,6 +103,7 @@ flutter:
     - assets/logo.png
     - assets/AppLogo.png
     - assets/splash screen.jpg
+    - assets/fef62f309a322c6bc2c6cc8d7cd250914c058627.jpg
     - assets/translations/
     - .env
 

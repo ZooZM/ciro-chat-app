@@ -49,7 +49,7 @@ void main() {
     when(() => mockSocketService.disconnect()).thenReturn(null);
     when(() => mockChatCubit.silentSyncContacts()).thenAnswer((_) async => true);
     when(() => mockChatCubit.reset()).thenReturn(null);
-    when(() => mockCallCubit.reset()).thenReturn(null);
+    when(() => mockCallCubit.reset()).thenAnswer((_) async {});
     when(() => mockChatLocalDataSource.clearAllData()).thenAnswer((_) async => {});
   });
 
@@ -113,13 +113,13 @@ void main() {
     blocTest<AuthCubit, AuthState>(
       'emits [AuthLoading, AuthError] when failure',
       build: () {
-        when(() => mockRepository.sendOtp(any())).thenAnswer((_) async => const Left(ServerFailure('Error')));
+        when(() => mockRepository.sendOtp(any())).thenAnswer((_) async => Left(ServerFailure('Error')));
         return cubit;
       },
       act: (cubit) => cubit.submitPhoneNumber(tPhone),
       expect: () => [
         const AuthLoading(),
-        const AuthError(ServerFailure('Error')),
+        AuthError(ServerFailure('Error')),
       ],
     );
   });

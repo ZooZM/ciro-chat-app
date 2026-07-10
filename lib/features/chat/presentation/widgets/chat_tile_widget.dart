@@ -4,6 +4,7 @@ import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/utils/url_utils.dart';
 import 'package:badges/badges.dart' as pk_badges;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -115,7 +116,7 @@ class ChatTileWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            DateFormat('h:mm a').format(chat.timestamp.toLocal()),
+            DateFormat('h:mm a', context.locale.languageCode).format(chat.timestamp.toLocal()),
             style: AppTypography.caption.copyWith(
               color: chat.unreadCount > 0
                   ? Colors.black
@@ -124,18 +125,27 @@ class ChatTileWidget extends StatelessWidget {
           ),
           SizedBox(height: 6.resH),
           if (chat.unreadCount > 0)
-            pk_badges.Badge(
-              badgeContent: Text(
-                chat.unreadCount.toString(),
-                style: TextStyle(color: Colors.white, fontSize: 10.resSp),
+            Container(
+              width: 25,
+              height: 25,
+              padding: const EdgeInsets.only(top: 3, right: 7, bottom: 3, left: 7),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12.5),
               ),
-              badgeStyle: pk_badges.BadgeStyle(
-                badgeColor: Colors.green, // Enforced WhatsApp aesthetic
-                padding: EdgeInsets.all(5.resW),
+              alignment: Alignment.center,
+              child: FittedBox(
+                child: Text(
+                  chat.unreadCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             )
           else
-            SizedBox(height: 16.resH),
+            SizedBox(height: 25),
         ],
       ),
     );

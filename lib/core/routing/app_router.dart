@@ -2,9 +2,6 @@ import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_sou
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.dart';
-import 'package:ciro_chat_app/features/status/presentation/pages/status_creation_screen.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_content_type.dart';
-import 'package:ciro_chat_app/features/status/domain/entities/status_entity.dart';
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
@@ -15,7 +12,6 @@ import 'package:ciro_chat_app/features/chat/presentation/pages/group_chat_screen
 import 'package:ciro_chat_app/features/contacts/presentation/pages/contacts_screen.dart';
 import 'package:ciro_chat_app/features/chat/domain/entities/chat_session.dart';
 import 'package:ciro_chat_app/features/splash/presentation/pages/splash_screen.dart';
-import 'package:ciro_chat_app/features/map/presentation/pages/map_screen.dart';
 import 'package:ciro_chat_app/features/map/presentation/pages/invite_to_share_location_page.dart';
 import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
@@ -26,6 +22,7 @@ import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/outgoing_call_screen.dart';
 import '../../features/video_call/presentation/pages/group_call_screen.dart';
+
 import '../../features/video_call/presentation/pages/incoming_group_call_screen.dart';
 import '../../features/video_call/presentation/pages/avatar_incoming_call_screen.dart';
 import '../../features/video_call/presentation/pages/avatar_active_call_screen.dart';
@@ -40,6 +37,39 @@ import '../../features/reels/presentation/pages/creator_profile_screen.dart';
 import '../../features/reels/presentation/pages/reel_capture_screen.dart';
 import '../../features/reels/presentation/pages/reels_feed_screen.dart';
 import '../../features/reels/presentation/pages/search_screen.dart';
+import '../../features/reels/presentation/pages/upload_reel_screen.dart';
+import '../../features/profile/presentation/pages/profile_main_screen.dart';
+import '../../features/profile/presentation/pages/qr_code_screen.dart';
+import '../../features/profile/presentation/pages/profile_info_screen.dart';
+import '../../features/profile/presentation/pages/appearance_screen.dart';
+import '../../features/profile/presentation/pages/chat_theme_preview_screen.dart';
+import '../../features/profile/presentation/pages/language_screen.dart';
+import '../../features/profile/presentation/pages/logout_screen.dart';
+import '../../features/profile/presentation/pages/invite_friend_screen.dart';
+import '../../features/profile/presentation/pages/invite_via_screen.dart';
+import '../../features/profile/presentation/pages/invite_link_screen.dart';
+import '../../features/profile/presentation/pages/notification_screen.dart';
+import '../../features/profile/presentation/pages/privacy_screen.dart';
+import '../../features/profile/presentation/pages/change_phone_number_screen.dart';
+import '../../features/profile/presentation/pages/verify_new_phone_number_screen.dart';
+import '../../features/profile/presentation/pages/billing_info_screen.dart';
+import '../../features/profile/presentation/pages/bank_account_screen.dart';
+import '../../features/profile/presentation/pages/payments_history_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_stepper_screen.dart';
+import '../../features/profile/presentation/pages/identity_verification_success_screen.dart';
+import '../../features/profile/presentation/pages/payments_method_screen.dart';
+import '../../features/profile/presentation/pages/add_new_card_screen.dart';
+import '../../features/profile/presentation/pages/add_apple_pay_screen.dart';
+import '../../features/profile/presentation/pages/add_google_pay_screen.dart';
+import '../../features/profile/presentation/pages/google_pay_success_screen.dart';
+import '../../features/profile/presentation/pages/help_feedback_screen.dart';
+import '../../features/profile/presentation/pages/contact_us_screen.dart';
+import '../../features/profile/presentation/pages/report_problem_screen.dart';
+import '../../features/profile/presentation/pages/faq_screen.dart';
+import '../../features/profile/presentation/pages/privacy_policy_screen.dart';
+import '../../features/profile/presentation/pages/terms_service_screen.dart';
+import '../../features/profile/presentation/pages/send_feedback_screen.dart';
 import '../di/injection.dart';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -75,6 +105,7 @@ class AppRouterName {
   static const String calls = '/calls';
   static const String profile = '/profile';
   static const String groupCall = '/group_call/:roomId';
+
   static const String incomingGroupCall = '/incoming_group_call';
   static const String avatarIncomingCall = '/avatar_incoming_call';
   static const String avatarActiveCall = '/avatar_active_call';
@@ -97,6 +128,44 @@ class AppRouterName {
   // paths above. The post-details step is not a route (the trimmer pushes it
   // directly), so there is no `/reels/upload`.
   static const String reelCapture = '/reels/capture';
+  // v3 (FR-060): declared before `/reels/:id` for the same reason as the
+  // other static 2-segment reels paths above.
+  static const String reelUpload = '/reels/upload';
+
+  static const String qrCode = '/profile/qr_code';
+  static const String profileInfo = '/profile/info';
+  static const String appearance = '/profile/appearance';
+  static const String chatThemePreview = '/profile/appearance/theme_preview';
+  static const String language = '/profile/language';
+  static const String logout = '/profile/logout';
+  static const String inviteFriend = '/profile/invite_friend';
+  static const String inviteVia = '/profile/invite_friend/via';
+  static const String inviteLink = '/profile/invite_friend/link';
+  static const String notifications = '/profile/notifications';
+  static const String privacy = '/profile/privacy';
+  static const String changePhone = '/profile/change_phone';
+  static const String verifyNewPhone = 'verify_new_phone';
+  static const String billingInfo = '/profile/billing_info';
+  static const String bankAccount = '/profile/bank_account';
+  static const String identityVerification = '/profile/identity_verification';
+  static const String identityVerificationStepper =
+      '/profile/identity_verification/stepper';
+  static const String identityVerificationSuccess =
+      '/profile/identity_verification/success';
+  static const String paymentsMethod = '/profile/payments_method';
+  static const String addNewCard = '/profile/payments_method/add_card';
+  static const String addApplePay = '/profile/payments_method/add_apple_pay';
+  static const String addGooglePay = '/profile/payments_method/add_google_pay';
+  static const String googlePaySuccess =
+      '/profile/payments_method/google_pay_success';
+  static const String paymentsHistory = '/profile/payments_history';
+  static const String helpFeedback = '/profile/help_feedback';
+  static const String contactUs = '/profile/help_feedback/contact_us';
+  static const String faq = '/profile/help_feedback/faq';
+  static const String reportProblem = '/profile/help_feedback/report_problem';
+  static const String sendFeedback = '/profile/help_feedback/send_feedback';
+  static const String privacyPolicy = '/profile/help_feedback/privacy_policy';
+  static const String termsService = '/profile/help_feedback/terms_service';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -381,6 +450,7 @@ final GoRouter appRouter = GoRouter(
         return OutgoingCallScreen(
           contactName: data['contactName'] as String? ?? 'Calling...',
           avatarUrl: data['avatarUrl'] as String? ?? '',
+          isVideoCall: data['isVideoCall'] as bool? ?? false,
         );
       },
     ),
@@ -431,6 +501,7 @@ final GoRouter appRouter = GoRouter(
         return GroupCallScreen(roomId: roomId);
       },
     ),
+
     GoRoute(
       path: AppRouterName.incomingGroupCall,
       pageBuilder: (context, state) {
@@ -622,6 +693,143 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.newContact,
       builder: (context, state) => const NewContactScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profile,
+      builder: (context, state) => const ProfileMainScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.qrCode,
+      builder: (context, state) => const QrCodeScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profileInfo,
+      builder: (context, state) => const ProfileInfoScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.appearance,
+      builder: (context, state) => const AppearanceScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.chatThemePreview,
+      builder: (context, state) => const ChatThemePreviewScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.language,
+      builder: (context, state) => const LanguageScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.logout,
+      builder: (context, state) => const LogoutScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteFriend,
+      builder: (context, state) => const InviteFriendScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteVia,
+      builder: (context, state) => const InviteViaScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.inviteLink,
+      builder: (context, state) => const InviteLinkScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.notifications,
+      builder: (context, state) => const NotificationScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.privacy,
+      builder: (context, state) => const PrivacyScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.changePhone,
+      builder: (context, state) => const ChangePhoneNumberScreen(),
+      routes: [
+        GoRoute(
+          path: AppRouterName.verifyNewPhone,
+          builder: (context, state) {
+            final phone = state.extra as String? ?? '';
+            return VerifyNewPhoneNumberScreen(phoneNumber: phone);
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: AppRouterName.billingInfo,
+      builder: (context, state) => const BillingInfoScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.bankAccount,
+      builder: (context, state) => const BankAccountScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.identityVerification,
+      builder: (context, state) => const IdentityVerificationScreen(),
+      routes: [
+        GoRoute(
+          path: 'stepper',
+          builder: (context, state) =>
+              const IdentityVerificationStepperScreen(),
+        ),
+        GoRoute(
+          path: 'success',
+          builder: (context, state) =>
+              const IdentityVerificationSuccessScreen(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: AppRouterName.paymentsMethod,
+      builder: (context, state) => const PaymentsMethodScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addNewCard,
+      builder: (context, state) => const AddNewCardScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addApplePay,
+      builder: (context, state) => const AddApplePayScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.addGooglePay,
+      builder: (context, state) => const AddGooglePayScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.googlePaySuccess,
+      builder: (context, state) => const GooglePaySuccessScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.paymentsHistory,
+      builder: (context, state) => const PaymentsHistoryScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.helpFeedback,
+      builder: (context, state) => const HelpFeedbackScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.contactUs,
+      builder: (context, state) => const ContactUsScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.faq,
+      builder: (context, state) => const FaqScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.reportProblem,
+      builder: (context, state) => const ReportProblemScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.sendFeedback,
+      builder: (context, state) => const SendFeedbackScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.privacyPolicy,
+      builder: (context, state) => const PrivacyPolicyScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.termsService,
+      builder: (context, state) => const TermsServiceScreen(),
     ),
   ],
 );

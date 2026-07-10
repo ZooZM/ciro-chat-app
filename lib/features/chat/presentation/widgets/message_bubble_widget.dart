@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ciro_chat_app/core/helpers/responsive.dart';
 import 'package:ciro_chat_app/core/utils/url_utils.dart';
@@ -108,9 +109,9 @@ class MessageBubbleWidget extends StatelessWidget {
     }
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(BuildContext context) {
     final formattedTime = DateFormat(
-      'hh:mm a',
+      'hh:mm a', context.locale.languageCode
     ).format(message.timestamp.toLocal());
     return Container(
       height: 19.resH,
@@ -326,68 +327,68 @@ class MessageBubbleWidget extends StatelessWidget {
         return _ImageBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.file:
         return _FileBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.voiceNote:
         return _VoiceBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.contact:
         return _ContactBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.location:
         return _LocationBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.audio:
         return _AudioBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.poll:
         return _PollBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.reelShare:
         return ReelShareBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.event:
         return _EventBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.video:
         return _VideoBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
       case MessageType.system:
       case MessageType.text:
         return _TextBubble(
           message: message,
           isMine: _isMine,
-          footer: _buildFooter(),
+          footer: _buildFooter(context),
         );
     }
   }

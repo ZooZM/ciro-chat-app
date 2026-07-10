@@ -244,8 +244,8 @@ void main() {
       },
       expect: () => const <TranslationState>[],
       verify: (cubit) {
-        expect(cubit.latestActiveCaption.value?.speakerId, 'sp2');
-        expect(cubit.latestActiveCaption.value?.text, 'from sp2');
+        expect(cubit.captionNotifier('sp2').value?.speakerId, 'sp2');
+        expect(cubit.captionNotifier('sp2').value?.text, 'from sp2');
       },
     );
   });
@@ -405,7 +405,6 @@ void main() {
         cubit.subscribe(speakerId: 'sp3', targetLanguage: 'en');
         onDenied?.call('sp3', 'insufficient_credits'); // denied — not live
 
-        final latestNotifier = cubit.latestActiveCaption;
         final sp1Notifier = cubit.captionNotifier('sp1');
 
         await cubit.close();
@@ -414,7 +413,6 @@ void main() {
         verify(() => repo.unsubscribe(roomId: 'room1', speakerId: 'sp2')).called(1);
         verifyNever(() => repo.unsubscribe(roomId: 'room1', speakerId: 'sp3'));
 
-        expect(() => latestNotifier.addListener(() {}), throwsFlutterError);
         expect(() => sp1Notifier.addListener(() {}), throwsFlutterError);
       },
     );

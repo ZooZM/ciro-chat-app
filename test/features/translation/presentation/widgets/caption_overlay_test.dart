@@ -73,7 +73,7 @@ void main() {
                 },
               ),
               CaptionOverlay(caption: cubit.captionNotifier('sp1')),
-              CaptionBanner(caption: cubit.latestActiveCaption, participants: const []),
+              CaptionBanner(caption: cubit.captionNotifier('sp1'), participants: const []),
             ],
           ),
         ),
@@ -110,9 +110,8 @@ void main() {
       // final — also drives the CaptionBanner fallback
       final finalCaption = caption(text: 'Hola mundo.', type: CaptionType.final_, seq: 3);
       cubit.captionNotifier('sp1').value = finalCaption;
-      cubit.latestActiveCaption.value = finalCaption;
       await tester.pump();
-      expect(find.text('Hola mundo.'), findsOneWidget); // CaptionOverlay
+      expect(find.text('Hola mundo.'), findsWidgets); // CaptionOverlay and CaptionBanner both have it
       expect(find.text('sp1: Hola mundo.'), findsOneWidget); // CaptionBanner
       expect(gridBuildCount, 1);
     },

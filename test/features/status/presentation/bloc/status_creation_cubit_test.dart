@@ -10,14 +10,17 @@ import 'package:fpdart/fpdart.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
+import 'package:ciro_chat_app/features/map/data/datasources/map_location_service.dart';
 
 class MockAuthCubit extends MockCubit<AuthState> implements AuthCubit {}
+class MockMapLocationService extends Mock implements MapLocationService {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockStatusRepository mockRepository;
   late MockAuthCubit mockAuthCubit;
+  late MockMapLocationService mockLocationService;
 
   const tDefaultAudience = [
     StatusAudienceContact(userId: 'contact-1', name: 'Alice', phoneNumber: '+1', avatarUrl: ''),
@@ -27,6 +30,7 @@ void main() {
   setUp(() {
     mockRepository = MockStatusRepository();
     mockAuthCubit = MockAuthCubit();
+    mockLocationService = MockMapLocationService();
     when(() => mockAuthCubit.state).thenReturn(
       const Authenticated(userData: {'name': 'Me', 'avatarUrl': 'me.png'}),
     );
@@ -37,6 +41,7 @@ void main() {
   StatusCreationCubit buildCubit() => StatusCreationCubit(
         statusRepository: mockRepository,
         authCubit: mockAuthCubit,
+        locationService: mockLocationService,
       );
 
   group('_updateDraft via copyWith (T053 regression)', () {

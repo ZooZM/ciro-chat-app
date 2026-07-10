@@ -147,6 +147,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
               localizationsDelegates: context.localizationDelegates,
               supportedLocales: context.supportedLocales,
               locale: context.locale,
+              // RTL support: Arabic uses RTL layout direction, which Flutter
+              // automatically derives from the locale via MaterialLocalizations.
+              // No explicit textDirection needed — Material handles it.
               theme: ThemeData.dark(useMaterial3: true),
               routerConfig: appRouter,
               debugShowCheckedModeBanner: false,
