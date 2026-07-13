@@ -2,11 +2,72 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
+import 'package:ciro_chat_app/core/routing/app_router.dart';
 import '../data/mock_profile_data.dart';
 
-class ProfileInfoScreen extends StatelessWidget {
+class ProfileInfoScreen extends StatefulWidget {
   const ProfileInfoScreen({super.key});
+
+  @override
+  State<ProfileInfoScreen> createState() => _ProfileInfoScreenState();
+}
+
+class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
+  late TextEditingController _nameController;
+  late TextEditingController _bioController;
+  late FocusNode _nameFocusNode;
+  late FocusNode _bioFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = MockProfileData.currentUser;
+    _nameController = TextEditingController(text: user.name);
+    _bioController = TextEditingController(text: user.bio);
+
+    _nameFocusNode = FocusNode();
+    _bioFocusNode = FocusNode();
+
+    _nameFocusNode.addListener(() {
+      if (_nameFocusNode.hasFocus) {
+        if (_nameController.text == user.name) {
+          _nameController.clear();
+          setState(() {});
+        }
+      } else {
+        if (_nameController.text.isEmpty) {
+          _nameController.text = user.name;
+          setState(() {});
+        }
+      }
+    });
+
+    _bioFocusNode.addListener(() {
+      if (_bioFocusNode.hasFocus) {
+        if (_bioController.text == user.bio) {
+          _bioController.clear();
+          setState(() {});
+        }
+      } else {
+        if (_bioController.text.isEmpty) {
+          _bioController.text = user.bio;
+          setState(() {});
+        }
+      }
+    });
+    
+    _nameController.addListener(() => setState(() {}));
+    _bioController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _bioController.dispose();
+    _nameFocusNode.dispose();
+    _bioFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +84,12 @@ class ProfileInfoScreen extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
+        leading: context.canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -63,7 +126,11 @@ class ProfileInfoScreen extends StatelessWidget {
             const SizedBox(height: 48),
             // TextFields
             TextField(
-              controller: TextEditingController(text: user.name),
+              controller: _nameController,
+              focusNode: _nameFocusNode,
+              style: TextStyle(
+                color: _nameController.text == user.name ? Colors.grey : Colors.black,
+              ),
               decoration: InputDecoration(
                 labelText: 'profile_name_hint'.tr(),
                 labelStyle: TextStyle(color: Colors.grey[800]),
@@ -84,7 +151,11 @@ class ProfileInfoScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             TextField(
-              controller: TextEditingController(text: user.bio),
+              controller: _bioController,
+              focusNode: _bioFocusNode,
+              style: TextStyle(
+                color: _bioController.text == user.bio ? Colors.grey : Colors.black,
+              ),
               decoration: InputDecoration(
                 labelText: 'profile_about_hint'.tr(),
                 labelStyle: TextStyle(color: Colors.grey[800]),
@@ -112,7 +183,9 @@ class ProfileInfoScreen extends StatelessWidget {
           child: SizedBox(
             height: 56,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                context.go(AppRouterName.profileVerificationWelcome);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 shape: RoundedRectangleBorder(

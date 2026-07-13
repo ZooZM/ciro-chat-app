@@ -73,117 +73,128 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           body: SafeArea(
             child: Padding(
               padding: EdgeInsets.all(AppConstants.defaultScreenPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(height: 64.resH), // Spacing from top
-                  // Header Title
-                  Text(
-                    'Verify code',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.headline1.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-
-                  SizedBox(height: 12.resH),
-
-                  // Subtitle Text Block
-                  RichText(
-                    textAlign: TextAlign.center,
-                    text: TextSpan(
-                      style: AppTypography.body1.copyWith(
-                        color: AppColors.textSecondary,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(height: 64.resH), // Spacing from top
+                            // Header Title
+                            Text(
+                              'Verify code',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.headline1.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black,
+                              ),
+                            ),
+          
+                            SizedBox(height: 12.resH),
+          
+                            // Subtitle Text Block
+                            RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                style: AppTypography.body1.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                                children: [
+                                  const TextSpan(
+                                    text: 'Please enter the code we just send to\n',
+                                  ),
+                                  TextSpan(
+                                    text: 'Phone number ',
+                                    style: AppTypography.body1.copyWith(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: widget.phoneNumber,
+                                    style: AppTypography.headline2.copyWith(
+                                      fontSize: AppTypography.body1.fontSize,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+          
+                            SizedBox(height: 48.resH),
+          
+                            // OTP Entry Field
+                            Pinput(
+                              length: 6,
+                              defaultPinTheme: defaultPinTheme,
+                              focusedPinTheme: focusedPinTheme,
+                              submittedPinTheme: defaultPinTheme,
+                              onChanged: (val) {
+                                setState(() {
+                                  _pin = val;
+                                });
+                              },
+                              onCompleted: (val) {
+                                _pin = val;
+                                _onVerify(); // Auto-verify
+                              },
+                              cursor: Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    margin: EdgeInsets.only(bottom: 16.resH),
+                                    width: 22.resW,
+                                    height: 2.resH,
+                                    color: AppColors.primary,
+                                  ),
+                                ],
+                              ),
+                            ),
+          
+                            SizedBox(height: 48.resH),
+          
+                            // Resend Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Didn’t receive code? ',
+                                  style: AppTypography.body1.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: isLoading ? null : _onResend,
+                                  child: Text(
+                                    'Resend code',
+                                    style: AppTypography.body1.copyWith(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+          
+                            const Spacer(),
+          
+                            // Primary Button
+                            PrimaryButton(
+                              isLoading: isLoading,
+                              onPressed: _onVerify,
+                              text: 'Verify',
+                            ),
+          
+                            SizedBox(height: 16.resH),
+                          ],
+                        ),
                       ),
-                      children: [
-                        const TextSpan(
-                          text: 'Please enter the code we just send to\n',
-                        ),
-                        TextSpan(
-                          text: 'Phone number ',
-                          style: AppTypography.body1.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        TextSpan(
-                          text: widget.phoneNumber,
-                          style: AppTypography.headline2.copyWith(
-                            fontSize: AppTypography.body1.fontSize,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
-
-                  SizedBox(height: 48.resH),
-
-                  // OTP Entry Field
-                  Pinput(
-                    length: 6,
-                    defaultPinTheme: defaultPinTheme,
-                    focusedPinTheme: focusedPinTheme,
-                    submittedPinTheme: defaultPinTheme,
-                    onChanged: (val) {
-                      setState(() {
-                        _pin = val;
-                      });
-                    },
-                    onCompleted: (val) {
-                      _pin = val;
-                      _onVerify(); // Auto-verify
-                    },
-                    cursor: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Container(
-                          margin: EdgeInsets.only(bottom: 16.resH),
-                          width: 22.resW,
-                          height: 2.resH,
-                          color: AppColors.primary,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: 48.resH),
-
-                  // Resend Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Didn’t receive code? ',
-                        style: AppTypography.body1.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: isLoading ? null : _onResend,
-                        child: Text(
-                          'Resend code',
-                          style: AppTypography.body1.copyWith(
-                            color: Colors.black,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const Spacer(),
-
-                  // Primary Button
-                  PrimaryButton(
-                    isLoading: isLoading,
-                    onPressed: _onVerify,
-                    text: 'Verify',
-                  ),
-
-                  SizedBox(height: 16.resH),
-                ],
+                  );
+                },
               ),
             ),
           ),

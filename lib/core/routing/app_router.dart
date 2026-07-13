@@ -5,6 +5,9 @@ import 'package:ciro_chat_app/features/status/presentation/pages/updates_screen.
 import 'package:ciro_chat_app/features/status/presentation/bloc/status_cubit.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/mobile_number_screen.dart';
 import 'package:ciro_chat_app/features/auth/presentation/pages/verify_code_screen.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/profile_verification_welcome_screen.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/profile_verification_flow_screen.dart';
+import 'package:ciro_chat_app/features/auth/presentation/pages/profile_verification_success_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_list_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/chat_room_screen.dart';
 import 'package:ciro_chat_app/features/chat/presentation/pages/create_group_page.dart';
@@ -90,6 +93,9 @@ class AppRouterName {
   static const String splash = '/splash';
   static const String auth = '/auth';
   static const String verify = 'verify';
+  static const String profileVerificationWelcome = '/profile/verification';
+  static const String profileVerificationFlow = '/profile/verification/flow';
+  static const String profileVerificationSuccess = '/profile/verification/success';
   static const String home = '/home';
   static const String createGroup = '/home/create_group';
   static const String chatRoom = '/chat_room';
@@ -303,7 +309,7 @@ final GoRouter appRouter = GoRouter(
         // restricted to /reels/ targets so this can't become an open redirect.
         final target = state.uri.queryParameters['redirect'];
         if (target != null && target.startsWith('/reels/')) return target;
-        return AppRouterName.home;
+        return AppRouterName.profileInfo;
       }
       return null;
     }
@@ -344,6 +350,18 @@ final GoRouter appRouter = GoRouter(
           },
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRouterName.profileVerificationWelcome,
+      builder: (context, state) => const ProfileVerificationWelcomeScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profileVerificationFlow,
+      builder: (context, state) => const ProfileVerificationFlowScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.profileVerificationSuccess,
+      builder: (context, state) => const ProfileVerificationSuccessScreen(),
     ),
     GoRoute(
       path: AppRouterName.home,
