@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -72,6 +74,28 @@ class CallKitServiceImpl implements CallKitService {
   /// duplicate/retried signals stacking two screens (E2 — FR idempotency).
   final Set<String> _activeIncoming = {};
 
+  /// CallKit is non-functional on the iOS Simulator: `showCallkitIncoming`
+  /// immediately fires a spurious `CallEventActionCallDecline` (no user action),
+  /// which would reject the call and tear it down on the caller too. Gate all
+  /// native calls behind "is this a physical device" so the app falls back to
+  /// its in-app call UI on the simulator. Resolved once, cached.
+  late final Future<bool> _callKitSupported = _resolveCallKitSupported();
+
+  Future<bool> _resolveCallKitSupported() async {
+    // Android emulators handle CallKit fine; only iOS simulators are broken.
+    if (!Platform.isIOS) return true;
+    try {
+      final info = await DeviceInfoPlugin().iosInfo;
+      if (!info.isPhysicalDevice) {
+        debugPrint('[CallKitService] iOS Simulator detected — CallKit disabled, using in-app UI.');
+      }
+      return info.isPhysicalDevice;
+    } catch (e) {
+      debugPrint('[CallKitService] device check failed, assuming CallKit supported: $e');
+      return true;
+    }
+  }
+
   CallKitServiceImpl() {
     _bindEvents();
   }
@@ -81,6 +105,7 @@ class CallKitServiceImpl implements CallKitService {
 
   void _bindEvents() {
     _eventSub = FlutterCallkitIncoming.onEvent.listen((event) {
+      debugPrint('[CallKitService] onEvent ${event.runtimeType}');
       switch (event) {
         case CallEventActionCallAccept(:final callKitParams):
           _controller.add(CallKitAccept(callKitParams.id));
@@ -103,7 +128,17 @@ class CallKitServiceImpl implements CallKitService {
         default:
           break;
       }
-    });
+    },
+      // flutter_callkit_incoming 3.1.3 throws a FormatException while decoding
+      // some native events (notably ACTION_CALL_TOGGLE_AUDIO_SESSION, whose
+      // `isActive` arrives null on iOS — the package even mislabels it "id is
+      // null"). Without this handler the throw surfaces as an unhandled zone
+      // exception on every call. We don't consume that event, so swallow &
+      // log — best-effort, never crash a call (Constitution §VII).
+      onError: (Object e, StackTrace st) {
+        debugPrint('[CallKitService] onEvent decode error (ignored): $e');
+      },
+    );
   }
 
   @override
@@ -113,6 +148,7 @@ class CallKitServiceImpl implements CallKitService {
     String? callerAvatarUrl,
     required bool isVideo,
   }) async {
+    if (!await _callKitSupported) return;
     // E2: a repeated event for an already-shown call is a no-op.
     if (_activeIncoming.contains(callId)) return;
     _activeIncoming.add(callId);
@@ -132,6 +168,7 @@ class CallKitServiceImpl implements CallKitService {
     required String calleeName,
     required bool isVideo,
   }) async {
+    if (!await _callKitSupported) return;
     try {
       await FlutterCallkitIncoming.startCall(
         buildCallKitParams(callId: callId, name: calleeName, isVideo: isVideo),
@@ -143,6 +180,7 @@ class CallKitServiceImpl implements CallKitService {
 
   @override
   Future<void> setConnected(String callId) async {
+    if (!await _callKitSupported) return;
     try {
       await FlutterCallkitIncoming.setCallConnected(callId);
     } catch (e) {
@@ -153,6 +191,7 @@ class CallKitServiceImpl implements CallKitService {
   @override
   Future<void> endCall(String callId) async {
     _activeIncoming.remove(callId);
+    if (!await _callKitSupported) return;
     try {
       await FlutterCallkitIncoming.endCall(callId);
     } catch (e) {
@@ -162,6 +201,7 @@ class CallKitServiceImpl implements CallKitService {
 
   @override
   Future<void> reportMute(String callId, bool muted) async {
+    if (!await _callKitSupported) return;
     try {
       await FlutterCallkitIncoming.muteCall(callId, isMuted: muted);
     } catch (e) {
@@ -172,6 +212,7 @@ class CallKitServiceImpl implements CallKitService {
   @override
   Future<void> endAllCalls() async {
     _activeIncoming.clear();
+    if (!await _callKitSupported) return;
     try {
       await FlutterCallkitIncoming.endAllCalls();
     } catch (e) {

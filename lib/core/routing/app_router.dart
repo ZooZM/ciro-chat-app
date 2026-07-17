@@ -1,3 +1,4 @@
+import 'package:livekit_client/livekit_client.dart' show Room;
 import 'package:ciro_chat_app/features/auth/data/datasources/auth_local_data_source.dart';
 import 'package:ciro_chat_app/features/auth/presentation/bloc/auth_cubit.dart';
 import 'package:ciro_chat_app/features/chat/presentation/bloc/chat_cubit.dart';
@@ -414,17 +415,29 @@ final GoRouter appRouter = GoRouter(
       path: AppRouterName.videoCall,
       pageBuilder: (context, state) {
         final data = state.extra as Map<String, dynamic>? ?? {};
+        final externalRoom = data['externalRoom'] as Room?;
+        final videoScreen = VideoCallScreen(
+          contactName: data['contactName'] as String? ?? 'Calling...',
+          livekitUrl: data['livekitUrl'] as String? ?? '',
+          livekitToken: data['livekitToken'] as String? ?? '',
+          externalRoom: externalRoom,
+          callStartedAt: data['callStartedAt'] as DateTime?,
+          roomName: data['roomName'] as String? ?? '',
+          startWithCamera: data['startWithCamera'] as bool? ?? true,
+        );
         return CustomTransitionPage(
           transitionDuration: const Duration(milliseconds: 500),
           reverseTransitionDuration: const Duration(milliseconds: 500),
-          child: Hero(
-            tag: 'call_screen_transition',
-            child: VideoCallScreen(
-              contactName: data['contactName'] as String? ?? 'Calling...',
-              livekitUrl: data['livekitUrl'] as String? ?? '',
-              livekitToken: data['livekitToken'] as String? ?? '',
-            ),
-          ),
+          // On a voice→video upgrade (externalRoom set) we replace the voice
+          // route, which already owns a 'call_screen_transition' Hero — wrapping
+          // this one in the same-tag Hero nests them and throws. Only use the
+          // shared-element Hero for a fresh incoming/outgoing → video call.
+          child: externalRoom != null
+              ? videoScreen
+              : Hero(
+                  tag: 'call_screen_transition',
+                  child: videoScreen,
+                ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
               position:
@@ -470,6 +483,9 @@ final GoRouter appRouter = GoRouter(
               livekitToken: data['livekitToken'] as String? ?? '',
               initialMicMuted: data['initialMicMuted'] as bool? ?? false,
               initialSpeakerOn: data['initialSpeakerOn'] as bool? ?? false,
+              externalRoom: data['externalRoom'] as Room?,
+              callStartedAt: data['callStartedAt'] as DateTime?,
+              roomName: data['roomName'] as String? ?? '',
             ),
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -498,7 +514,12 @@ final GoRouter appRouter = GoRouter(
       path: '/group_call/:roomId',
       builder: (context, state) {
         final roomId = state.pathParameters['roomId'] ?? '';
-        return GroupCallScreen(roomId: roomId);
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return GroupCallScreen(
+          roomId: roomId,
+          externalRoom: data['externalRoom'] as Room?,
+          callStartedAt: data['callStartedAt'] as DateTime?,
+        );
       },
     ),
 

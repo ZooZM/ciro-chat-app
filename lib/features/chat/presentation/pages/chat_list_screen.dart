@@ -69,7 +69,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
               backgroundColor: Colors.white,
               elevation: 0,
               titleSpacing: 0, // Shift the entire logo to the left
-              title: ChatListAppBar(),
+              title: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: ChatListAppBar(),
+              ),
               actions: [
                 Padding(
                   padding: EdgeInsets.only(right: 16.resW),
@@ -394,7 +397,6 @@ class ChatListAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     context.locale; // Subscribe to locale changes
     return Row(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // ── Bubble icon — left side of logo ─────────────────────────────

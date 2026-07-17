@@ -77,28 +77,15 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
         if (state is CallActive) {
-          final initials = state.contactName.isNotEmpty
-              ? (state.contactName.length >= 2
-                  ? state.contactName.substring(0, 2).toUpperCase()
-                  : state.contactName[0].toUpperCase())
-              : _initials;
-
-          if (state.isVideo) {
-            context.pushReplacement(AppRouterName.videoCall, extra: {
-              'contactName': state.contactName,
-              'livekitUrl': state.livekitUrl,
-              'livekitToken': state.livekitToken,
-            });
-          } else {
-            context.pushReplacement(AppRouterName.voiceCall, extra: {
-              'contactName': state.contactName,
-              'avatarInitials': initials,
-              'livekitUrl': state.livekitUrl,
-              'livekitToken': state.livekitToken,
-              'initialMicMuted': _isMicMuted,
-              'initialSpeakerOn': _isSpeakerOn,
-            });
-          }
+          // Both voice and video use VideoCallScreen for an identical UX; voice
+          // just starts with the camera off.
+          context.pushReplacement(AppRouterName.videoCall, extra: {
+            'contactName': state.contactName,
+            'livekitUrl': state.livekitUrl,
+            'livekitToken': state.livekitToken,
+            'roomName': state.chatRoomId,
+            'startWithCamera': state.isVideo,
+          });
         } else if (state is CallEnded || state is CallIdle) {
           if (state is CallEnded && state.reason == 'rejected') {
             ScaffoldMessenger.of(context).showSnackBar(

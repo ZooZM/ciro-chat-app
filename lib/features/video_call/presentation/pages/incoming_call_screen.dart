@@ -27,30 +27,17 @@ class IncomingCallScreen extends StatelessWidget {
     return BlocListener<CallCubit, CallState>(
       listener: (context, state) {
         if (state is CallActive) {
-          final initials = state.contactName.isNotEmpty 
-              ? (state.contactName.length >= 2 ? state.contactName.substring(0, 2).toUpperCase() : state.contactName[0].toUpperCase()) 
-              : 'AK';
-              
-          if (state.isVideo) {
-            context.pushReplacement(
-              AppRouterName.videoCall,
-              extra: {
-                'contactName': state.contactName,
-                'livekitUrl': state.livekitUrl,
-                'livekitToken': state.livekitToken,
-              },
-            );
-          } else {
-            context.pushReplacement(
-              AppRouterName.voiceCall,
-              extra: {
-                'contactName': state.contactName,
-                'avatarInitials': initials,
-                'livekitUrl': state.livekitUrl,
-                'livekitToken': state.livekitToken,
-              },
-            );
-          }
+          // Voice and video share VideoCallScreen; voice starts camera-off.
+          context.pushReplacement(
+            AppRouterName.videoCall,
+            extra: {
+              'contactName': state.contactName,
+              'livekitUrl': state.livekitUrl,
+              'livekitToken': state.livekitToken,
+              'roomName': state.chatRoomId,
+              'startWithCamera': state.isVideo,
+            },
+          );
         } else if (state is CallEnded || state is CallIdle) {
           Navigator.pop(context); // Fallback pop if completely dismissed
         }

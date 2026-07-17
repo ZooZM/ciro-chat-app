@@ -24,14 +24,24 @@ class ScreenShareTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF1A1A2E),
+      // Must be `decoration` (not `color`) when clipBehavior is set — Container
+      // asserts decoration != null for clipping.
+      decoration: const BoxDecoration(color: Color(0xFF1A1A2E)),
       clipBehavior: Clip.hardEdge,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Screen content (or connecting placeholder)
+          // Screen content (or connecting placeholder) — pinch to zoom & pan.
           videoTrack != null
-              ? VideoTrackRenderer(videoTrack!)
+              ? InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 5.0,
+                  clipBehavior: Clip.hardEdge,
+                  child: VideoTrackRenderer(
+                    videoTrack!,
+                    fit: VideoViewFit.contain,
+                  ),
+                )
               : const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

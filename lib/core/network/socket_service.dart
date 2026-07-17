@@ -77,6 +77,9 @@ class SocketService {
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onCallAccepted;
   void Function(Map<String, dynamic> data)? onCallRejected;
+  // Peer ended an established 1:1 call (backend `callEnded`). Without this the
+  // other side stays stuck on the call screen after the peer hangs up.
+  void Function(Map<String, dynamic> data)? onCallEnded;
   // 020-native-voip-callkit: incoming 1:1 call was answered/declined on another
   // device of the same user → suppress missed-call recording here (C2).
   void Function(Map<String, dynamic> data)? onCallHandledElsewhere;
@@ -289,6 +292,11 @@ class SocketService {
       debugPrint('[CALL] callRejected: $data');
       if (data == null || data is! Map) return;
       onCallRejected?.call(Map<String, dynamic>.from(data));
+    });
+
+    _socket?.on('callEnded', (data) {
+      debugPrint('[CALL] callEnded: $data');
+      onCallEnded?.call(data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{});
     });
 
     _socket?.on('callHandledElsewhere', (data) {

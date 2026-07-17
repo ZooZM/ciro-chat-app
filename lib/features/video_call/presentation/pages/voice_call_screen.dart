@@ -14,6 +14,7 @@ import 'package:ciro_chat_app/core/services/audio_route_service.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../bloc/call_cubit.dart';
 import '../widgets/audio_route_picker_sheet.dart';
+import '../widgets/minimized_call.dart';
 
 class VoiceCallScreen extends StatefulWidget {
   final String contactName;
@@ -23,6 +24,18 @@ class VoiceCallScreen extends StatefulWidget {
   final bool initialMicMuted;
   final bool initialSpeakerOn;
 
+  /// When restoring a minimized call, the already-connected room is handed back
+  /// here so we reuse the same session instead of opening a new one.
+  final Room? externalRoom;
+
+  /// The moment the call actually started, preserved across minimize/restore so
+  /// the timer keeps counting instead of resetting to 00:00.
+  final DateTime? callStartedAt;
+
+  /// LiveKit room name (`call_<a>_<b>` for 1:1) — used as the room id for live
+  /// translation and screen-share signaling.
+  final String roomName;
+
   const VoiceCallScreen({
     Key? key,
     required this.contactName,
@@ -31,6 +44,9 @@ class VoiceCallScreen extends StatefulWidget {
     required this.livekitToken,
     this.initialMicMuted = false,
     this.initialSpeakerOn = false,
+    this.externalRoom,
+    this.callStartedAt,
+    this.roomName = '',
   }) : super(key: key);
 
   @override
@@ -39,25 +55,57 @@ class VoiceCallScreen extends StatefulWidget {
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Room? _room;
+  EventsListener<RoomEvent>? _roomEventsListener;
   bool _isConnecting = true;
   late bool _isMicMuted;
-  bool _isCameraDisabled = true;
   bool _hasRemoteParticipantJoined = false;
   bool _isUpgrading = false;
+  // True while handing the room off to the floating minimized window — dispose
+  // must NOT disconnect the room in that case (mirrors _isUpgrading).
+  bool _isMinimizing = false;
   late final AudioRouteService _audioRoute = getIt<AudioRouteService>();
   StreamSubscription<AudioRouteState>? _routeSub;
   AudioRouteState _routeState = const AudioRouteState();
 
-  late final Stopwatch _callTimer;
+  late final DateTime _callStartedAt;
   Timer? _uiTimer;
 
-  // PIP offset
+  // PIP offset (top-left corner by default)
   Offset _pipOffset = const Offset(16, 110);
+
+  // Immersive mode: tap the screen to hide the top bar + bottom controls.
+  bool _controlsVisible = true;
+
+  static const double _pipW = 100;
+  static const double _pipH = 170;
+
+  void _toggleControls() =>
+      setState(() => _controlsVisible = !_controlsVisible);
+
+  /// Snaps the PIP to whichever of the four corners it is nearest, clear of the
+  /// top bar and bottom control bar. [c] is the Stack's real size.
+  void _snapPipToCorner(BoxConstraints c) {
+    final w = _pipW.resR;
+    final h = _pipH.resR;
+    final margin = 16.resW;
+    final leftX = margin;
+    final rightX = c.maxWidth - w - margin;
+    final topY = 100.resH; // below the top bar
+    final bottomY = c.maxHeight - h - 110.resH; // above the control bar
+    final centerX = _pipOffset.dx + w / 2;
+    final centerY = _pipOffset.dy + h / 2;
+    setState(() {
+      _pipOffset = Offset(
+        centerX < c.maxWidth / 2 ? leftX : rightX,
+        centerY < c.maxHeight / 2 ? topY : bottomY,
+      );
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _callTimer = Stopwatch()..start();
+    _callStartedAt = widget.callStartedAt ?? DateTime.now();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -66,8 +114,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       if (mounted) setState(() => _routeState = s);
     });
 
-    if (widget.livekitToken.trim().isEmpty ||
-        widget.livekitUrl.trim().isEmpty) {
+    if (widget.externalRoom == null &&
+        (widget.livekitToken.trim().isEmpty ||
+            widget.livekitUrl.trim().isEmpty)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).pop();
       });
@@ -76,16 +125,62 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _connectToRoom();
   }
 
+  /// Collapses the call into the floating minimized window and leaves this
+  /// screen. dispose() keeps the room alive (via [_isMinimizing]); the
+  /// controller owns it until restored or ended.
+  void _minimizeCall() {
+    final room = _room;
+    if (room == null) return;
+    setState(() => _isMinimizing = true);
+    MinimizedCallController.instance.minimize(
+      room: room,
+      contactName: widget.contactName,
+      isVideo: false,
+      livekitUrl: widget.livekitUrl,
+      livekitToken: widget.livekitToken,
+      startedAt: _callStartedAt,
+    );
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+  }
+
   Future<void> _connectToRoom() async {
     try {
-      await getIt<CallAudioSessionService>().configureForCall();
-      _room = Room(roomOptions: CallAudioConfig.roomOptions());
+      // Restore path: reuse the still-connected room handed back from the
+      // minimized floating window (audio + mic already live).
+      final reusing = widget.externalRoom != null;
+      if (reusing) {
+        _room = widget.externalRoom;
+        _isMicMuted =
+            !(_room!.localParticipant?.isMicrophoneEnabled() ?? true);
+      } else {
+        await getIt<CallAudioSessionService>().configureForCall();
+        _room = Room(roomOptions: CallAudioConfig.roomOptions());
+      }
       _room!.addListener(_onRoomUpdate);
 
-      await _room!.connect(widget.livekitUrl, widget.livekitToken);
+      if (!reusing) {
+        await _room!.connect(widget.livekitUrl, widget.livekitToken);
+      }
 
-      // Publish local audio with initial state
-      await _room!.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
+      // If the remote turns on their camera, follow them into the video UI so
+      // both sides see video (the Room ChangeNotifier doesn't reliably fire on
+      // remote track subscription, so listen explicitly).
+      _roomEventsListener = _room!.createListener();
+      _roomEventsListener!
+        ..on<TrackSubscribedEvent>((e) {
+          if (e.publication.source == TrackSource.camera) _upgradeToVideo();
+        })
+        ..on<TrackUnmutedEvent>((e) {
+          if (e.publication.source == TrackSource.camera &&
+              e.participant is RemoteParticipant) {
+            _upgradeToVideo();
+          }
+        });
+
+      // Publish local audio with initial state (already published when reusing).
+      if (!reusing) {
+        await _room!.localParticipant?.setMicrophoneEnabled(!_isMicMuted);
+      }
 
       // Default audio route: voice calls → earpiece, BT takes precedence
       // (FR-VoIP-10). Output-only — never touches the 019 audio session.
@@ -108,6 +203,29 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         );
       }
     }
+  }
+
+  /// Upgrades this voice call to the full video UI, reusing the live LiveKit
+  /// [Room]. `dispose()` checks [_isUpgrading] and skips disconnecting so the
+  /// session (and audio) survives the screen swap; the video screen enables the
+  /// camera. Safe to call repeatedly — guarded by [_isUpgrading].
+  Future<void> _upgradeToVideo() async {
+    if (_isUpgrading || _room == null || _isConnecting) return;
+    setState(() => _isUpgrading = true);
+    try {
+      await [Permission.camera].request();
+    } catch (_) {}
+    if (!mounted) return;
+    context.pushReplacement(
+      AppRouterName.videoCall,
+      extra: {
+        'contactName': widget.contactName,
+        'livekitUrl': widget.livekitUrl,
+        'livekitToken': widget.livekitToken,
+        'externalRoom': _room,
+        'callStartedAt': _callStartedAt,
+      },
+    );
   }
 
   void _onRoomUpdate() {
@@ -137,10 +255,12 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void dispose() {
     _uiTimer?.cancel();
-    _callTimer.stop();
     _room?.removeListener(_onRoomUpdate);
+    _roomEventsListener?.dispose();
     _routeSub?.cancel();
-    if (!_isUpgrading) {
+    // Keep the room alive when handing it to the video screen (upgrade) or the
+    // floating minimized window; otherwise tear it down.
+    if (!_isUpgrading && !_isMinimizing) {
       _room?.disconnect();
       getIt<CallAudioSessionService>().deactivate();
       _audioRoute.stop();
@@ -149,7 +269,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   String get _elapsedLabel {
-    final s = _callTimer.elapsed;
+    final s = DateTime.now().difference(_callStartedAt);
     final mm = s.inMinutes.remainder(60).toString().padLeft(2, '0');
     final ss = s.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mm:$ss';
@@ -172,14 +292,25 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFFEA4071), // Solid dark pink background
         body: SafeArea(
-          child: Stack(
+          child: LayoutBuilder(
+            builder: (context, constraints) => GestureDetector(
+              // Tap empty space to toggle immersive mode. Child controls (buttons,
+              // PIP) claim their own taps, so only background taps reach this.
+              onTap: _toggleControls,
+              behavior: HitTestBehavior.opaque,
+              child: Stack(
             children: [
               // Top Bar
               Positioned(
                 top: 16.resH,
                 left: 16.resW,
                 right: 16.resW,
-                child: Container(
+                child: IgnorePointer(
+                  ignoring: !_controlsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _controlsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    child: Container(
                   height: 72.resH,
                   padding: EdgeInsets.symmetric(horizontal: 12.resW),
                   decoration: BoxDecoration(
@@ -222,12 +353,6 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    Icons.chevron_left,
-                                    color: Colors.white,
-                                    size: 20.resR,
-                                  ),
-                                  SizedBox(width: 4.resW),
                                   Text(
                                     widget.contactName,
                                     style: AppTypography.subtitle1.copyWith(
@@ -260,14 +385,21 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                             ),
                           ),
                           SizedBox(width: 4.resW),
-                          Icon(
-                            Icons.keyboard_arrow_down,
-                            color: Colors.white,
-                            size: 24.resR,
+                          // Minimize the call into the floating window.
+                          GestureDetector(
+                            onTap: _minimizeCall,
+                            behavior: HitTestBehavior.opaque,
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                              size: 24.resR,
+                            ),
                           ),
                         ],
                       ),
                     ],
+                  ),
+                    ),
                   ),
                 ),
               ),
@@ -320,7 +452,12 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                 bottom: 24.resH,
                 left: 16.resW,
                 right: 16.resW,
-                child: ClipRRect(
+                child: IgnorePointer(
+                  ignoring: !_controlsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _controlsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    child: ClipRRect(
                   borderRadius: BorderRadius.circular(40.resR),
                   child: BackdropFilter(
                     filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
@@ -353,18 +490,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                             onTap: () => AudioRoutePickerSheet.show(context),
                           ),
                           _buildIconBtn(
-                            icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
-                            isActive: _isCameraDisabled,
-                            onTap: () async {
-                              try {
-                                final targetDisabled = !_isCameraDisabled;
-                                await [Permission.camera].request();
-                                await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
-                                setState(() => _isCameraDisabled = targetDisabled);
-                              } catch (e) {
-                                debugPrint('Failed to toggle camera: $e');
-                              }
-                            },
+                            // Turning on the camera upgrades the call to the
+                            // video UI (voice screen renders no video).
+                            icon: Icons.videocam,
+                            isActive: _isUpgrading,
+                            onTap: _upgradeToVideo,
                           ),
                           // End call button
                           GestureDetector(
@@ -387,30 +517,33 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                       ),
                     ),
                   ),
+                    ),
+                  ),
                 ),
               ),
 
-              // PIP Avatar (Left) - Placed last so it stays on top of everything
-              Positioned(
+              // PIP Avatar — draggable, snaps to the nearest corner on release.
+              // Placed last so it stays on top of everything.
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
                 left: _pipOffset.dx,
                 top: _pipOffset.dy,
                 child: GestureDetector(
                   onPanUpdate: (details) {
                     setState(() {
-                      final size = MediaQuery.of(context).size;
                       double newX = _pipOffset.dx + details.delta.dx;
                       double newY = _pipOffset.dy + details.delta.dy;
-                      
-                      // clamp to screen bounds
-                      newX = newX.clamp(0.0, size.width - 100.resR);
-                      newY = newY.clamp(0.0, size.height - 170.resR);
-                      
+                      // clamp to the Stack bounds
+                      newX = newX.clamp(0.0, constraints.maxWidth - _pipW.resR);
+                      newY = newY.clamp(0.0, constraints.maxHeight - _pipH.resR);
                       _pipOffset = Offset(newX, newY);
                     });
                   },
+                  onPanEnd: (_) => _snapPipToCorner(constraints),
                   child: Container(
-                    width: 100.resR,
-                    height: 170.resR,
+                    width: _pipW.resR,
+                    height: _pipH.resR,
                     decoration: BoxDecoration(
                       color: const Color(0xFFF35C8D),
                       borderRadius: BorderRadius.circular(24.resR),
@@ -429,6 +562,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                 ),
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),

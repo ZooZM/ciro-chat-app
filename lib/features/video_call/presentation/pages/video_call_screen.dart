@@ -17,19 +17,46 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
 import '../bloc/call_cubit.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../widgets/audio_route_picker_sheet.dart';
-import '../widgets/screen_share_toggle_sheet.dart';
+import '../widgets/minimized_call.dart';
+import '../widgets/call_more_options_sheet.dart';
+import '../../../translation/domain/entities/supported_languages.dart';
+import '../../../translation/domain/entities/translation_subscription.dart';
+import '../../../translation/presentation/bloc/translation_cubit.dart';
+import '../../../translation/presentation/widgets/translation_toggle_sheet.dart';
+import '../../../translation/presentation/widgets/subtitle_overlay_widget.dart';
 
 class VideoCallScreen extends StatefulWidget {
   final String contactName;
   final String livekitUrl;
   final String livekitToken;
 
+  /// When a voice call is upgraded to video, the already-connected LiveKit
+  /// [Room] is handed over here so we reuse the same session (same identity /
+  /// tracks) instead of opening a second connection.
+  final Room? externalRoom;
+
+  /// Call start time, preserved across minimize/restore so the timer continues.
+  final DateTime? callStartedAt;
+
+  /// LiveKit room name (`call_<a>_<b>` for 1:1) — used as the room id for live
+  /// translation and screen-share signaling.
+  final String roomName;
+
+  /// Voice calls reuse this screen with the camera off (audio-only). Enabling
+  /// the camera from the control bar turns it into a normal video call.
+  final bool startWithCamera;
+
   const VideoCallScreen({
     super.key,
     required this.contactName,
     required this.livekitUrl,
     required this.livekitToken,
+    this.externalRoom,
+    this.callStartedAt,
+    this.roomName = '',
+    this.startWithCamera = true,
   });
 
   @override
@@ -44,6 +71,21 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isCameraDisabled = false;
   bool _hasRemoteParticipantJoined = false;
   bool _isFrontCamera = true;
+  // True while handing the room off to the floating minimized window — dispose
+  // must NOT disconnect the room in that case.
+  bool _isMinimizing = false;
+
+  // Guards against disconnecting the LiveKit room twice (PopScope + dispose both
+  // fire when the peer ends the call), which double-completes the SDK's internal
+  // completer → "Bad state: Future already completed".
+  bool _roomDisconnected = false;
+  void _disconnectRoom() {
+    if (_roomDisconnected) return;
+    _roomDisconnected = true;
+    _room?.disconnect();
+  }
+  // Live translation (reuses the group-call subsystem for the 1:1 remote party).
+  late final TranslationCubit _translationCubit = getIt<TranslationCubit>();
   // Screen share
   StreamSubscription<CallSideEvent>? _sideEventSub;
   StreamSubscription<CallState>? _callStateSub;
@@ -55,11 +97,40 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   AudioRouteState _routeState = const AudioRouteState();
 
   // Timer
-  late final Stopwatch _callTimer;
+  late final DateTime _callStartedAt;
   Timer? _uiTimer;
 
   // PIP offset
   Offset _pipOffset = const Offset(16, 110);
+
+  // Immersive mode: tap the screen to hide the top bar + bottom controls.
+  bool _controlsVisible = true;
+
+  static const double _pipW = 100;
+  static const double _pipH = 170;
+
+  void _toggleControls() =>
+      setState(() => _controlsVisible = !_controlsVisible);
+
+  /// Snaps the PIP to whichever of the four corners it is nearest, clear of the
+  /// top bar and bottom control bar. [c] is the Stack's real size.
+  void _snapPipToCorner(BoxConstraints c) {
+    final w = _pipW.resR;
+    final h = _pipH.resR;
+    final margin = 16.resW;
+    final leftX = margin;
+    final rightX = c.maxWidth - w - margin;
+    final topY = 100.resH; // below the top bar
+    final bottomY = c.maxHeight - h - 110.resH; // above the control bar
+    final centerX = _pipOffset.dx + w / 2;
+    final centerY = _pipOffset.dy + h / 2;
+    setState(() {
+      _pipOffset = Offset(
+        centerX < c.maxWidth / 2 ? leftX : rightX,
+        centerY < c.maxHeight / 2 ? topY : bottomY,
+      );
+    });
+  }
 
   bool _isEmojiOpen = false;
   int _selectedFilterIndex = 0;
@@ -69,7 +140,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void initState() {
     super.initState();
     _filterPageController = PageController(viewportFraction: 0.22);
-    _callTimer = Stopwatch()..start();
+    _callStartedAt = widget.callStartedAt ?? DateTime.now();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -148,30 +219,121 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
       await cubit.stopScreenShare(localUserId: _localUserId, localUserName: _localUserName);
       return;
     }
-    final withAudio = await showModalBottomSheet<bool>(
-      context: ctx,
-      isScrollControlled: true,
-      builder: (_) => const ScreenShareToggleSheet(),
-    );
-    if (withAudio == null) return; // cancelled
+    // Only one participant may share at a time.
+    if (s is CallActive &&
+        s.activeSharerUserId.isNotEmpty &&
+        s.activeSharerUserId != _localUserId) {
+      if (mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('${s.activeSharerName} is already sharing')),
+        );
+      }
+      return;
+    }
+    // Start immediately, no audio (no toggle sheet).
     await cubit.startScreenShare(
-      withDeviceAudio: withAudio,
+      withDeviceAudio: false,
       localUserId: _localUserId,
       localUserName: _localUserName,
     );
   }
 
+  /// The ≡ More menu — Share Screen + Translate.
+  void _showMoreOptions() {
+    final s = context.read<CallCubit>().state;
+    final isSharing = s is CallActive && s.isLocallySharingScreen;
+    final isTranslating = _translationCubit.state.subscriptions.values
+        .any((x) => x.status != TranslationStatus.off);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetCtx) => CallMoreOptionsSheet(
+        title: widget.contactName,
+        isSharing: isSharing,
+        isTranslating: isTranslating,
+        onShareScreen: () {
+          Navigator.pop(sheetCtx);
+          _onScreenShareTap(context);
+        },
+        onTranslate: () {
+          Navigator.pop(sheetCtx);
+          _onTapTranslate();
+        },
+      ),
+    );
+  }
+
+  /// Opens [TranslationToggleSheet] for the 1:1 remote participant and applies
+  /// subscribe / changeLanguage / unsubscribe — same flow as group calls.
+  Future<void> _onTapTranslate() async {
+    final remote = _room?.remoteParticipants.values.firstOrNull;
+    if (remote == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No one to translate yet')),
+        );
+      }
+      return;
+    }
+    final speakerId = remote.identity;
+    final sub = _translationCubit.state.subscriptions[speakerId];
+    final isEnabled = sub != null && sub.status != TranslationStatus.off;
+    final initialLanguage = _translationCubit.resolveTargetLanguage(
+      speakerId,
+      deviceLanguageCode: context.locale.languageCode,
+      supportedLanguages: kSupportedTranslationLanguages,
+    );
+    final result = await showModalBottomSheet<TranslationToggleResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => TranslationToggleSheet(
+        isEnabled: isEnabled,
+        initialLanguage: initialLanguage,
+      ),
+    );
+    if (result == null || !mounted) return;
+    switch (result) {
+      case TranslationToggleOn(targetLanguage: final lang):
+        if (!isEnabled) {
+          _translationCubit.subscribe(speakerId: speakerId, targetLanguage: lang);
+        } else if (sub.targetLanguage != lang) {
+          _translationCubit.changeLanguage(
+              speakerId: speakerId, targetLanguage: lang);
+        }
+      case TranslationToggleOff():
+        if (isEnabled) _translationCubit.unsubscribe(speakerId);
+    }
+  }
+
   Future<void> _connectToRoom() async {
     try {
-      // Request permissions before connecting
-      await [Permission.camera, Permission.microphone].request();
+      // Upgrade path: reuse the voice call's already-connected room. The audio
+      // session + mic are already live from the voice screen, so only the
+      // camera permission is needed here.
+      final reusing = widget.externalRoom != null;
 
-      // Configure the OS voice-communication audio session BEFORE connecting
-      // (FR-Audio-01, SC-003).
-      await getIt<CallAudioSessionService>().configureForCall();
+      if (reusing) {
+        _room = widget.externalRoom;
+        // Preserve the mic + camera state carried over from the reused session.
+        _isMicMuted = !(_room!.localParticipant?.isMicrophoneEnabled() ?? true);
+        _isCameraDisabled =
+            !(_room!.localParticipant?.isCameraEnabled() ?? false);
+      } else {
+        // Request only what this call needs: camera+mic for video, mic-only for
+        // a voice call (camera can be enabled later from the control bar).
+        await (widget.startWithCamera
+                ? [Permission.camera, Permission.microphone]
+                : [Permission.microphone])
+            .request();
 
-      // useiOSBroadcastExtension routes flutter_webrtc to FlutterBroadcastScreenCapturer (socket) not FlutterRPScreenRecorder.
-      _room = Room(roomOptions: CallAudioConfig.roomOptions());
+        // Configure the OS voice-communication audio session BEFORE connecting
+        // (FR-Audio-01, SC-003).
+        await getIt<CallAudioSessionService>().configureForCall();
+
+        // useiOSBroadcastExtension routes flutter_webrtc to FlutterBroadcastScreenCapturer (socket) not FlutterRPScreenRecorder.
+        _room = Room(roomOptions: CallAudioConfig.roomOptions());
+      }
 
       // Listen to peer connection events native to the LiveKit Room!
       _room!.addListener(_onRoomUpdate);
@@ -201,23 +363,40 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
           if (mounted) setState(() {});
         });
 
-      await _room!.connect(widget.livekitUrl, widget.livekitToken);
+      // Skip connect when reusing the voice call's already-connected room.
+      if (!reusing) {
+        await _room!.connect(widget.livekitUrl, widget.livekitToken);
+      }
 
       // Register the room with the repository so screen-share cubit actions work
       getIt<VideoCallRepository>().setExternalRoom(_room!);
+
+      // Attach live translation to this room (no-op until the user enables it
+      // from the ≡ More menu). roomName is the 1:1 LiveKit room id.
+      if (widget.roomName.isNotEmpty) {
+        _translationCubit.attachRoom(_room!, roomId: widget.roomName);
+      }
 
       // Start the Android call foreground service so the OS doesn't suspend
       // mic/camera when the screen locks. No-op on iOS.
       getIt<VideoCallRepository>().setCallServiceActive(true);
 
-      // Publish local media tracks immediately upon connecting
-      await _room!.localParticipant?.setCameraEnabled(true);
-      await _room!.localParticipant?.setMicrophoneEnabled(true);
+      // Publish local media for a fresh call. When reusing, the tracks are
+      // already published — leave them (camera state preserved above).
+      if (!reusing) {
+        if (widget.startWithCamera) {
+          await _room!.localParticipant?.setCameraEnabled(true);
+          _isCameraDisabled = false;
+        } else {
+          _isCameraDisabled = true; // voice call — camera off
+        }
+        await _room!.localParticipant?.setMicrophoneEnabled(true);
+      }
 
-      // Video calls default to speakerphone; BT takes precedence (FR-VoIP-10).
+      // Video → speakerphone, voice → earpiece; BT takes precedence (FR-VoIP-10).
       // Output-only — never touches the 019 audio session.
       await _audioRoute.start();
-      await _audioRoute.applyDefaultForCall(isVideo: true);
+      await _audioRoute.applyDefaultForCall(isVideo: !_isCameraDisabled);
 
       if (mounted) {
         setState(() {
@@ -248,7 +427,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
         // 1. The remote participant was here and left (isEmpty + joined flag) OR
         // 2. The entire room connection itself dropped.
         if ((_room!.remoteParticipants.isEmpty && _hasRemoteParticipantJoined) || isDisconnected) {
-          _room?.disconnect();
+          _disconnectRoom();
           if (Navigator.of(context).canPop()) {
             Navigator.of(context).pop();
           }
@@ -263,22 +442,43 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   void dispose() {
     _filterPageController.dispose();
     _uiTimer?.cancel();
-    _callTimer.stop();
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _routeSub?.cancel();
     _roomEventsListener?.dispose();
-    getIt<VideoCallRepository>().setCallServiceActive(false);
-    getIt<VideoCallRepository>().setExternalRoom(null);
+    _translationCubit.detachRoom();
+    _translationCubit.close();
     _room?.removeListener(_onRoomUpdate);
-    _room?.disconnect();
-    getIt<CallAudioSessionService>().deactivate();
-    _audioRoute.stop();
+    // Keep the room alive when handing it to the floating minimized window.
+    if (!_isMinimizing) {
+      getIt<VideoCallRepository>().setCallServiceActive(false);
+      getIt<VideoCallRepository>().setExternalRoom(null);
+      _disconnectRoom();
+      getIt<CallAudioSessionService>().deactivate();
+      _audioRoute.stop();
+    }
     super.dispose();
   }
 
+  /// Collapses the call into the floating minimized window and leaves this
+  /// screen. dispose() keeps the room alive via [_isMinimizing].
+  void _minimizeCall() {
+    final room = _room;
+    if (room == null) return;
+    setState(() => _isMinimizing = true);
+    MinimizedCallController.instance.minimize(
+      room: room,
+      contactName: widget.contactName,
+      isVideo: true,
+      livekitUrl: widget.livekitUrl,
+      livekitToken: widget.livekitToken,
+      startedAt: _callStartedAt,
+    );
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+  }
+
   String get _elapsedLabel {
-    final s = _callTimer.elapsed;
+    final s = DateTime.now().difference(_callStartedAt);
     final mm = s.inMinutes.remainder(60).toString().padLeft(2, '0');
     final ss = s.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mm:$ss';
@@ -308,8 +508,9 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
-        if (didPop) return;
-        await _room?.disconnect();
+        // Skip while minimizing — the room must stay alive for the floating window.
+        if (didPop || _isMinimizing) return;
+        _disconnectRoom();
         if (context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
@@ -380,14 +581,28 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         ),
                 ),
                 SafeArea(
-                  child: Stack(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Stack(
                     children: [
+                      // Tap empty space to toggle immersive controls (child
+                      // buttons/PIP claim their own taps).
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onTap: _toggleControls,
+                          behavior: HitTestBehavior.opaque,
+                        ),
+                      ),
                       // Top Bar
                       Positioned(
                         top: 16.resH,
                         left: 16.resW,
                         right: 16.resW,
-                        child: Container(
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: AnimatedOpacity(
+                            opacity: _controlsVisible ? 1 : 0,
+                            duration: const Duration(milliseconds: 220),
+                            child: Container(
                           padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 12.resH),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.15),
@@ -396,9 +611,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                           child: Row(
                             children: [
                               GestureDetector(
-                                onTap: () {
-                                   if (context.canPop()) context.pop();
-                                },
+                                // Minimize the call into the floating window.
+                                onTap: _minimizeCall,
                                 child: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 28),
                               ),
                               SizedBox(width: 8.resW),
@@ -465,7 +679,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                               GestureDetector(
                                 onTap: () async {
                                   await context.read<CallCubit>().endCall();
-                                  await _room?.disconnect();
+                                  _disconnectRoom();
                                   if (context.mounted) context.go(AppRouterName.home);
                                 },
                                 child: Container(
@@ -485,25 +699,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             ],
                           ),
                         ),
+                          ),
+                        ),
                       ),
 
-                      Positioned(
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
                         left: _pipOffset.dx,
                         top: _pipOffset.dy,
                         child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onPanEnd: (_) => _snapPipToCorner(constraints),
                   onPanUpdate: (details) {
                     setState(() {
-                      final size = MediaQuery.of(context).size;
                       double newX = _pipOffset.dx + details.delta.dx;
                       double newY = _pipOffset.dy + details.delta.dy;
-                      
-                      final maxX = (size.width - 100.resR) > 0.0 ? (size.width - 100.resR) : 0.0;
-                      final maxY = (size.height - 170.resR) > 0.0 ? (size.height - 170.resR) : 0.0;
-                      
+
+                      final maxX = (constraints.maxWidth - _pipW.resR) > 0.0
+                          ? (constraints.maxWidth - _pipW.resR)
+                          : 0.0;
+                      final maxY = (constraints.maxHeight - _pipH.resR) > 0.0
+                          ? (constraints.maxHeight - _pipH.resR)
+                          : 0.0;
+
                       newX = newX.clamp(0.0, maxX);
                       newY = newY.clamp(0.0, maxY);
-                      
+
                       _pipOffset = Offset(newX, newY);
                     });
                   },
@@ -536,12 +758,32 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                         ),
                       ),
 
+                      // Live translation captions (subscribed via ≡ → Translate)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 130.resH,
+                        child: IgnorePointer(
+                          child: SubtitleOverlayWidget(
+                            transcript: _translationCubit.transcriptList,
+                            participants:
+                                _room?.remoteParticipants.values.toList() ??
+                                    const [],
+                          ),
+                        ),
+                      ),
+
                       // Bottom Controls & Filters
                       Positioned(
                         bottom: 24.resH,
                         left: 16.resW,
                         right: 16.resW,
-                        child: Column(
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: AnimatedOpacity(
+                            opacity: _controlsVisible ? 1 : 0,
+                            duration: const Duration(milliseconds: 220),
+                            child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             // Horizontal Filter Selection List
@@ -631,7 +873,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                         onTap: () async {
                                           try {
                                             final targetDisabled = !_isCameraDisabled;
+                                            // Enabling from a voice call: ensure camera permission,
+                                            // then switch output to speaker (video default).
+                                            if (!targetDisabled) {
+                                              await [Permission.camera].request();
+                                            }
                                             await _room!.localParticipant?.setCameraEnabled(!targetDisabled);
+                                            await _audioRoute.applyDefaultForCall(isVideo: !targetDisabled);
                                             setState(() => _isCameraDisabled = targetDisabled);
                                           } catch (e) {
                                             if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
@@ -686,7 +934,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                                       _buildIconBtn(
                                         icon: Icons.menu,
                                         isActive: false,
-                                        onTap: () {},
+                                        onTap: _showMoreOptions,
                                       ),
                                     ],
                                   ),
@@ -695,8 +943,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                             ),
                           ],
                         ),
+                          ),
+                        ),
                       ),
                     ],
+                  ),
                   ),
                 ),
               ],

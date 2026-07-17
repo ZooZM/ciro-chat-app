@@ -4,7 +4,10 @@ import OSLog
 let broadcastLogger = OSLog(subsystem: "com.cirochat.zeyad.ciroChat.ScreenShareBroadcast", category: "Broadcast")
 
 private enum Constants {
-    static let appGroupIdentifier = "group.com.cirochat.zeyad.shared"
+    // Must match the app group in Runner.entitlements / ScreenShareBroadcast.entitlements.
+    // A mismatch makes containerURL(forSecurityApplicationGroupIdentifier:) nil, so the
+    // broadcast socket never connects and shared frames never reach the app.
+    static let appGroupIdentifier = "group.com.cirochat.zeyad.chinaparts.shared"
 }
 
 class SampleHandler: RPBroadcastSampleHandler {

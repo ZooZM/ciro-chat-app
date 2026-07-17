@@ -30,35 +30,35 @@ class AppColors {
 
   // ── Backgrounds ───────────────────────────────────────────────────────────
 
-  static const Color background    = Color(0xFFF8F9FA);
-  static const Color surface       = Color(0xFFFFFFFF);
+  static const Color background = Color(0xFFF8F9FA);
+  static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceVariant = Color(0xFFF3F4F6);
 
   // ── Text ──────────────────────────────────────────────────────────────────
 
   /// High-emphasis text — headings, titles
-  static const Color textPrimary   = Color(0xFF1A1A1A);
+  static const Color textPrimary = Color(0xFF1A1A1A);
 
   /// Medium-emphasis — subtitles, helper text
   static const Color textSecondary = Color(0xFF757575);
 
   /// Low-emphasis — placeholders, disabled
-  static const Color textHint      = Color(0xFFBDBDBD);
+  static const Color textHint = Color(0xFFBDBDBD);
 
   // ── Semantic ──────────────────────────────────────────────────────────────
 
-  static const Color error   = Color(0xFFD32F2F);
+  static const Color error = Color(0xFFD32F2F);
   static const Color success = Color(0xFF388E3C);
   static const Color warning = Color(0xFFF57C00);
-  static const Color info    = Color(0xFF1976D2);
+  static const Color info = Color(0xFF1976D2);
 
   // ── UI Chrome ─────────────────────────────────────────────────────────────
 
   /// Dividers, border strokes
-  static const Color divider  = Color(0xFFE0E0E0);
+  static const Color divider = Color(0xFFE0E0E0);
 
   /// Input field borders in rest state
-  static const Color border   = Color(0xFFCCCCCC);
+  static const Color border = Color(0xFFCCCCCC);
 
   // ── Chat bubbles ──────────────────────────────────────────────────────────
 
@@ -66,5 +66,5 @@ class AppColors {
   static const Color bubbleOut = Color(0xFFDFFAC4);
 
   /// Incoming message bubble
-  static const Color bubbleIn  = Color(0xFFFFFFFF);
+  static const Color bubbleIn = Color(0xFFFFFFFF);
 }

@@ -9,6 +9,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:media_kit/media_kit.dart';
 import 'core/di/injection.dart';
 import 'core/network/socket_service.dart';
+import 'core/services/callkit_service.dart';
 import 'core/routing/app_router.dart';
 import 'core/bloc/app_bloc_observer.dart';
 import 'core/network/dio_client.dart';
@@ -38,6 +39,7 @@ void main() async {
   Bloc.observer = const AppBlocObserver();
 
   await configureDependencies();
+  await getIt<CallKitService>().endAllCalls();
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 

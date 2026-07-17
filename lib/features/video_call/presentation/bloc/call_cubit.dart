@@ -299,6 +299,7 @@ class CallCubit extends Cubit<CallState> {
   /// wrong socket event (e.g. `rejectCall` instead of `declineGroupCall`).
   void _bindCallKitActions() {
     _callKitSub = _callKit.actions.listen((action) {
+      debugPrint('[CallCubit] CallKit action ${action.runtimeType} while state=${state.runtimeType}');
       switch (action) {
         case CallKitAccept():
           final s = state;
@@ -381,7 +382,7 @@ class CallCubit extends Cubit<CallState> {
       final ctx = _ctx;
       if (ctx != null) {
         ctx.recorded = true; // suppress the missed-record path
-        _callKit.endCall(ctx.callId);
+        _endNativeCall();
         _ctx = null;
       }
       emit(const CallIdle());
@@ -389,8 +390,19 @@ class CallCubit extends Cubit<CallState> {
 
     // Both sides accepted — enter the LiveKit room (1-on-1 AND group path).
     _socketService.onCallAccepted = (data) {
-      _stopRinging();
       final s = state;
+
+      // Stale acceptance: we already canceled/ended this call before the remote
+      // answered (state is idle/ended). Without this guard we'd emit CallActive
+      // with a default 'Unknown' contact and get pulled into a dead call. Tell
+      // the backend to tear the remote down too, then ignore.
+      if (s is CallIdle || s is CallEnded) {
+        _socketService.endCall();
+        _endNativeCall();
+        return;
+      }
+
+      _stopRinging();
 
       // Group call path: caller gets token right away; acceptors get it via acceptGroupCall
       if (s is CallIncoming && s.isGroupCall ||
@@ -444,6 +456,10 @@ class CallCubit extends Cubit<CallState> {
         livekitUrl: data['livekitUrl'] as String? ?? AppConstants.liveKitWsUrl,
         contactName: contactName,
         isVideo: isVideo,
+        // Carry the LiveKit room name so 1:1 screens have a room id for live
+        // translation / screen-share signaling (empty for group here — group
+        // sets its own chatRoomId in the branch above).
+        chatRoomId: data['roomName'] as String? ?? '',
       ));
       // 1:1 connected → start the system call session so audio survives
       // backgrounding (FR-VoIP-03) and Recents duration begins (US2).
@@ -454,10 +470,26 @@ class CallCubit extends Cubit<CallState> {
     // Remote rejected our call
     _socketService.onCallRejected = (_) {
       _stopRinging();
-      final callId = _ctx?.callId;
       _recordHistory(CallOutcome.declined); // outgoing declined by remote
-      if (callId != null) _callKit.endCall(callId);
+      _endNativeCall();
       emit(const CallEnded(reason: 'rejected'));
+    };
+
+    // Peer hung up an established 1:1 call → tear down our side too. Previously
+    // unhandled, so the other device stayed stuck on the call screen with a
+    // lingering native CallKit call.
+    _socketService.onCallEnded = (_) {
+      final s = state;
+      // Only relevant to 1:1 calls; group teardown is driven by participantLeft.
+      if (s is CallActive && s.isGroupCall) return;
+      if (s is CallIdle || s is CallEnded) return;
+      _stopRinging();
+      final ctx = _ctx;
+      _recordHistory(
+        ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
+      );
+      _endNativeCall();
+      emit(const CallEnded(reason: 'ended'));
     };
 
     // ── Group call socket events ───────────────────────────────────────────────
@@ -611,9 +643,8 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallIncoming) return;
     _stopRinging();
-    final callId = _ctx?.callId;
     _recordHistory(CallOutcome.declined); // incoming declined locally
-    if (callId != null) _callKit.endCall(callId);
+    _endNativeCall();
     _socketService.rejectCall(callerId: s.callerId);
     emit(const CallEnded(reason: 'rejected'));
   }
@@ -649,11 +680,10 @@ class CallCubit extends Cubit<CallState> {
     _stopRinging();
     // Connected → answered; otherwise it never connected → missed.
     final ctx = _ctx;
-    final callId = ctx?.callId;
     await _recordHistory(
       ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
     );
-    if (callId != null) await _callKit.endCall(callId);
+    _endNativeCall();
     _socketService.endCall();
     emit(const CallIdle());
   }
@@ -720,9 +750,8 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallIncoming || !s.isGroupCall) return;
     _stopRinging();
-    final callId = _ctx?.callId;
     _recordHistory(CallOutcome.declined);
-    if (callId != null) _callKit.endCall(callId);
+    _endNativeCall();
     _socketService.declineGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallEnded(reason: 'rejected'));
   }
@@ -732,11 +761,10 @@ class CallCubit extends Cubit<CallState> {
     final s = state;
     if (s is! CallActive || !s.isGroupCall) return;
     await _tearDownLocalScreenShare();
-    final callId = _ctx?.callId;
     await _recordHistory(
       _ctx?.connectedAt != null ? CallOutcome.answered : CallOutcome.missed,
     );
-    if (callId != null) await _callKit.endCall(callId);
+    _endNativeCall();
     _socketService.leaveGroupCall(chatRoomId: s.chatRoomId);
     emit(const CallIdle());
   }
@@ -893,6 +921,14 @@ class CallCubit extends Cubit<CallState> {
   void _stopRinging() {
     _audioPlayer.stop().ignore();
   }
+
+  /// Robustly dismisses the native (CallKit) call on any terminal transition.
+  /// The app is single-call (CallKitParams maximumCallGroups: 1), so ending all
+  /// reliably clears the native UI even when a per-callId `endCall` is a no-op —
+  /// e.g. the caller and callee generate different callIds (the backend does not
+  /// broadcast a shared one), so the id we hold may not match what CallKit shows.
+  /// This prevents a call that "won't end" natively and ghost calls on relaunch.
+  void _endNativeCall() => _callKit.endAllCalls();
 
   @override
   Future<void> close() {

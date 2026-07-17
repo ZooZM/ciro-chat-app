@@ -18,7 +18,9 @@ import '../../../auth/presentation/bloc/auth_cubit.dart';
 import '../../domain/repositories/video_call_repository.dart';
 import '../widgets/audio_route_picker_sheet.dart';
 import '../widgets/screen_share_tile.dart';
-import '../widgets/screen_share_toggle_sheet.dart';
+import '../widgets/minimized_call.dart';
+import '../widgets/call_more_options_sheet.dart';
+import '../../../chat/data/datasources/chat_local_data_source.dart';
 import '../../../call_recording/presentation/bloc/call_recording_cubit.dart';
 import '../../../translation/domain/entities/caption.dart';
 import '../../../translation/domain/entities/supported_languages.dart';
@@ -50,7 +52,20 @@ const _kTileColors = [
 /// Full-screen group voice/video call screen backed by LiveKit.
 class GroupCallScreen extends StatefulWidget {
   final String roomId;
-  const GroupCallScreen({super.key, required this.roomId});
+
+  /// When restoring a minimized group call, the already-connected room is handed
+  /// back here so we reuse the same session instead of reconnecting.
+  final Room? externalRoom;
+
+  /// Preserved call start time so the timer keeps counting across minimize.
+  final DateTime? callStartedAt;
+
+  const GroupCallScreen({
+    super.key,
+    required this.roomId,
+    this.externalRoom,
+    this.callStartedAt,
+  });
 
   @override
   State<GroupCallScreen> createState() => _GroupCallScreenState();
@@ -59,6 +74,8 @@ class GroupCallScreen extends StatefulWidget {
 class _GroupCallScreenState extends State<GroupCallScreen> {
   Room? _room;
   EventsListener<RoomEvent>? _roomEventsListener;
+  // Resolved group display name (falls back to roomId until loaded).
+  String _groupName = '';
   bool _isConnecting = true;
   bool _isMicMuted = false;
   bool _isCameraDisabled = true; // voice call: camera off by default
@@ -77,9 +94,47 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   StreamSubscription<AudioRouteState>? _routeSub;
   AudioRouteState _routeState = const AudioRouteState();
 
-  // Timer
-  late final Stopwatch _callTimer;
+  // Timer — a persistent start time so it survives minimize/restore.
+  late final DateTime _callStartedAt;
   Timer? _uiTimer;
+
+  // Immersive mode: tap the screen to hide the top bar + bottom controls
+  // (matches the 1:1 video call screen).
+  bool _controlsVisible = true;
+  bool _isEmojiOpen = false;
+  bool _isMinimizing = false;
+  void _toggleControls() =>
+      setState(() => _controlsVisible = !_controlsVisible);
+
+  // Idempotent room teardown — `_endCall`, the CallEnded listener, and dispose
+  // can all fire for the same end; disconnecting the LiveKit room twice
+  // double-completes the SDK's completer → "Future already completed".
+  bool _roomDisconnected = false;
+  void _disconnectRoom() {
+    if (_roomDisconnected) return;
+    _roomDisconnected = true;
+    _room?.disconnect();
+  }
+
+  // Local "You" tile floats as a draggable, corner-snapping PIP (like 1:1).
+  Offset _pipOffset = const Offset(16, 130);
+  static const double _pipW = 110;
+  static const double _pipH = 150;
+
+  void _snapPipToCorner(Size size) {
+    final leftX = 16.resW;
+    final rightX = size.width - _pipW.resR - 16.resW;
+    final topY = 130.resH; // below the status bar + top bar
+    final bottomY = size.height - _pipH.resR - 130.resH; // above the control bar
+    final centerX = _pipOffset.dx + _pipW.resR / 2;
+    final centerY = _pipOffset.dy + _pipH.resR / 2;
+    setState(() {
+      _pipOffset = Offset(
+        centerX < size.width / 2 ? leftX : rightX,
+        centerY < size.height / 2 ? topY : bottomY,
+      );
+    });
+  }
 
   // Live translation captions (015-live-translation-captions)
   late final TranslationCubit _translationCubit;
@@ -93,10 +148,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   void initState() {
     super.initState();
     _translationCubit = getIt<TranslationCubit>();
-    _callTimer = Stopwatch()..start();
+    _callStartedAt = widget.callStartedAt ?? DateTime.now();
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+
+    // Resolve the group's display name from the local chat session.
+    getIt<ChatLocalDataSource>().getRoomById(widget.roomId).then((session) {
+      final name = session?.name ?? '';
+      if (mounted && name.isNotEmpty) setState(() => _groupName = name);
+    }).catchError((_) {});
 
     final authState = getIt<AuthCubit>().state;
     if (authState is Authenticated) {
@@ -161,6 +222,17 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   void _connectFromCubitState() {
     final s = context.read<CallCubit>().state;
+    // Restore path: reuse the room handed back from the minimized window.
+    if (widget.externalRoom != null) {
+      _connectToRoom(
+        '',
+        '',
+        isVideo: false,
+        chatRoomId: s is CallActive ? s.chatRoomId : widget.roomId,
+        reuseRoom: widget.externalRoom,
+      );
+      return;
+    }
     if (s is CallActive && s.isGroupCall) {
       _connectToRoom(
         s.livekitUrl,
@@ -181,16 +253,26 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     String token, {
     bool isVideo = false,
     required String chatRoomId,
+    Room? reuseRoom,
   }) async {
     try {
-      await PermissionService.requestSingle(Permission.microphone);
-      if (isVideo) await PermissionService.requestSingle(Permission.camera);
+      final reusing = reuseRoom != null;
+      if (reusing) {
+        // Restore from the minimized window — the room is already connected.
+        _room = reuseRoom;
+        _isMicMuted = !(_room!.localParticipant?.isMicrophoneEnabled() ?? true);
+        _isCameraDisabled =
+            !(_room!.localParticipant?.isCameraEnabled() ?? false);
+      } else {
+        await PermissionService.requestSingle(Permission.microphone);
+        if (isVideo) await PermissionService.requestSingle(Permission.camera);
 
-      // Configure the OS voice-communication audio session BEFORE connecting
-      // (FR-Audio-01, SC-003).
-      await getIt<CallAudioSessionService>().configureForCall();
+        // Configure the OS voice-communication audio session BEFORE connecting
+        // (FR-Audio-01, SC-003).
+        await getIt<CallAudioSessionService>().configureForCall();
 
-      _room = Room(roomOptions: CallAudioConfig.roomOptions());
+        _room = Room(roomOptions: CallAudioConfig.roomOptions());
+      }
       _room!.addListener(_onRoomUpdate);
 
       _roomEventsListener = _room!.createListener()
@@ -210,9 +292,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           _translationCubit.removeSpeaker(event.participant.identity);
         });
 
-      await _room!.connect(url, token);
+      if (!reusing) {
+        await _room!.connect(url, token);
+      }
       debugPrint(
-        '[GroupCallScreen] Room connected. Calling attachRoom with roomId: $chatRoomId',
+        '[GroupCallScreen] Room ${reusing ? 'reused' : 'connected'}. Calling attachRoom with roomId: $chatRoomId',
       );
       _translationCubit.attachRoom(_room!, roomId: chatRoomId);
       debugPrint(
@@ -230,9 +314,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       getIt<VideoCallRepository>().setExternalRoom(_room!);
       // Keep the WebRTC connection alive when the screen locks (Android).
       getIt<VideoCallRepository>().setCallServiceActive(true);
-      await _room!.localParticipant?.setCameraEnabled(isVideo);
-      await _room!.localParticipant?.setMicrophoneEnabled(true);
-      if (isVideo) await _room!.localParticipant?.setCameraEnabled(true);
+      if (!reusing) {
+        await _room!.localParticipant?.setMicrophoneEnabled(true);
+        if (isVideo) await _room!.localParticipant?.setCameraEnabled(true);
+      }
 
       // Default audio route: BT takes precedence, else video→speaker /
       // voice→earpiece (FR-VoIP-10). Output-only — never touches the 019
@@ -241,12 +326,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         if (mounted) setState(() => _routeState = s);
       });
       await _audioRoute.start();
-      await _audioRoute.applyDefaultForCall(isVideo: isVideo);
+      await _audioRoute.applyDefaultForCall(isVideo: !_isCameraDisabled);
 
       if (mounted) {
         setState(() {
           _isConnecting = false;
-          _isCameraDisabled = !isVideo;
+          if (!reusing) _isCameraDisabled = !isVideo;
         });
       }
     } catch (e) {
@@ -270,7 +355,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final canPop = context.canPop();
     if (recCubit.state is RecordingActive) await recCubit.stop();
     await callCubit.leaveGroupCall();
-    await _room?.disconnect();
+    _disconnectRoom();
     if (mounted) {
       if (canPop) {
         try {
@@ -287,27 +372,47 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   @override
   void dispose() {
     _uiTimer?.cancel();
-    _callTimer.stop();
     _sideEventSub?.cancel();
     _callStateSub?.cancel();
     _routeSub?.cancel();
     _roomEventsListener?.dispose();
     _rawDataDebugSub?.call();
-    _translationCubit.detachRoom();
-    _translationCubit.close();
-    getIt<VideoCallRepository>().setCallServiceActive(false);
-    getIt<VideoCallRepository>().setExternalRoom(null);
     _room?.removeListener(_onRoomUpdate);
-    _room?.disconnect();
-    getIt<CallAudioSessionService>().deactivate();
-    _audioRoute.stop();
+    // Keep the room + translation alive when handing off to the minimized window.
+    if (!_isMinimizing) {
+      _translationCubit.detachRoom();
+      _translationCubit.close();
+      getIt<VideoCallRepository>().setCallServiceActive(false);
+      getIt<VideoCallRepository>().setExternalRoom(null);
+      _disconnectRoom();
+      getIt<CallAudioSessionService>().deactivate();
+      _audioRoute.stop();
+    }
     super.dispose();
+  }
+
+  /// Collapses the group call into the floating minimized window; dispose keeps
+  /// the room alive via [_isMinimizing]. Restores back into the group screen.
+  void _minimizeCall() {
+    final room = _room;
+    if (room == null) return;
+    setState(() => _isMinimizing = true);
+    MinimizedCallController.instance.minimize(
+      room: room,
+      contactName: _groupName.isNotEmpty ? _groupName : 'Group Call',
+      isVideo: true,
+      livekitUrl: '',
+      livekitToken: '',
+      startedAt: _callStartedAt,
+      groupRoomId: widget.roomId,
+    );
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   String get _elapsedLabel {
-    final s = _callTimer.elapsed;
+    final s = DateTime.now().difference(_callStartedAt);
     final mm = s.inMinutes.remainder(60).toString().padLeft(2, '0');
     final ss = s.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mm:$ss';
@@ -326,21 +431,19 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               if (state is CallIdle || state is CallEnded) {
                 final router = GoRouter.of(context);
                 final canPop = context.canPop();
-                _room?.disconnect().then((_) {
-                  if (!mounted) return;
-                  // _endCall and this listener can both fire for the same CallIdle —
-                  // whichever pops second hits "nothing to pop". Guard with try/catch
-                  // and fall back to /home if the stack has already unwound.
-                  if (canPop) {
-                    try {
-                      router.pop();
-                    } catch (_) {
-                      router.go('/home');
-                    }
-                  } else {
+                _disconnectRoom();
+                // _endCall and this listener can both fire for the same CallIdle —
+                // whichever pops second hits "nothing to pop". Guard with try/catch
+                // and fall back to /home if the stack has already unwound.
+                if (canPop) {
+                  try {
+                    router.pop();
+                  } catch (_) {
                     router.go('/home');
                   }
-                });
+                } else {
+                  router.go('/home');
+                }
               }
             },
           ),
@@ -405,7 +508,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         final callActive = state is CallActive && state.isGroupCall;
         final isRecording = callActive && state.recordingState.isRecording;
         final isSharing = callActive && state.isLocallySharingScreen;
-        final groupName = callActive ? (state.chatRoomId) : widget.roomId;
+        // Prefer the resolved group name; fall back to a generic label rather
+        // than exposing the raw room id.
+        final groupName = _groupName.isNotEmpty ? _groupName : 'Group Call';
 
         final remoteParticipants =
             _room?.remoteParticipants.values.toList() ?? [];
@@ -453,7 +558,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
         final isWaiting = remoteParticipants.isEmpty && !isSharing;
 
-        return Stack(
+        // Parent GestureDetector: taps on empty video toggle the controls, while
+        // child buttons (CC on tiles, top/bottom bar, PIP) win their own taps via
+        // the gesture arena. (A sibling tap layer would steal the CC taps.)
+        return GestureDetector(
+          onTap: _toggleControls,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
           children: [
             Positioned.fill(
               child: isWaiting
@@ -474,33 +585,80 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
               left: 0,
               right: 0,
               bottom: 100, // Above controls
-              child: SubtitleOverlayWidget(
-                transcript: _translationCubit.transcriptList,
-                participants: remoteParticipants,
+              child: IgnorePointer(
+                child: SubtitleOverlayWidget(
+                  transcript: _translationCubit.transcriptList,
+                  participants: remoteParticipants,
+                ),
               ),
             ),
             Positioned(
               top: MediaQuery.of(context).padding.top,
               left: 0,
               right: 0,
-              child: _buildHeader(
-                groupName: groupName,
-                isWaiting: isWaiting,
-                participantCount: participantCount,
-                isRecording: isRecording,
-                isSharing: isSharing,
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: _buildHeader(
+                    groupName: groupName,
+                    isWaiting: isWaiting,
+                    participantCount: participantCount,
+                    isRecording: isRecording,
+                    isSharing: isSharing,
+                  ),
+                ),
               ),
             ),
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              child: SafeArea(
-                top: false,
-                child: _buildControls(isSharing: isSharing),
+              child: IgnorePointer(
+                ignoring: !_controlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: SafeArea(
+                    top: false,
+                    child: _buildControls(isSharing: isSharing),
+                  ),
+                ),
               ),
             ),
+            // Local "You" — draggable, corner-snapping floating PIP (like 1:1).
+            if (!isWaiting)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                left: _pipOffset.dx,
+                top: _pipOffset.dy,
+                child: GestureDetector(
+                  onPanUpdate: (d) {
+                    final size = MediaQuery.of(context).size;
+                    setState(() {
+                      _pipOffset = Offset(
+                        (_pipOffset.dx + d.delta.dx)
+                            .clamp(0.0, size.width - _pipW.resR),
+                        (_pipOffset.dy + d.delta.dy)
+                            .clamp(0.0, size.height - _pipH.resR),
+                      );
+                    });
+                  },
+                  onPanEnd: (_) => _snapPipToCorner(MediaQuery.of(context).size),
+                  child: SizedBox(
+                    width: _pipW.resR,
+                    height: _pipH.resR,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16.resR),
+                      child: _buildLocalTile(),
+                    ),
+                  ),
+                ),
+              ),
           ],
+          ),
         );
       },
     );
@@ -515,100 +673,98 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     required bool isRecording,
     required bool isSharing,
   }) {
+    final displayName = groupName.isNotEmpty ? groupName : 'Group Call';
+    final subtitle = isWaiting
+        ? 'call_waiting_to_join'.tr()
+        : '$_elapsedLabel · ${'call_participants_count'.tr(namedArgs: {'count': '$participantCount'})}';
+    // Same top bar as the 1:1 video screen: minimize · avatar · name/subtitle ·
+    // (REC) · speaker · end.
     return Padding(
-      padding: EdgeInsets.only(
-        top: 24.resH,
-        bottom: 12.resH,
-        left: 16.resW,
-        right: 16.resW,
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                groupName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
+      padding: EdgeInsets.only(top: 16.resH, left: 16.resW, right: 16.resW),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.resW, vertical: 12.resH),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: _minimizeCall,
+              child: const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.white, size: 28),
+            ),
+            SizedBox(width: 8.resW),
+            CircleAvatar(
+              radius: 20.resW,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              child: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white),
               ),
-              SizedBox(height: 4.resH),
-              if (isWaiting)
-                Text(
-                  'call_waiting_to_join'.tr(),
-                  style: const TextStyle(
-                    color: Color(0xFFCCCCCC),
-                    fontSize: 14,
+            ),
+            SizedBox(width: 12.resW),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    displayName,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16.resSp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  textAlign: TextAlign.center,
-                )
-              else ...[
-                Text(
-                  _elapsedLabel,
-                  style: const TextStyle(
-                    color: Color(0xFFCCCCCC),
-                    fontSize: 14,
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: Colors.white70, fontSize: 13.resSp),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                SizedBox(height: 2.resH),
-                Text(
-                  'call_participants_count'.tr(
-                    namedArgs: {'count': '$participantCount'},
-                  ),
-                  style: const TextStyle(
-                    color: Color(0xFFCCCCCC),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+                ],
+              ),
+            ),
+            if (isRecording) ...[
+              const _RecordingBanner(),
+              SizedBox(width: 8.resW),
             ],
-          ),
-          // REC badge (top-right)
-          if (isRecording)
-            Positioned(right: 0, top: 0, child: const _RecordingBanner()),
-          // Screen-share banner
-          if (isSharing)
-            Positioned(
-              right: 0,
-              top: 0,
-              child: GestureDetector(
-                onTap: () => context.read<CallCubit>().stopScreenShare(
-                  localUserId: _localUserId,
-                  localUserName: _localUserName,
+            // Speaker Button
+            GestureDetector(
+              onTap: () => AudioRoutePickerSheet.show(context),
+              child: Container(
+                width: 44.resW,
+                height: 44.resW,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
                 ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade700,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.stop_screen_share,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Stop',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  speakerIconForRoute(_routeState.activeRoute),
+                  color: Colors.white,
+                  size: 22.resW,
                 ),
               ),
             ),
-        ],
+            SizedBox(width: 8.resW),
+            // End Call Button
+            GestureDetector(
+              onTap: _endCall,
+              child: Container(
+                width: 44.resW,
+                height: 44.resW,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE53935),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.call_end, color: Colors.white, size: 22.resW),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -640,31 +796,38 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     required bool isSharing,
     required VideoTrack? localShareTrack,
   }) {
+    // Grid holds only REMOTE participants — the local "You" tile floats as a
+    // draggable PIP (added in _buildCallBody), like the 1:1 video screen.
+
+    // Sharer's view: "You're sharing your screen!" with participants as PIPs.
+    if (isSharing) {
+      return _buildLocalSharingLayout(remoteParticipants);
+    }
+
+    // Viewer's view: a remote is sharing → show their screen prominently with
+    // participants as a PIP strip along the bottom (mirrors the sharer's view).
+    if (showRemoteTile) {
+      return _buildRemoteSharingLayout(
+        remoteParticipants,
+        remoteShareTrack: remoteShareTrack,
+        remoteSharerName: remoteSharerName,
+        remoteSharerUserId: remoteSharerUserId,
+        remoteSharerHasAudio: remoteSharerHasAudio,
+        isMutedLocally: isMutedLocally,
+      );
+    }
+
     final all = <Widget>[];
-    
+
     for (int i = 0; i < remoteParticipants.length; i++) {
       all.add(_buildRemoteTile(remoteParticipants[i], i));
-    }
-    all.add(_buildLocalTile());
-    
-    if (showRemoteTile) {
-      all.add(ScreenShareTile(
-        videoTrack: remoteShareTrack,
-        participantName: remoteSharerName,
-        hasAudio: remoteSharerHasAudio,
-        isMutedLocally: isMutedLocally,
-        onMuteToggle: () => context
-            .read<CallCubit>()
-            .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
-      ));
-    }
-    if (isSharing) {
-      all.add(_LocalShareTile(localShareTrack: localShareTrack));
     }
 
     final count = all.length;
     if (count == 1) return all.first;
-    if (count == 2) return _buildP2PLayout(all);
+    // Local is a floating PIP now, so 2 remotes split the screen equally
+    // instead of the old fullscreen + corner (P2P) layout.
+    if (count == 2) return _buildTwoSplitLayout(all);
     if (count == 3) return _buildTriSplitLayout(all);
     if (count == 4) return _buildGrid2x2Layout(all);
     if (count == 5) return _buildGrid5Layout(all);
@@ -680,21 +843,155 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
-  Widget _buildP2PLayout(List<Widget> tiles) {
-    return Stack(
+  // Two remotes split the screen equally (top / bottom).
+  Widget _buildTwoSplitLayout(List<Widget> tiles) {
+    return Column(
       children: [
-        Positioned.fill(child: tiles[0]),
-        Positioned(
-          right: 16,
-          bottom: 100,
-          width: 120,
-          height: 160,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: tiles[1],
+        Expanded(child: tiles[0]),
+        Expanded(child: tiles[1]),
+      ],
+    );
+  }
+
+  /// Viewer's layout while a remote participant is sharing: their shared screen
+  /// fills the top (pinch-to-zoom via ScreenShareTile) and everyone else shows
+  /// as a PIP strip along the bottom.
+  Widget _buildRemoteSharingLayout(
+    List<RemoteParticipant> remotes, {
+    required VideoTrack? remoteShareTrack,
+    required String remoteSharerName,
+    required String remoteSharerUserId,
+    required bool remoteSharerHasAudio,
+    required bool isMutedLocally,
+  }) {
+    return Column(
+      children: [
+        Expanded(
+          child: ScreenShareTile(
+            videoTrack: remoteShareTrack,
+            participantName: remoteSharerName,
+            hasAudio: remoteSharerHasAudio,
+            isMutedLocally: isMutedLocally,
+            onMuteToggle: () => context
+                .read<CallCubit>()
+                .toggleReceivedScreenShareAudioMute(remoteSharerUserId),
           ),
         ),
+        if (remotes.isNotEmpty)
+          SizedBox(
+            height: 170.resH,
+            child: Padding(
+              padding: EdgeInsets.all(6.resR),
+              child: Row(
+                children: [
+                  for (int i = 0; i < remotes.length && i < 4; i++)
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4.resR),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16.resR),
+                          child: _buildRemoteTile(remotes[i], i),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  /// The local sharer's layout: a "You're sharing your screen!" panel with the
+  /// other participants as a strip of PIPs along the bottom (matches the design).
+  Widget _buildLocalSharingLayout(List<RemoteParticipant> remotes) {
+    return Column(
+      children: [
+        Expanded(child: _buildLocalSharingView()),
+        if (remotes.isNotEmpty)
+          SizedBox(
+            height: 170.resH,
+            child: Padding(
+              padding: EdgeInsets.all(6.resR),
+              child: Row(
+                children: [
+                  for (int i = 0; i < remotes.length && i < 4; i++)
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4.resR),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16.resR),
+                          child: _buildRemoteTile(remotes[i], i),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLocalSharingView() {
+    return Container(
+      decoration: const BoxDecoration(color: Color(0xFF1A1A2E)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.screen_share, size: 72.resR, color: Colors.white),
+            SizedBox(height: 16.resH),
+            Text(
+              "You're sharing your screen!",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18.resSp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 20.resH),
+            GestureDetector(
+              onTap: () => context.read<CallCubit>().stopScreenShare(
+                    localUserId: _localUserId,
+                    localUserName: _localUserName,
+                  ),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                    horizontal: 22.resW, vertical: 12.resH),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(24.resR),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 24.resR,
+                      height: 24.resR,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.close,
+                          size: 16.resR, color: Colors.black),
+                    ),
+                    SizedBox(width: 10.resW),
+                    Text(
+                      'Stop Sharing',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.resSp,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -915,6 +1212,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   // ── Controls ───────────────────────────────────────────────────────────────
 
   Widget _buildControls({required bool isSharing}) {
+    // Same bottom bar as the 1:1 video screen: camera · flip · mic · emoji · ≡.
+    // (Speaker + End live in the top bar.)
     return Padding(
       padding: EdgeInsets.only(bottom: 24.resH, left: 16.resW, right: 16.resW, top: 8.resH),
       child: ClipRRect(
@@ -926,83 +1225,63 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.15),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildIconBtn2(
-                    icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam,
-                    isActive: !_isCameraDisabled,
-                    onTap: () async {
-                      final target = _isCameraDisabled;
-                      if (target) {
-                        final granted = await PermissionService.requestSingle(Permission.camera);
-                        if (!granted && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera permission required.')));
-                          return;
-                        }
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _buildIconBtn2(
+                  icon: _isCameraDisabled ? Icons.videocam_off : Icons.videocam_outlined,
+                  isActive: _isCameraDisabled,
+                  onTap: () async {
+                    final target = _isCameraDisabled;
+                    if (target) {
+                      final granted = await PermissionService.requestSingle(Permission.camera);
+                      if (!granted && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera permission required.')));
+                        return;
                       }
-                      setState(() => _isCameraDisabled = !target);
-                      await _room?.localParticipant?.setCameraEnabled(target);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildIconBtn2(
-                    icon: Icons.sync,
-                    isActive: false,
-                    onTap: () async {
-                      try {
-                        final track = _room?.localParticipant?.videoTrackPublications.firstOrNull?.track;
-                        if (track is LocalVideoTrack) {
-                          _isFrontCamera = !_isFrontCamera;
-                          final options = CameraCaptureOptions(cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back);
-                          await track.restartTrack(options);
-                          setState(() {});
-                        }
-                      } catch (e) {
-                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                    }
+                    setState(() => _isCameraDisabled = !target);
+                    await _room?.localParticipant?.setCameraEnabled(target);
+                  },
+                ),
+                _buildIconBtn2(
+                  icon: Icons.cameraswitch_outlined,
+                  isActive: false,
+                  onTap: () async {
+                    try {
+                      final track = _room?.localParticipant?.videoTrackPublications.firstOrNull?.track;
+                      if (track is LocalVideoTrack) {
+                        _isFrontCamera = !_isFrontCamera;
+                        final options = CameraCaptureOptions(cameraPosition: _isFrontCamera ? CameraPosition.front : CameraPosition.back);
+                        await track.restartTrack(options);
+                        setState(() {});
                       }
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildIconBtn2(
-                    icon: _isMicMuted ? Icons.mic_off : Icons.mic,
-                    isActive: _isMicMuted,
-                    onTap: () async {
-                      final targetMuted = !_isMicMuted;
-                      setState(() => _isMicMuted = targetMuted);
-                      await _room?.localParticipant?.setMicrophoneEnabled(!targetMuted);
-                      if (mounted) context.read<CallCubit>().reportLocalMute(targetMuted);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildIconBtn2(
-                    icon: speakerIconForRoute(_routeState.activeRoute),
-                    isActive: _routeState.activeRoute == AudioOutputRoute.speaker,
-                    onTap: () => AudioRoutePickerSheet.show(context),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildIconBtn2(
-                    icon: Icons.menu,
-                    isActive: false,
-                    onTap: () => _showMoreOptions(isSharing: isSharing),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _endCall,
-                    child: Container(
-                      width: 52.resR,
-                      height: 52.resR,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.call_end, color: const Color(0xFFE33451), size: 26.resR),
-                    ),
-                  ),
-                ],
-              ),
+                    } catch (e) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                    }
+                  },
+                ),
+                _buildIconBtn2(
+                  icon: _isMicMuted ? Icons.mic_off : Icons.mic_none,
+                  isActive: _isMicMuted,
+                  onTap: () async {
+                    final targetMuted = !_isMicMuted;
+                    setState(() => _isMicMuted = targetMuted);
+                    await _room?.localParticipant?.setMicrophoneEnabled(!targetMuted);
+                    if (mounted) context.read<CallCubit>().reportLocalMute(targetMuted);
+                  },
+                ),
+                _buildIconBtn2(
+                  icon: Icons.emoji_emotions_outlined,
+                  isActive: _isEmojiOpen,
+                  onTap: () => setState(() => _isEmojiOpen = !_isEmojiOpen),
+                ),
+                _buildIconBtn2(
+                  icon: Icons.menu,
+                  isActive: false,
+                  onTap: () => _showMoreOptions(isSharing: isSharing),
+                ),
+              ],
             ),
           ),
         ),
@@ -1010,38 +1289,44 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
-  /// Shows the More Options bottom sheet matching the screenshot design
+  /// The ≡ More menu — Share Screen only. Translation is handled per-participant
+  /// via the CC control on each tile, so it's omitted here.
   void _showMoreOptions({required bool isSharing}) {
-    final roomId = widget.roomId;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (sheetCtx) => _MoreOptionsSheet(
-        roomId: roomId,
+      builder: (sheetCtx) => CallMoreOptionsSheet(
+        title: _groupName.isNotEmpty ? _groupName : 'Group Call',
         isSharing: isSharing,
-        onShareScreen: () async {
+        isTranslating: false,
+        onShareScreen: () {
           Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          final cubit = context.read<CallCubit>();
+          final s = cubit.state;
           if (isSharing) {
-            if (mounted) {
-              context.read<CallCubit>().stopScreenShare(
-                localUserId: _localUserId,
-                localUserName: _localUserName,
-              );
-            }
-          } else {
-            final withAudio = await showModalBottomSheet<bool>(
-              context: context,
-              builder: (_) => const ScreenShareToggleSheet(),
+            cubit.stopScreenShare(
+              localUserId: _localUserId,
+              localUserName: _localUserName,
             );
-            if (withAudio != null && mounted) {
-              context.read<CallCubit>().startScreenShare(
-                localUserId: _localUserId,
-                localUserName: _localUserName,
-                withDeviceAudio: withAudio,
-              );
-            }
+            return;
           }
+          // Only one participant may share at a time.
+          if (s is CallActive &&
+              s.activeSharerUserId.isNotEmpty &&
+              s.activeSharerUserId != _localUserId) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${s.activeSharerName} is already sharing')),
+            );
+            return;
+          }
+          // Start immediately, no audio (no toggle sheet).
+          cubit.startScreenShare(
+            localUserId: _localUserId,
+            localUserName: _localUserName,
+            withDeviceAudio: false,
+          );
         },
       ),
     );
@@ -1062,160 +1347,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     );
   }
 
-  Widget _buildIconBtn({
-    required IconData icon,
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return _buildIconBtn2(icon: icon, onTap: onTap, isActive: active);
-  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// More Options Sheet
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MoreOptionsSheet extends StatelessWidget {
-  final String roomId;
-  final bool isSharing;
-  final VoidCallback onShareScreen;
-
-  const _MoreOptionsSheet({
-    required this.roomId,
-    required this.isSharing,
-    required this.onShareScreen,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF2A2A3E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Handle ──────────────────────────────────────────────────────
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
-            // ── Header row ──────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.view_column_outlined,
-                    color: Colors.white70,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Call with $roomId',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.white12,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        color: Colors.white70,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // ── Share Screen button ─────────────────────────────────────────
-            _MoreOptionsTile(
-              icon: Icons.ios_share,
-              label: isSharing ? 'Stop Sharing' : 'Share Screen',
-              onTap: onShareScreen,
-            ),
-
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MoreOptionsTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _MoreOptionsTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF3D3D55),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: Colors.white, size: 22),
-                const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Participant Tile
@@ -1283,9 +1416,14 @@ class _ParticipantTile extends StatelessWidget {
                 ],
               ),
 
-              // Video overlay (if camera is on)
+              // Video overlay (if camera is on) — fill the whole tile.
               if (videoTrack != null)
-                Positioned.fill(child: VideoTrackRenderer(videoTrack!)),
+                Positioned.fill(
+                  child: VideoTrackRenderer(
+                    videoTrack!,
+                    fit: VideoViewFit.cover,
+                  ),
+                ),
 
               // Muted badge (top-right)
               if (isMuted)
@@ -1307,26 +1445,27 @@ class _ParticipantTile extends StatelessWidget {
                   ),
                 ),
 
-              // CC (translation) toggle (top-left)
+              // CC (translation) toggle — bottom-left, clear of the status bar
+              // and the floating top bar (better UX than the previous top-left).
               if (onTapTranslate != null)
                 Positioned(
-                  top: 10,
-                  left: 10,
+                  bottom: 12,
+                  left: 12,
                   child: GestureDetector(
                     onTap: onTapTranslate,
                     child: Container(
-                      width: 28,
-                      height: 28,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: isTranslationLive ? _kGreen : Colors.white,
+                        color: isTranslationLive
+                            ? _kGreen
+                            : Colors.black.withValues(alpha: 0.45),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.closed_caption,
-                        size: 16,
-                        color: isTranslationLive
-                            ? Colors.white
-                            : Colors.grey.shade700,
+                        size: 22,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -1335,8 +1474,8 @@ class _ParticipantTile extends StatelessWidget {
               // "Translation unavailable" badge (FR-002/FR-014)
               if (translationStatus == TranslationStatus.unavailable)
                 Positioned(
-                  top: 44,
-                  left: 10,
+                  bottom: 60,
+                  left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
@@ -1353,12 +1492,12 @@ class _ParticipantTile extends StatelessWidget {
                   ),
                 ),
 
-              // Live translation caption (FR-004/FR-009/FR-011)
+              // Live translation caption (FR-004/FR-009/FR-011) — above the CC.
               if (caption != null)
                 Positioned(
                   left: 8,
                   right: 8,
-                  bottom: 8,
+                  bottom: 62,
                   child: CaptionOverlay(caption: caption!),
                 ),
             ],
@@ -1397,74 +1536,6 @@ class _RecordingBanner extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ── Local screen-share preview tile ────────────────────────────────────────────
-// Shown to the sharer themselves so they can confirm what's being broadcast.
-// Renders the actual screen-share video track when published; otherwise a
-// "Sharing your screen" placeholder while iOS / Android finishes publishing.
-class _LocalShareTile extends StatelessWidget {
-  final VideoTrack? localShareTrack;
-  const _LocalShareTile({required this.localShareTrack});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(color: Color(0xFF1A1A2E)),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (localShareTrack != null)
-              VideoTrackRenderer(localShareTrack!)
-            else
-              const ColoredBox(
-                color: Colors.black87,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.screen_share, color: Colors.white, size: 36),
-                      SizedBox(height: 8),
-                      Text(
-                        'Sharing\nyour screen',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.screen_share_outlined,
-                      color: Colors.white70,
-                      size: 14,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'You • Screen',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
     );
   }
 }
