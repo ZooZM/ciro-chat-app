@@ -1,62 +1,88 @@
-# Implementation Plan: 023-dynamic-group-call
+# Implementation Plan: [FEATURE]
 
-**Branch**: `023-dynamic-group-call` | **Date**: 2026-07-09 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `/specs/023-dynamic-group-call/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Implement a "Dynamic Group Call Screen" UI that adapts its layout based on the number of participants. It re-uses standard P2P for 2 participants, uses a split layout for 3, and a 2-column grid for 4-6+. The UI handles "Video Stream" and "Avatar Mode" states, includes mute/speaker badges, uses `easy_localization` for all text, and relies entirely on mock data for rendering to allow manual testing of layout transitions.
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: Dart (Flutter)
-**Primary Dependencies**: `easy_localization`
-**Storage**: N/A (Mock data only)
-**Testing**: Flutter Widget Tests
-**Target Platform**: iOS, Android
-**Project Type**: Mobile App
-**Performance Goals**: 60 fps during layout transitions
-**Constraints**: Mock data ONLY. No WebRTC/Agora logic. Smooth rounded corners and vibrant colors.
-**Scale/Scope**: Single self-contained UI screen with 1-6+ mock participants.
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
+
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- [x] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers? (UI only, goes in `presentation`)
-- [x] **II. State Management**: Uses `flutter_bloc` (Cubit preferred)? States extend `Equatable`? (Using simple `StatefulWidget` or Cubit for the mock `participantCount` state)
-- [x] **III. Offline-First**: Relational data uses `sqflite`? Key-value uses `Hive`? (N/A - mock data)
-- [x] **IV. Socket.io**: Real-time logic uses singleton `SocketService`? Events are idempotent? (N/A)
-- [x] **V. Teardown**: Proper `dispose`/`cancel` implemented? Logout sequence handled? (N/A - no streams)
-- [x] **Code Quality**: Strict linting followed? Naming conventions (snake_case files) met? (Yes)
-- [x] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer? (N/A)
+- [ ] **I. Clean Architecture**: Feature is split into `presentation`, `domain`, and `data` layers?
+- [ ] **II. State Management**: Uses `flutter_bloc` (Cubit preferred)? States extend `Equatable`?
+- [ ] **III. Offline-First**: Relational data uses `sqflite`? Key-value uses `Hive`?
+- [ ] **IV. Socket.io**: Real-time logic uses singleton `SocketService`? Events are idempotent?
+- [ ] **V. Teardown**: Proper `dispose`/`cancel` implemented? Logout sequence handled?
+- [ ] **Code Quality**: Strict linting followed? Naming conventions (snake_case files) met?
+- [ ] **Error Handling**: Exceptions mapped to `Failure` classes in Data layer?
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/023-dynamic-group-call/
-├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output
-└── tasks.md             # Phase 2 output
+specs/[###-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
 
 lib/
+├── core/
+│   ├── bloc/
+│   ├── di/
+│   ├── helpers/
+│   ├── network/
+│   ├── routing/
+│   └── theme/
 └── features/
-    └── video_call/
+    └── [feature_name]/
+        ├── data/
+        │   ├── datasources/
+        │   ├── models/
+        │   └── repositories/
+        ├── domain/
+        │   ├── entities/
+        │   └── repositories/
         └── presentation/
+            ├── bloc/
             ├── pages/
-            │   └── dynamic_group_call_screen.dart
             └── widgets/
-                └── mock_participant_tile.dart
 
-**Structure Decision**: Will place the UI code within the existing `video_call` feature under `presentation/pages` and `presentation/widgets`.
+test/
+└── features/
+    └── [feature_name]/
+
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Complexity Tracking
 
@@ -64,4 +90,5 @@ lib/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| N/A | N/A | N/A |
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

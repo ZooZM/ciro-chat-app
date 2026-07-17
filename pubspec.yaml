@@ -103,6 +103,8 @@ flutter:
     - assets/icons/reels/
     - assets/logo.png
     - assets/AppLogo.png
+    - assets/right_check.png
+    - assets/invoice.png
     - assets/splash screen.jpg
     - assets/fef62f309a322c6bc2c6cc8d7cd250914c058627.jpg
     - assets/translations/
