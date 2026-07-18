@@ -195,17 +195,20 @@ class _WalletHomeScreenState extends State<WalletHomeScreen> {
               alignment: AlignmentDirectional.centerStart,
             ),
           ),
-          Image.asset(
-            'assets/bd563dcd9d7f8c94622a4f349454f5162e5b8a79.png',
-            width: 180,
-            height: 90,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Text(
-              'ciro WALLET',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A1A),
+          Align(
+            alignment: Alignment.center,
+            child: Image.asset(
+              'assets/bd563dcd9d7f8c94622a4f349454f5162e5b8a79.png',
+              width: 180,
+              height: 90,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Text(
+                'ciro WALLET',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
               ),
             ),
           ),
