@@ -82,6 +82,7 @@ dependencies:
   camera: ^0.11.1
 
   flutter_webrtc: any
+  mobile_scanner: ^7.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -104,9 +105,11 @@ flutter:
     - assets/logo.png
     - assets/AppLogo.png
     - assets/right_check.png
+    - assets/failed.png
     - assets/invoice.png
     - assets/splash screen.jpg
     - assets/fef62f309a322c6bc2c6cc8d7cd250914c058627.jpg
+    - assets/bd563dcd9d7f8c94622a4f349454f5162e5b8a79.png
     - assets/translations/
     - .env
 

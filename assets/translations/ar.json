@@ -24,8 +24,8 @@
   "nav_updates": "الحالات",
   "nav_map": "الخريطة",
   "nav_calls": "المكالمات",
-  "nav_reels": "منصة الأضواء",
-  "nav_profile": "الملف الشخصي",
+  "nav_reels": "ريلز",
+  "nav_profile": "أنت",
   "calls_title": "المكالمات",
   "calls_search_hint": "بحث",
   "calls_recent": "الأخيرة",
@@ -147,36 +147,7 @@
     "following_empty_title": "لا توجد ريلز من الأشخاص الذين تتابعهم بعد",
     "following_empty_subtitle": "تابع صنّاع المحتوى لتظهر ريلاتهم هنا"
   },
-  "status": {
-    "video": "فيديو",
-    "image": "صورة",
-    "text": "نص",
-    "voice": "صوت",
-    "public": "عام",
-    "public_desc": "يمكن لأي شخص رؤية هذه الحالة",
-    "private": "خاص",
-    "private_desc": "يمكن لجهات الاتصال المحددة فقط رؤية هذا",
-    "show_on_map": "إظهار على الخريطة",
-    "add_status": "إضافة حالة",
-    "write_status": "اكتب حالة",
-    "create_any_image": "أنشئ أي صورة",
-    "search": "بحث",
-    "music": "موسيقى",
-    "ai_image": "صورة بالذكاء الاصطناعي",
-    "recently_used": "المستخدمة مؤخرًا",
-    "preview": "معاينة",
-    "no_music_found": "لم يتم العثور على موسيقى",
-    "camera": "الكاميرا",
-    "tap_to_record": "اضغط للتسجيل",
-    "tap_to_stop": "اضغط للإيقاف",
-    "music_attached": "تم إرفاق الموسيقى",
-    "create_image_for": "صف الصورة التي تريد إنشاءها",
-    "today": "اليوم",
-    "yesterday": "أمس",
-    "reply": "رد",
-    "views": "مشاهدة",
-    "no_views": "لا مشاهدات بعد"
-  },
+  "status": "الحالة",
   "map_following": "المتابَعون",
   "map_explore": "استكشاف",
   "map_you": "أنا",
@@ -245,7 +216,7 @@
   "calls_new_contact_phone": "رقم الهاتف",
   "calls_new_contact_save": "حفظ",
   "calls_new_contact_add_number": "إضافة رقم آخر",
-  "profile_title": "الملف الشخصي",
+  "profile_title": "أنت",
   "profile_total_balance": "إجمالي الرصيد",
   "profile_current_balance": "الرصيد الحالي",
   "profile_complete_your_profile": "أكمل ملفك الشخصي لفتح جميع الميزات",
@@ -364,7 +335,6 @@
   "bank_edit": "تعديل",
   "bank_name_label": "اسم البنك",
   "bank_holder_label": "اسم صاحب الحساب",
-  "profile_help_feedback": "المساعدة والتعليقات",
   "help_contact_us": "اتصل بنا",
   "help_contact_us_desc": "نحن هنا للمساعدة",
   "help_faq": "الأسئلة الشائعة",
@@ -491,7 +461,6 @@
   "take_clear_selfie": "التقط صورة شخصية واضحة تحمل فيها هويتك",
   "edit": "تعديل",
   "id_number": "رقم الهوية",
-  "status": "الحالة",
   "verified": "تم التحقق",
   "face_match": "تطابق الوجه",
   "matched": "متطابق",
@@ -540,5 +509,78 @@
   "profile_verification_iban_label": "رقم الآيبان (IBAN)",
   "profile_verification_success_title": "تم توثيق الحساب بنجاح",
   "profile_verification_success_subtitle": "يمكنك الآن البدء في إنشاء الفواتير",
-  "profile_verification_finish": "إنهاء"
+  "profile_verification_finish": "إنهاء",
+  "wallet": {
+    "title": "محفظة سيرو",
+    "totalBalance": "الرصيد الإجمالي",
+    "currentBalance": "الرصيد الحالي",
+    "balanceHidden": "الرصيد مخفي",
+    "addMoney": "إضافة أموال",
+    "send": "إرسال",
+    "receive": "استلام",
+    "qrCode": "رمز الاستجابة السريعة",
+    "recentTransactions": "أحدث العمليات",
+    "viewAll": "عرض الكل",
+    "profile": {
+      "title": "الملف الشخصي للمحفظة",
+      "ciroId": "معرف سيرو",
+      "status": "الحالة",
+      "registrationDate": "تاريخ التسجيل",
+      "lastSeen": "آخر ظهور",
+      "country": "البلد",
+      "associatedBank": "البنك المرتبط",
+      "shareBarcode": "مشاركة الرمز",
+      "shareBarcodeDesc": "شارك الرمز مع أي شخص",
+      "viewBarcode": "عرض الرمز",
+      "viewBarcodeDesc": "عرض الرمز الخاص بك",
+      "settings": "إعدادات المحفظة",
+      "accountInfo": "معلومات الحساب",
+      "verificationSecurity": "التحقق والأمان",
+      "paymentMethod": "طرق الدفع والحساب البنكي",
+      "notification": "الإشعارات"
+    },
+    "sendFlow": {
+      "title": "إرسال أموال",
+      "searchHint": "ابحث بالاسم، الجوال أو معرف سيرو",
+      "contactCiro": "جهة اتصال سيرو",
+      "scanQr": "مسح الرمز",
+      "uploadQr": "رفع الرمز",
+      "suggestedPeople": "أشخاص مقترحون",
+      "recentTransaction": "العمليات السابقة"
+    },
+    "receiveFlow": {
+      "title": "استلام أموال",
+      "ciroId": "معرف سيرو",
+      "securePayments": "مدفوعات آمنة",
+      "securePaymentsDesc": "شارك فقط مع جهات موثوقة",
+      "qrRefresh": "يتم تحديث الرمز كل 60 ثانية",
+      "shareQr": "مشاركة الرمز",
+      "download": "تحميل",
+      "customize": "تخصيص",
+      "securityBanner": "معلومات الدفع الخاصة بك آمنة"
+    },
+    "addAmount": {
+      "title": "إضافة مبلغ",
+      "subtitle": "أدخل المبلغ الذي ترغب بإضافته",
+      "enterAmount": "أدخل المبلغ",
+      "minimumHint": "الحد الأدنى 10 ريال",
+      "paymentMethod": "طريقة الدفع",
+      "change": "تغيير"
+    },
+    "payment": {
+      "success": {
+        "title": "تم الدفع بنجاح",
+        "subtitle": "{amount} إلى {recipient}"
+      },
+      "failed": {
+        "title": "فشلت عملية الدفع",
+        "subtitle": "لم نتمكن من إتمام العملية",
+        "reason": {
+          "insufficientBalance": "رصيد غير كاف"
+        }
+      },
+      "referenceId": "رقم المرجع",
+      "done": "تم"
+    }
+  }
 }

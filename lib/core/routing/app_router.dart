@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:ciro_chat_app/features/status/presentation/pages/story_viewer_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../features/call_history/presentation/pages/calls_history_screen.dart';
 import '../../features/video_call/presentation/pages/video_call_screen.dart';
 import '../../features/video_call/presentation/pages/voice_call_screen.dart';
 import '../../features/video_call/presentation/pages/incoming_call_screen.dart';
@@ -79,6 +80,16 @@ import '../di/injection.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'go_router_refresh_stream.dart';
+
+import '../../features/payment/presentation/pages/wallet_home_screen.dart';
+import '../../features/payment/presentation/pages/wallet_profile_screen.dart';
+import '../../features/payment/presentation/pages/wallet_send_screen.dart';
+import '../../features/payment/presentation/pages/wallet_receive_screen.dart';
+import '../../features/payment/presentation/pages/wallet_add_amount_screen.dart';
+import '../../features/payment/presentation/pages/wallet_payment_status_screen.dart';
+import '../../features/payment/presentation/pages/wallet_qr_scanner_screen.dart';
+import '../../features/payment/presentation/pages/wallet_notifications_screen.dart';
+import '../../features/payment/presentation/entities/wallet_entities.dart';
 
 /// `chatRoom`'s `extra` payload when the caller also wants to hand the
 /// screen a draft message (e.g. the map's "invite to share location" flow) —
@@ -173,6 +184,15 @@ class AppRouterName {
   static const String sendFeedback = '/profile/help_feedback/send_feedback';
   static const String privacyPolicy = '/profile/help_feedback/privacy_policy';
   static const String termsService = '/profile/help_feedback/terms_service';
+
+  static const String wallet = '/wallet';
+  static const String walletProfile = '/wallet/profile';
+  static const String walletSend = '/wallet/send';
+  static const String walletReceive = '/wallet/receive';
+  static const String walletAddAmount = '/wallet/add-amount';
+  static const String walletPaymentStatus = '/wallet/payment-status';
+  static const String walletScanner = '/wallet/scanner';
+  static const String walletNotifications = '/wallet/notifications';
 }
 
 final GlobalKey<NavigatorState> globalNavigatorKey =
@@ -734,6 +754,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const NewContactScreen(),
     ),
     GoRoute(
+      path: AppRouterName.calls,
+      builder: (context, state) => const CallsHistoryScreen(),
+    ),
+    GoRoute(
       path: AppRouterName.profile,
       builder: (context, state) => const ProfileMainScreen(),
     ),
@@ -869,6 +893,41 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRouterName.termsService,
       builder: (context, state) => const TermsServiceScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.wallet,
+      builder: (context, state) => const WalletHomeScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletProfile,
+      builder: (context, state) => const WalletProfileScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletSend,
+      builder: (context, state) => const WalletSendScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletReceive,
+      builder: (context, state) => const WalletReceiveScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletAddAmount,
+      builder: (context, state) => const WalletAddAmountScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletPaymentStatus,
+      builder: (context, state) {
+        final result = state.extra as PaymentResult?;
+        return WalletPaymentStatusScreen(result: result!);
+      },
+    ),
+    GoRoute(
+      path: AppRouterName.walletScanner,
+      builder: (context, state) => const WalletQrScannerScreen(),
+    ),
+    GoRoute(
+      path: AppRouterName.walletNotifications,
+      builder: (context, state) => const WalletNotificationsScreen(),
     ),
   ],
 );

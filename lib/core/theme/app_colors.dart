@@ -13,6 +13,9 @@ class AppColors {
   /// Primary green — left bubble, buttons, highlights
   static const Color primary = Color(0xFF4CA02A);
 
+  /// Wallet balance card gradient end — blue
+  static const Color walletGradientEnd = Color(0xFF1A8FC0);
+
   /// Darker green for active / pressed states
   static const Color primaryDark = Color(0xFF397820);
 

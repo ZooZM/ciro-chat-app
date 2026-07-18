@@ -25,7 +25,7 @@
   "nav_map": "Map",
   "nav_calls": "Calls",
   "nav_reels": "Reels",
-  "nav_profile": "Profile",
+  "nav_profile": "You",
   "calls_title": "Calls",
   "calls_search_hint": "Search",
   "calls_recent": "Recent",
@@ -147,36 +147,7 @@
     "following_empty_title": "No reels from people you follow yet",
     "following_empty_subtitle": "Follow creators to see their reels here"
   },
-  "status": {
-    "video": "Video",
-    "image": "Image",
-    "text": "Text",
-    "voice": "Voice",
-    "public": "Public",
-    "public_desc": "Anyone can see this status",
-    "private": "Private",
-    "private_desc": "Only selected contacts can see this",
-    "show_on_map": "Show on map",
-    "add_status": "Add status",
-    "write_status": "Type a status",
-    "create_any_image": "Create any image",
-    "search": "Search",
-    "music": "Music",
-    "ai_image": "AI image",
-    "recently_used": "Recently used",
-    "preview": "Preview",
-    "no_music_found": "No music found",
-    "camera": "Camera",
-    "tap_to_record": "Tap to record",
-    "tap_to_stop": "Tap to stop",
-    "music_attached": "Music attached",
-    "create_image_for": "Describe the image you want to create",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "reply": "Reply",
-    "views": "Views",
-    "no_views": "No views yet"
-  },
+  "status": "Status",
   "map_following": "Following",
   "map_explore": "Explore",
   "map_you": "Me",
@@ -245,7 +216,7 @@
   "calls_new_contact_phone": "Phone number",
   "calls_new_contact_save": "Save",
   "calls_new_contact_add_number": "Add another number",
-  "profile_title": "Profile",
+  "profile_title": "You",
   "profile_total_balance": "Total Balance",
   "profile_current_balance": "Current Balance",
   "profile_complete_your_profile": "Complete your profile to unlock all features",
@@ -364,7 +335,6 @@
   "bank_edit": "Edit",
   "bank_name_label": "Bank Name",
   "bank_holder_label": "Account Holder Name",
-  "profile_help_feedback": "Help & Feedback",
   "help_contact_us": "Contact Us",
   "help_contact_us_desc": "We're here to help",
   "help_faq": "FAQ",
@@ -491,7 +461,6 @@
   "take_clear_selfie": "Take a clear selfie holding your ID",
   "edit": "Edit",
   "id_number": "ID Number",
-  "status": "Status",
   "verified": "Verified",
   "face_match": "Face Match",
   "matched": "Matched",
@@ -540,5 +509,78 @@
   "profile_verification_iban_label": "IBAN",
   "profile_verification_success_title": "Account Verified Successfully",
   "profile_verification_success_subtitle": "You can now start creating invoices",
-  "profile_verification_finish": "Finish"
+  "profile_verification_finish": "Finish",
+  "wallet": {
+    "title": "wallet",
+    "totalBalance": "Total Balance",
+    "currentBalance": "Current Balance",
+    "balanceHidden": "Balance Hidden",
+    "addMoney": "Add Money",
+    "send": "Send",
+    "receive": "Receive",
+    "qrCode": "QR Code",
+    "recentTransactions": "Recent Transaction",
+    "viewAll": "View All",
+    "profile": {
+      "title": "Wallet Profile",
+      "ciroId": "Ciro ID",
+      "status": "Status",
+      "registrationDate": "Registration Date",
+      "lastSeen": "Last Seen",
+      "country": "Country",
+      "associatedBank": "Associated Bank",
+      "shareBarcode": "Share Barcode",
+      "shareBarcodeDesc": "Share your barcode with anyone",
+      "viewBarcode": "View Barcode",
+      "viewBarcodeDesc": "Display your barcode",
+      "settings": "Wallet Setting",
+      "accountInfo": "Account Information",
+      "verificationSecurity": "Verification & Security",
+      "paymentMethod": "Payment Method & Bank Account",
+      "notification": "Notification"
+    },
+    "sendFlow": {
+      "title": "Send Money",
+      "searchHint": "Search by name, mobile or ciro id",
+      "contactCiro": "Contact Ciro",
+      "scanQr": "Scan QR",
+      "uploadQr": "Upload QR",
+      "suggestedPeople": "Suggested People",
+      "recentTransaction": "Recent Transaction"
+    },
+    "receiveFlow": {
+      "title": "Receive Money",
+      "ciroId": "Ciro ID",
+      "securePayments": "Secure payments",
+      "securePaymentsDesc": "Only share with trusted contacts",
+      "qrRefresh": "QR refreshes automatically every 60 seconds",
+      "shareQr": "Share QR",
+      "download": "Download",
+      "customize": "Customize",
+      "securityBanner": "Your payment info is secure"
+    },
+    "addAmount": {
+      "title": "Add Amount",
+      "subtitle": "Enter the amount you wish to add",
+      "enterAmount": "Enter Amount",
+      "minimumHint": "Minimum add 10 SAR",
+      "paymentMethod": "Payment Method",
+      "change": "Change"
+    },
+    "payment": {
+      "success": {
+        "title": "Payment Successful",
+        "subtitle": "{amount} to {recipient}"
+      },
+      "failed": {
+        "title": "Payment Failed",
+        "subtitle": "Could not complete transaction",
+        "reason": {
+          "insufficientBalance": "Insufficient Balance"
+        }
+      },
+      "referenceId": "Reference ID",
+      "done": "Done"
+    }
+  }
 }

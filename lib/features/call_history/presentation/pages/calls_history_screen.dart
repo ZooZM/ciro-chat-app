@@ -49,6 +49,23 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'calls_title'.tr(),
+          style: GoogleFonts.inter(
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF4CAF50),
         shape: RoundedRectangleBorder(
@@ -62,53 +79,34 @@ class _CallsHistoryViewState extends State<_CallsHistoryView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'calls_title'.tr(),
-                    style: GoogleFonts.inter(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      height: 1.0,
-                      letterSpacing: 0,
-                      color: Colors.black,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: SizedBox(
+                height: 36,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (q) => context.read<CallHistoryCubit>().search(q),
+                  textAlignVertical: TextAlignVertical.center,
+                  decoration: InputDecoration(
+                    hintText: 'calls_search_hint'.tr(),
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 10),
+                      child: Icon(Icons.search, color: Colors.grey[400], size: 16),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: SizedBox(
-                      height: 30,
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (q) => context.read<CallHistoryCubit>().search(q),
-                        textAlignVertical: TextAlignVertical.center,
-                        decoration: InputDecoration(
-                          hintText: 'calls_search_hint'.tr(),
-                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
-                          prefixIcon: Padding(
-                            padding: const EdgeInsets.only(left: 10, right: 10),
-                            child: Icon(Icons.search, color: Colors.grey[400], size: 16),
-                          ),
-                          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 30),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.only(top: 10, bottom: 10, left: 10, right: 15),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.green.withOpacity(0.3), width: 2),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: const BorderSide(color: Colors.green, width: 2),
-                          ),
-                        ),
-                      ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 30),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.only(top: 10, bottom: 10, left: 10, right: 15),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: Colors.green.withOpacity(0.3), width: 2),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: Colors.green, width: 2),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
             Padding(

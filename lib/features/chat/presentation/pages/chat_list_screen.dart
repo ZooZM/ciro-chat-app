@@ -19,9 +19,8 @@ import 'package:ciro_chat_app/features/reels/presentation/pages/reels_feed_scree
 import 'package:ciro_chat_app/features/profile/presentation/pages/profile_main_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 
-/// Bottom-nav tab index for Reels — inserted after Calls per the
-/// "keep the Call icon/tab as-is and add Reels directly after it" clarification.
-const int kReelsTabIndex = 4;
+/// Bottom-nav tab index for Reels.
+const int kReelsTabIndex = 3;
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({Key? key}) : super(key: key);
@@ -61,11 +60,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ? Colors.black
           : Colors.white,
       appBar:
-          (_currentIndex == 2 ||
-              _currentIndex == 3 ||
-              _currentIndex == kReelsTabIndex)
-          ? null
-          : AppBar(
+          (_currentIndex == 0 || _currentIndex == 1)
+          ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               titleSpacing: 0, // Shift the entire logo to the left
@@ -75,7 +71,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
               actions: [
                 Padding(
-                  padding: EdgeInsets.only(right: 16.resW),
+                  padding: EdgeInsets.only(right: 20.resW,left: 20.resW),
                   child: CircleAvatar(
                     backgroundColor: AppColors.primary,
                     radius: 18.resR,
@@ -89,7 +85,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
                 ),
               ],
-            ),
+            )
+          : null,
+            
       body: _buildBody(context),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -189,21 +187,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
                 label: 'nav_map'.tr(),
               ),
-              // ── 4. Calls ──────────────────────────────────────────────────
-              BottomNavigationBarItem(
-                icon: Container(
-                  height: 40,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.call_outlined, size: 28),
-                ),
-                activeIcon: Container(
-                  height: 40,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.call, size: 28),
-                ),
-                label: 'nav_calls'.tr(),
-              ),
-              // ── 5. Reels ──────────────────────────────────────────────────
+              // ── 4. Reels ──────────────────────────────────────────────────
               BottomNavigationBarItem(
                 icon: Container(
                   height: 40,
@@ -217,7 +201,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
                 label: 'nav_reels'.tr(),
               ),
-              // ── 6. Profile ────────────────────────────────────────────────
+              // ── 5. Profile ────────────────────────────────────────────────
               BottomNavigationBarItem(
                 icon: Container(
                   height: 40,
@@ -253,13 +237,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (_currentIndex == 2) {
       return const MapScreen();
     }
-    if (_currentIndex == 3) {
-      return const CallsHistoryScreen();
-    }
     if (_currentIndex == kReelsTabIndex) {
       return const ReelsFeedScreen();
     }
-    if (_currentIndex == 5) {
+    if (_currentIndex == 4) {
       return const ProfileMainScreen();
     }
     // Default to Chat List

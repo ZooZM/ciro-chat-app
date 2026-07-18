@@ -24,7 +24,7 @@ class ProfileMainScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        centerTitle: false,
+        centerTitle: true,
         title: Text(
           'profile_title'.tr(),
           style: const TextStyle(
@@ -129,7 +129,12 @@ class ProfileMainScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Wallet Card
-            WalletCard(wallet: wallet),
+            GestureDetector(
+              onTap: () {
+                context.push(AppRouterName.wallet);
+              },
+              child: WalletCard(wallet: wallet),
+            ),
             const SizedBox(height: 16),
 
             // Profile Completion Bar
@@ -137,6 +142,11 @@ class ProfileMainScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Settings List
+            _buildSettingsItem(
+              icon: Icons.call_outlined,
+              title: 'nav_calls'.tr(),
+              onTap: () => context.push(AppRouterName.calls),
+            ),
             _buildSettingsItem(
               icon: Icons.palette_outlined,
               title: 'profile_appearance'.tr(),
